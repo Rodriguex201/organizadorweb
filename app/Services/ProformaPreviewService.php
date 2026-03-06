@@ -17,6 +17,7 @@ class ProformaPreviewService
 
         $totalLineas = array_reduce($lineas, fn (float $acc, LineaProforma $linea) => $acc + $linea->valorParcial(), 0.0);
         $valorTotalCobro = (float) ($cobro->valor_total ?? 0);
+        $totalPreview = $this->calcularTotalPreview($cobro);
 
         return [
             'cabecera' => [
@@ -24,7 +25,7 @@ class ProformaPreviewService
                 'mes' => (string) ($cobro->mes ?? ''),
                 'anio' => (string) ($cobro->año ?? ''),
                 'proforma_actual' => (int) ($cobro->Proforma ?? 0),
-                'empresa_emisora' => config('app.name', 'Organizadorweb'),
+                'empresa_emisora' => $this->resolverEmpresaEmisora($cobro),
                 'cliente' => [
                     'id' => $cobro->cliente_id ?? null,
                     'empresa' => $this->resolveEmpresaCliente($cobro),
@@ -43,7 +44,7 @@ class ProformaPreviewService
                 'lineas' => $lineasArray,
                 'total_calculado' => $totalLineas,
                 'total_cobro' => $valorTotalCobro,
-                'total_preview' => $valorTotalCobro > 0 ? $valorTotalCobro : $totalLineas,
+                'total_preview' => $totalPreview,
             ],
         ];
     }
@@ -54,55 +55,91 @@ class ProformaPreviewService
     private function construirLineas(object $cobro): array
     {
         $lineas = [];
-        $camposMonetarios = [
-            'valor_total',
-            'valor',
-            'subtotal',
-            'impuesto',
-            'iva',
-            'descuento',
-        ];
+        $valorMensualidad = $this->toFloat($cobro->valor_mensualidad ?? null);
+        $valorNomina = $this->toFloat($cobro->vlrnomina ?? null);
 
-        foreach ($camposMonetarios as $campo) {
-            if (!property_exists($cobro, $campo)) {
-                continue;
-            }
-
-            $valor = (float) $cobro->{$campo};
-            if ($valor <= 0) {
-                continue;
-            }
-
+        if ($valorMensualidad > 0) {
             $lineas[] = new LineaProforma(
-                concepto: $this->normalizarConcepto($campo, $cobro),
+                codigo: '0010',
+                concepto: 'Mensualidad SaaS',
                 cantidad: 1,
-                valorUnitario: $valor,
+                valorUnitario: $valorMensualidad - $valorNomina,
             );
         }
 
-        if ($lineas !== []) {
-            return $lineas;
-        }
-
-        return [
-            new LineaProforma(
-                concepto: $this->normalizarConcepto('valor_total', $cobro),
+        if ($valorNomina > 0) {
+            $lineas[] = new LineaProforma(
+                codigo: '0099',
+                concepto: 'Nómina electrónica',
                 cantidad: 1,
-                valorUnitario: (float) ($cobro->valor_total ?? 0),
-            ),
-        ];
-    }
-
-    private function normalizarConcepto(string $campo, object $cobro): string
-    {
-        if ($campo === 'valor_total') {
-            $mes = ucfirst((string) ($cobro->mes ?? ''));
-            $anio = (string) ($cobro->año ?? '');
-
-            return trim("Servicio cobrado {$mes} {$anio}");
+                valorUnitario: $valorNomina,
+            );
         }
 
-        return ucfirst(str_replace('_', ' ', $campo));
+        $numeroFacturas = $this->toFloat($cobro->numero_facturas ?? null);
+        if ($numeroFacturas > 0) {
+            $cantidadFacturas = $numeroFacturas
+                + $this->toFloat($cobro->numero_nota_debito ?? null)
+                + $this->toFloat($cobro->numero_nota_credito ?? null);
+
+            $lineas[] = new LineaProforma(
+                codigo: '0081',
+                concepto: 'Facturación electrónica',
+                cantidad: $cantidadFacturas,
+                valorUnitario: $this->toFloat($cobro->cliente_vlrfactura ?? null),
+                valorParcialOverride: $this->toFloat($cobro->valor_facturas ?? null),
+            );
+        }
+
+        $numeroAcuse = $this->toFloat($cobro->numero_acuse ?? null);
+        if ($numeroAcuse > 0) {
+            $valorUnitarioAcuse = $this->toFloat($cobro->cliente_vlrecepcion ?? null);
+            $valorAcuse = $this->toFloat($cobro->valor_acuse ?? null);
+
+            $lineas[] = new LineaProforma(
+                codigo: '0101',
+                concepto: 'Recepción compras',
+                cantidad: $numeroAcuse,
+                valorUnitario: $valorUnitarioAcuse,
+                valorParcialOverride: $valorAcuse > 0 ? $valorAcuse : ($numeroAcuse * $valorUnitarioAcuse),
+            );
+        }
+
+        $numeroDocumentosSoporte = $this->toFloat($cobro->numero_documento_soporte ?? null);
+        if ($numeroDocumentosSoporte > 0) {
+            $valorUnitarioSoporte = $this->toFloat($cobro->cliente_vlrsoporte ?? null);
+            $valorDocumentos = $this->toFloat($cobro->valor_documentos ?? null);
+
+            $lineas[] = new LineaProforma(
+                codigo: '0102',
+                concepto: 'Soporte electrónico',
+                cantidad: $numeroDocumentosSoporte,
+                valorUnitario: $valorUnitarioSoporte,
+                valorParcialOverride: $valorDocumentos > 0 ? $valorDocumentos : ($numeroDocumentosSoporte * $valorUnitarioSoporte),
+            );
+        }
+
+        $valorExtra = $this->toFloat($cobro->cliente_vlrextra ?? null);
+        if ($valorExtra > 0) {
+            $lineas[] = new LineaProforma(
+                codigo: 'EXTRA',
+                concepto: 'CARGO EXTRA',
+                cantidad: 1,
+                valorUnitario: $valorExtra,
+            );
+        }
+
+        $valorTerminalRecepcion = $this->toFloat($cobro->cliente_vlrextra2 ?? null);
+        if ($valorTerminalRecepcion > 0) {
+            $lineas[] = new LineaProforma(
+                codigo: '01',
+                concepto: 'VALOR TERMINAL RECEPCIÓN',
+                cantidad: 1,
+                valorUnitario: $valorTerminalRecepcion,
+            );
+        }
+
+        return $lineas;
     }
 
     private function resolveEmpresaCliente(object $cobro): ?string
@@ -115,5 +152,31 @@ class ProformaPreviewService
         $nombre = trim((string) ($cobro->cliente_nombre ?? ''));
 
         return $nombre !== '' ? $nombre : null;
+    }
+
+    private function resolverEmpresaEmisora(object $cobro): string
+    {
+        $regimen = strtoupper(trim((string) ($cobro->cliente_regimen ?? '')));
+
+        return match ($regimen) {
+            'PCS' => 'PCS',
+            'SMP' => 'SMP',
+            default => 'SAS',
+        };
+    }
+
+    private function calcularTotalPreview(object $cobro): float
+    {
+        return $this->toFloat($cobro->valor_mensualidad ?? null)
+            + $this->toFloat($cobro->valor_facturas ?? null)
+            + $this->toFloat($cobro->valor_documentos ?? null)
+            + $this->toFloat($cobro->valor_acuse ?? null)
+            + $this->toFloat($cobro->cliente_vlrextra ?? null)
+            + $this->toFloat($cobro->cliente_vlrextra2 ?? null);
+    }
+
+    private function toFloat(mixed $valor): float
+    {
+        return (float) ($valor ?? 0);
     }
 }
