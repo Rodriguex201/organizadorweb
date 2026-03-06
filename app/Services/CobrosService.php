@@ -78,6 +78,27 @@ class CobrosService
     }
 
 
+
+
+    public function findCobroById(int $idCobro): ?object
+    {
+        return DB::table('valores_externos as ve')
+            ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
+            ->select([
+                've.*',
+                'cp.idclientes_potenciales as cliente_id',
+                'cp.nombre as cliente_nombre',
+                'cp.empresa as cliente_empresa',
+                'cp.nit as cliente_nit',
+                'cp.codigo as cliente_codigo',
+                'cp.contacto as cliente_contacto',
+                'cp.celular1 as cliente_celular1',
+                'cp.email as cliente_email',
+            ])
+            ->where('ve.id_cobro', $idCobro)
+            ->first();
+    }
+
     /**
      * TODO: Integrar lógica de persistencia para sg_proform y sg_proford.
      */
