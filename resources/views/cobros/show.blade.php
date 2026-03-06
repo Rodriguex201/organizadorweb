@@ -84,6 +84,7 @@
         </section>
 
         <section class="bg-white rounded-lg shadow p-5">
+
             @php
                 $nombre = trim((string) ($cobro->cliente_nombre ?? ''));
                 $empresa = trim((string) ($cobro->cliente_empresa ?? ''));
@@ -107,12 +108,14 @@
                 ];
             @endphp
 
+
             <h2 class="text-lg font-semibold mb-4">Datos del cliente</h2>
             <dl class="space-y-3 text-sm">
                 <div>
                     <dt class="text-slate-500">ID cliente potencial</dt>
                     <dd class="font-medium">{{ $cobro->cliente_id ?? 'N/D' }}</dd>
                 </div>
+
 
                 @if($empresaMostrada)
                     <div>
@@ -156,6 +159,7 @@
                         <dd class="text-slate-500">No hay información de cliente disponible para este registro.</dd>
                     </div>
                 @endif
+
             </dl>
 
             <div class="mt-6 pt-4 border-t border-slate-200">
