@@ -100,6 +100,11 @@ class CobrosService
                 'cp.regimen as cliente_regimen',
                 'cp.modalidad as cliente_modalidad',
                 'cp.categoria as cliente_categoria',
+                'cp.vlrfactura as cliente_vlrfactura',
+                'cp.vlrecepcion as cliente_vlrecepcion',
+                'cp.vlrsoporte as cliente_vlrsoporte',
+                'cp.vlrextra as cliente_vlrextra',
+                'cp.vlrextra2 as cliente_vlrextra2',
 
             ])
             ->where('ve.id_cobro', $idCobro)
