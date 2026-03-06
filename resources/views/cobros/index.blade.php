@@ -17,13 +17,23 @@
         <form method="GET" action="{{ route('cobros.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
                 <label for="mes" class="block text-sm font-medium mb-1">Mes</label>
-                <input id="mes" name="mes" type="number" min="1" max="12" value="{{ $filters['mes'] ?? '' }}"
-                       class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+
+                <select id="mes" name="mes"
+                        class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">Todos los meses</option>
+                    @foreach($meses as $numero => $nombre)
+                        <option value="{{ $nombre }}" @selected(($filters['mes'] ?? '') === $nombre || (string) ($filters['mes'] ?? '') === (string) $numero)>
+                            {{ ucfirst($nombre) }}
+                        </option>
+                    @endforeach
+                </select>
+                <p class="mt-1 text-xs text-slate-500">Puedes seleccionar un mes o buscar por número (1-12) en la URL, por ejemplo: <code>?mes=3</code>.</p>
             </div>
 
             <div>
-                <label for="ano" class="block text-sm font-medium mb-1">Año</label>
-                <input id="ano" name="ano" type="number" min="1900" max="9999" value="{{ $filters['ano'] ?? '' }}"
+                <label for="anio" class="block text-sm font-medium mb-1">Año</label>
+                <input id="anio" name="anio" type="number" min="1900" max="9999" value="{{ $filters['anio'] ?? '' }}"
+
                        class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
             </div>
 
@@ -59,7 +69,9 @@
                         <td class="px-4 py-3">{{ $cobro->id_cobro }}</td>
                         <td class="px-4 py-3 font-medium">{{ $cobro->proforma }}</td>
                         <td class="px-4 py-3">{{ $cobro->mes }}</td>
-                        <td class="px-4 py-3">{{ $cobro->ano }}</td>
+
+                        <td class="px-4 py-3">{{ $cobro->anio }}</td>
+
                         <td class="px-4 py-3">{{ trim(($cobro->cliente_nombre ?? '') . ' ' . ($cobro->cliente_apellido ?? '')) ?: ($cobro->razon_social ?? 'Sin nombre') }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format((float) ($cobro->total ?? 0), 2, ',', '.') }}</td>
                     </tr>
