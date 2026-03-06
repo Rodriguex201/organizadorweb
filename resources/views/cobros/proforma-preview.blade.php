@@ -96,6 +96,7 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
                 <tr>
+                    <th class="text-left px-3 py-2">Código</th>
                     <th class="text-left px-3 py-2">Concepto</th>
                     <th class="text-right px-3 py-2">Cantidad</th>
                     <th class="text-right px-3 py-2">Valor unitario</th>
@@ -105,6 +106,7 @@
                 <tbody class="divide-y divide-slate-100">
                 @foreach($proforma['detalle']['lineas'] as $linea)
                     <tr>
+                        <td class="px-3 py-2 font-medium">{{ $linea['codigo'] }}</td>
                         <td class="px-3 py-2">{{ $linea['concepto'] }}</td>
                         <td class="px-3 py-2 text-right">{{ number_format((float) $linea['cantidad'], 2, ',', '.') }}</td>
                         <td class="px-3 py-2 text-right">{{ number_format((float) $linea['valor_unitario'], 2, ',', '.') }}</td>
@@ -114,15 +116,15 @@
                 </tbody>
                 <tfoot class="bg-slate-50">
                 <tr>
-                    <td colspan="3" class="px-3 py-2 text-right font-semibold">Total líneas</td>
+                    <td colspan="4" class="px-3 py-2 text-right font-semibold">Total líneas</td>
                     <td class="px-3 py-2 text-right font-semibold">{{ number_format((float) $proforma['detalle']['total_calculado'], 2, ',', '.') }}</td>
                 </tr>
                 <tr>
-                    <td colspan="3" class="px-3 py-2 text-right text-slate-600">Total cobro origen</td>
+                    <td colspan="4" class="px-3 py-2 text-right text-slate-600">Total cobro origen</td>
                     <td class="px-3 py-2 text-right text-slate-600">{{ number_format((float) $proforma['detalle']['total_cobro'], 2, ',', '.') }}</td>
                 </tr>
                 <tr>
-                    <td colspan="3" class="px-3 py-2 text-right font-bold">Total proforma vista previa</td>
+                    <td colspan="4" class="px-3 py-2 text-right font-bold">Total proforma vista previa</td>
                     <td class="px-3 py-2 text-right font-bold">{{ number_format((float) $proforma['detalle']['total_preview'], 2, ',', '.') }}</td>
                 </tr>
                 </tfoot>
