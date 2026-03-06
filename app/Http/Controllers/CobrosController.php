@@ -64,6 +64,7 @@ class CobrosController extends Controller
         ]);
     }
 
+
     public function previewProforma(int $id): View
     {
         $cobro = $this->cobrosService->findCobroById($id);
@@ -79,5 +80,6 @@ class CobrosController extends Controller
             'proforma' => $proforma,
         ]);
     }
+
 
 }
