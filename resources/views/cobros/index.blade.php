@@ -72,7 +72,7 @@
 
                         <td class="px-4 py-3">{{ $cobro->anio }}</td>
 
-                        <td class="px-4 py-3">{{ trim(($cobro->cliente_nombre ?? '') . ' ' . ($cobro->cliente_apellido ?? '')) ?: ($cobro->razon_social ?? 'Sin nombre') }}</td>
+                        <td class="px-4 py-3">{{ $cobro->nombre ?: ($cobro->empresa ?: ($cobro->contacto ?: 'Sin nombre')) }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format((float) ($cobro->total ?? 0), 2, ',', '.') }}</td>
                     </tr>
                 @empty
