@@ -14,6 +14,7 @@ class CobrosController extends Controller
 
     public function index(Request $request): View
     {
+
         $validated = $request->validate([
             'mes' => ['nullable', 'string', 'max:20'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
@@ -22,22 +23,27 @@ class CobrosController extends Controller
             'debug' => ['nullable'],
         ]);
 
+
         $filters = [
             'mes' => $validated['mes'] ?? null,
             'anio' => $validated['anio'] ?? $validated['ano'] ?? null,
             'proforma' => $validated['proforma'] ?? null,
         ];
 
+
         if ($request->boolean('debug')) {
             dd($this->cobrosService->debugSnapshot($filters));
         }
+
 
         $cobros = $this->cobrosService->paginateCobros($filters);
 
         return view('cobros.index', [
             'cobros' => $cobros,
             'filters' => $filters,
+
             'meses' => CobrosService::MESES,
+
         ]);
     }
 }

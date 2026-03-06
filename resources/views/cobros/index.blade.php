@@ -17,6 +17,7 @@
         <form method="GET" action="{{ route('cobros.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
                 <label for="mes" class="block text-sm font-medium mb-1">Mes</label>
+
                 <select id="mes" name="mes"
                         class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     <option value="">Todos los meses</option>
@@ -32,6 +33,7 @@
             <div>
                 <label for="anio" class="block text-sm font-medium mb-1">Año</label>
                 <input id="anio" name="anio" type="number" min="1900" max="9999" value="{{ $filters['anio'] ?? '' }}"
+
                        class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
             </div>
 
@@ -67,7 +69,9 @@
                         <td class="px-4 py-3">{{ $cobro->id_cobro }}</td>
                         <td class="px-4 py-3 font-medium">{{ $cobro->proforma }}</td>
                         <td class="px-4 py-3">{{ $cobro->mes }}</td>
+
                         <td class="px-4 py-3">{{ $cobro->anio }}</td>
+
                         <td class="px-4 py-3">{{ trim(($cobro->cliente_nombre ?? '') . ' ' . ($cobro->cliente_apellido ?? '')) ?: ($cobro->razon_social ?? 'Sin nombre') }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format((float) ($cobro->total ?? 0), 2, ',', '.') }}</td>
                     </tr>

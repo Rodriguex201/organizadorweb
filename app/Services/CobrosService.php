@@ -4,9 +4,11 @@ namespace App\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
+
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+
 
 class CobrosService
 {
@@ -25,17 +27,20 @@ class CobrosService
         12 => 'diciembre',
     ];
 
+
     public function paginateCobros(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $page = Paginator::resolveCurrentPage();
 
         try {
+
             $query = $this->buildCobrosQuery($filters);
             $this->logCobrosDebug($query);
 
             return $query
                 ->orderByDesc('ve.año')
                 ->orderByRaw($this->ordenMesSql() . ' DESC')
+
                 ->orderByDesc('ve.id_cobro')
                 ->paginate($perPage)
                 ->withQueryString();
@@ -53,14 +58,17 @@ class CobrosService
         }
     }
 
+
     public function debugSnapshot(array $filters = []): array
     {
         $baseQuery = DB::table('valores_externos as ve');
         $filteredQuery = $this->buildCobrosQuery($filters);
 
+
         return [
             'connection' => DB::connection()->getName(),
             'database' => DB::connection()->getDatabaseName(),
+
             'base_count' => (clone $baseQuery)->count(),
             'first_record' => (clone $baseQuery)->first(),
             'sql' => $filteredQuery->toSql(),
@@ -68,6 +76,7 @@ class CobrosService
             'filtered_count' => (clone $filteredQuery)->count(),
         ];
     }
+
 
     /**
      * TODO: Integrar lógica de persistencia para sg_proform y sg_proford.
@@ -84,6 +93,7 @@ class CobrosService
         ];
     }
 
+
     private function buildCobrosQuery(array $filters)
     {
         $query = DB::table('valores_externos as ve')
@@ -95,6 +105,7 @@ class CobrosService
                 've.id_cliente',
                 DB::raw('ve.`valor_total` as total'),
                 DB::raw('ve.`Proforma` as proforma'),
+
                 'cp.nombre as cliente_nombre',
                 'cp.apellido as cliente_apellido',
                 'cp.razon_social',
@@ -105,7 +116,9 @@ class CobrosService
         return $query
             ->when($mesNormalizado, fn ($q, $mes) => $q->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes]))
             ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->where('ve.año', (int) $anio))
+
             ->when($filters['proforma'] ?? null, fn ($q, $proforma) => $q->whereRaw('LOWER(TRIM(ve.`Proforma`)) like ?', ['%' . mb_strtolower(trim($proforma)) . '%']));
+
     }
 
     private function ordenMesSql(): string
@@ -136,6 +149,7 @@ class CobrosService
         ]);
     }
 
+
     private function normalizarMes(null|string|int $mes): ?string
     {
         if ($mes === null) {
@@ -160,4 +174,5 @@ class CobrosService
 
         return null;
     }
+
 }
