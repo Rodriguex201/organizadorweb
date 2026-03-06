@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
+
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\DB;
 
@@ -24,6 +25,7 @@ class CobrosService
         12 => 'diciembre',
     ];
 
+
     public function paginateCobros(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $page = Paginator::resolveCurrentPage();
@@ -35,13 +37,16 @@ class CobrosService
                     've.id_cobro',
                     've.proforma',
                     've.mes',
+
                     DB::raw('ve.`año` as anio'),
+
                     've.id_cliente_potencial',
                     've.total',
                     'cp.nombre as cliente_nombre',
                     'cp.apellido as cliente_apellido',
                     'cp.razon_social',
                 ]);
+
 
             $mesNormalizado = $this->normalizarMes($filters['mes'] ?? null);
 
@@ -68,6 +73,7 @@ class CobrosService
             return $query
                 ->orderByDesc('ve.año')
                 ->orderByRaw($ordenMes . ' DESC')
+
                 ->orderByDesc('ve.id_cobro')
                 ->paginate($perPage)
                 ->withQueryString();
@@ -100,6 +106,7 @@ class CobrosService
         ];
     }
 
+
     private function normalizarMes(null|string|int $mes): ?string
     {
         if ($mes === null) {
@@ -124,4 +131,5 @@ class CobrosService
 
         return null;
     }
+
 }
