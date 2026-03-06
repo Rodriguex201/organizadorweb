@@ -7,6 +7,8 @@ use Illuminate\Database\QueryException;
 
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
 
 class CobrosService
 {
@@ -31,48 +33,13 @@ class CobrosService
         $page = Paginator::resolveCurrentPage();
 
         try {
-            $query = DB::table('valores_externos as ve')
-                ->leftJoin('clientes_potenciales as cp', 'cp.id_cliente_potencial', '=', 've.id_cliente_potencial')
-                ->select([
-                    've.id_cobro',
-                    've.proforma',
-                    've.mes',
 
-                    DB::raw('ve.`año` as anio'),
-
-                    've.id_cliente_potencial',
-                    've.total',
-                    'cp.nombre as cliente_nombre',
-                    'cp.apellido as cliente_apellido',
-                    'cp.razon_social',
-                ]);
-
-
-            $mesNormalizado = $this->normalizarMes($filters['mes'] ?? null);
-
-            $query
-                ->when($mesNormalizado, fn ($q, $mes) => $q->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes]))
-                ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->where('ve.año', (int) $anio))
-                ->when($filters['proforma'] ?? null, fn ($q, $proforma) => $q->where('ve.proforma', 'like', '%' . trim($proforma) . '%'));
-
-            $ordenMes = "CASE LOWER(TRIM(ve.mes))\n"
-                . "WHEN 'enero' THEN 1\n"
-                . "WHEN 'febrero' THEN 2\n"
-                . "WHEN 'marzo' THEN 3\n"
-                . "WHEN 'abril' THEN 4\n"
-                . "WHEN 'mayo' THEN 5\n"
-                . "WHEN 'junio' THEN 6\n"
-                . "WHEN 'julio' THEN 7\n"
-                . "WHEN 'agosto' THEN 8\n"
-                . "WHEN 'septiembre' THEN 9\n"
-                . "WHEN 'octubre' THEN 10\n"
-                . "WHEN 'noviembre' THEN 11\n"
-                . "WHEN 'diciembre' THEN 12\n"
-                . "ELSE 0 END";
+            $query = $this->buildCobrosQuery($filters);
+            $this->logCobrosDebug($query);
 
             return $query
                 ->orderByDesc('ve.año')
-                ->orderByRaw($ordenMes . ' DESC')
+                ->orderByRaw($this->ordenMesSql() . ' DESC')
 
                 ->orderByDesc('ve.id_cobro')
                 ->paginate($perPage)
@@ -91,6 +58,27 @@ class CobrosService
         }
     }
 
+
+    public function debugSnapshot(array $filters = []): array
+    {
+        $baseCount = DB::table('valores_externos as ve')->count();
+
+        $joinedCount = DB::table('valores_externos as ve')
+            ->leftJoin('clientes_potenciales as cp', 'cp.id_cliente_potencial', '=', 've.id_cliente_potencial')
+            ->count();
+
+        $filteredCount = $this->buildCobrosQuery($filters)->count();
+
+        return [
+            'connection' => DB::connection()->getName(),
+            'database' => DB::connection()->getDatabaseName(),
+            'base_count' => $baseCount,
+            'joined_count' => $joinedCount,
+            'filtered_count' => $filteredCount,
+        ];
+    }
+
+
     /**
      * TODO: Integrar lógica de persistencia para sg_proform y sg_proford.
      */
@@ -104,6 +92,59 @@ class CobrosService
                 'items' => $data['items'] ?? [],
             ],
         ];
+    }
+
+
+    private function buildCobrosQuery(array $filters)
+    {
+        $query = DB::table('valores_externos as ve')
+            ->leftJoin('clientes_potenciales as cp', 'cp.id_cliente_potencial', '=', 've.id_cliente_potencial')
+            ->select([
+                've.id_cobro',
+                've.proforma',
+                've.mes',
+                DB::raw('ve.`año` as anio'),
+                've.id_cliente_potencial',
+                've.total',
+                'cp.nombre as cliente_nombre',
+                'cp.apellido as cliente_apellido',
+                'cp.razon_social',
+            ]);
+
+        $mesNormalizado = $this->normalizarMes($filters['mes'] ?? null);
+
+        return $query
+            ->when($mesNormalizado, fn ($q, $mes) => $q->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes]))
+            ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->where('ve.año', (int) $anio))
+            ->when($filters['proforma'] ?? null, fn ($q, $proforma) => $q->where('ve.proforma', 'like', '%' . trim($proforma) . '%'));
+    }
+
+    private function ordenMesSql(): string
+    {
+        return "CASE LOWER(TRIM(ve.mes))\n"
+            . "WHEN 'enero' THEN 1\n"
+            . "WHEN 'febrero' THEN 2\n"
+            . "WHEN 'marzo' THEN 3\n"
+            . "WHEN 'abril' THEN 4\n"
+            . "WHEN 'mayo' THEN 5\n"
+            . "WHEN 'junio' THEN 6\n"
+            . "WHEN 'julio' THEN 7\n"
+            . "WHEN 'agosto' THEN 8\n"
+            . "WHEN 'septiembre' THEN 9\n"
+            . "WHEN 'octubre' THEN 10\n"
+            . "WHEN 'noviembre' THEN 11\n"
+            . "WHEN 'diciembre' THEN 12\n"
+            . "ELSE 0 END";
+    }
+
+    private function logCobrosDebug($query): void
+    {
+        Log::info('Cobros debug query', [
+            'db_connection' => DB::connection()->getName(),
+            'database_name' => DB::connection()->getDatabaseName(),
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
     }
 
 

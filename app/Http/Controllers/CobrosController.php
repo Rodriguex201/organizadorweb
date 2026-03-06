@@ -18,9 +18,9 @@ class CobrosController extends Controller
         $validated = $request->validate([
             'mes' => ['nullable', 'string', 'max:20'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
-
             'ano' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'proforma' => ['nullable', 'string', 'max:100'],
+            'debug' => ['nullable'],
         ]);
 
 
@@ -29,6 +29,11 @@ class CobrosController extends Controller
             'anio' => $validated['anio'] ?? $validated['ano'] ?? null,
             'proforma' => $validated['proforma'] ?? null,
         ];
+
+
+        if ($request->boolean('debug')) {
+            dd($this->cobrosService->debugSnapshot($filters));
+        }
 
 
         $cobros = $this->cobrosService->paginateCobros($filters);
