@@ -84,40 +84,82 @@
         </section>
 
         <section class="bg-white rounded-lg shadow p-5">
+
+            @php
+                $nombre = trim((string) ($cobro->cliente_nombre ?? ''));
+                $empresa = trim((string) ($cobro->cliente_empresa ?? ''));
+                $contacto = trim((string) ($cobro->cliente_contacto ?? ''));
+                $celular1 = trim((string) ($cobro->cliente_celular1 ?? ''));
+                $celular2 = trim((string) ($cobro->cliente_celular2 ?? ''));
+
+                $empresaMostrada = $empresa !== '' ? $empresa : ($nombre !== '' ? $nombre : null);
+                $mostrarNombre = $nombre !== '' && ($empresa === '' || strcasecmp($nombre, $empresa) !== 0);
+                $contactoMostrado = $contacto !== '' ? $contacto : null;
+                $celularMostrado = $celular1 !== '' ? $celular1 : ($celular2 !== '' ? $celular2 : null);
+
+                $camposOpcionales = [
+                    'NIT' => trim((string) ($cobro->cliente_nit ?? '')),
+                    'Código' => trim((string) ($cobro->cliente_codigo ?? '')),
+                    'Email' => trim((string) ($cobro->cliente_email ?? '')),
+                    'Dirección' => trim((string) ($cobro->cliente_direccion ?? '')),
+                    'Régimen' => trim((string) ($cobro->cliente_regimen ?? '')),
+                    'Modalidad' => trim((string) ($cobro->cliente_modalidad ?? '')),
+                    'Categoría' => trim((string) ($cobro->cliente_categoria ?? '')),
+                ];
+            @endphp
+
+
             <h2 class="text-lg font-semibold mb-4">Datos del cliente</h2>
             <dl class="space-y-3 text-sm">
                 <div>
                     <dt class="text-slate-500">ID cliente potencial</dt>
                     <dd class="font-medium">{{ $cobro->cliente_id ?? 'N/D' }}</dd>
                 </div>
-                <div>
-                    <dt class="text-slate-500">Nombre</dt>
-                    <dd class="font-medium">{{ $cobro->cliente_nombre ?: 'N/D' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-slate-500">Empresa</dt>
-                    <dd>{{ $cobro->cliente_empresa ?: 'N/D' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-slate-500">NIT</dt>
-                    <dd>{{ $cobro->cliente_nit ?: 'N/D' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-slate-500">Código</dt>
-                    <dd>{{ $cobro->cliente_codigo ?: 'N/D' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-slate-500">Contacto</dt>
-                    <dd>{{ $cobro->cliente_contacto ?: 'N/D' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-slate-500">Celular</dt>
-                    <dd>{{ $cobro->cliente_celular1 ?: 'N/D' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-slate-500">Email</dt>
-                    <dd>{{ $cobro->cliente_email ?: 'N/D' }}</dd>
-                </div>
+
+
+                @if($empresaMostrada)
+                    <div>
+                        <dt class="text-slate-500">Empresa</dt>
+                        <dd class="font-medium">{{ $empresaMostrada }}</dd>
+                    </div>
+                @endif
+
+                @if($mostrarNombre)
+                    <div>
+                        <dt class="text-slate-500">Nombre</dt>
+                        <dd>{{ $nombre }}</dd>
+                    </div>
+                @endif
+
+                @if($contactoMostrado)
+                    <div>
+                        <dt class="text-slate-500">Contacto</dt>
+                        <dd>{{ $contactoMostrado }}</dd>
+                    </div>
+                @endif
+
+                @if($celularMostrado)
+                    <div>
+                        <dt class="text-slate-500">Celular</dt>
+                        <dd>{{ $celularMostrado }}</dd>
+                    </div>
+                @endif
+
+                @foreach($camposOpcionales as $label => $valor)
+                    @if($valor !== '')
+                        <div>
+                            <dt class="text-slate-500">{{ $label }}</dt>
+                            <dd>{{ $valor }}</dd>
+                        </div>
+                    @endif
+                @endforeach
+
+                @if(!$empresaMostrada && !$mostrarNombre && !$contactoMostrado && !$celularMostrado && collect($camposOpcionales)->every(fn ($valor) => $valor === ''))
+                    <div>
+                        <dd class="text-slate-500">No hay información de cliente disponible para este registro.</dd>
+                    </div>
+                @endif
+
             </dl>
 
             <div class="mt-6 pt-4 border-t border-slate-200">

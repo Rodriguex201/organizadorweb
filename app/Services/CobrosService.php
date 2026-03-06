@@ -93,7 +93,14 @@ class CobrosService
                 'cp.codigo as cliente_codigo',
                 'cp.contacto as cliente_contacto',
                 'cp.celular1 as cliente_celular1',
+
+                'cp.celular2 as cliente_celular2',
                 'cp.email as cliente_email',
+                'cp.direccion as cliente_direccion',
+                'cp.regimen as cliente_regimen',
+                'cp.modalidad as cliente_modalidad',
+                'cp.categoria as cliente_categoria',
+
             ])
             ->where('ve.id_cobro', $idCobro)
             ->first();
