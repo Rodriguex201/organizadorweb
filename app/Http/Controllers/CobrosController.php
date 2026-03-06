@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Services\CobrosService;
 use App\Services\ProformaPreviewService;
+use App\Services\ProformaStoreService;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -13,6 +15,7 @@ class CobrosController extends Controller
     public function __construct(
         private readonly CobrosService $cobrosService,
         private readonly ProformaPreviewService $proformaPreviewService,
+        private readonly ProformaStoreService $proformaStoreService,
     ) {
     }
 
@@ -79,6 +82,24 @@ class CobrosController extends Controller
             'cobro' => $cobro,
             'proforma' => $proforma,
         ]);
+    }
+
+    public function storeProforma(int $id): RedirectResponse
+    {
+        $cobro = $this->cobrosService->findCobroById($id);
+
+        if (!$cobro) {
+            throw new NotFoundHttpException('Cobro no encontrado.');
+        }
+
+        $resultado = $this->proformaStoreService->storeFromCobro($cobro);
+
+        $flashType = $resultado['duplicated'] ? 'warning' : 'success';
+
+        return redirect()
+            ->route('cobros.proforma.preview', $id)
+            ->with('status', $resultado['message'])
+            ->with('status_type', $flashType);
     }
 
 

@@ -8,6 +8,16 @@
 </head>
 <body class="bg-slate-100 text-slate-800">
 <div class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    @if(session('status'))
+        @php
+            $statusType = session('status_type', 'success');
+            $isWarning = $statusType === 'warning';
+        @endphp
+        <div class="rounded border px-4 py-3 text-sm {{ $isWarning ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800' }}">
+            {{ session('status') }}
+        </div>
+    @endif
+
     <div class="flex items-center justify-between">
         <div>
             <p class="text-sm text-slate-500">Módulo Cobros</p>
@@ -132,8 +142,20 @@
         </div>
 
         <p class="mt-4 text-xs text-slate-500">
-            Esta vista solo construye la proforma en memoria. La persistencia en <code>sg_proform</code> y <code>sg_proford</code> queda para la siguiente fase.
+            Esta vista refleja la construcción de la proforma y permite confirmar el guardado en <code>sg_proform</code> y <code>sg_proford</code>.
         </p>
+
+        <div class="mt-4 flex justify-end gap-2">
+            <a href="{{ route('cobros.show', $cobro->id_cobro) }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
+                Volver
+            </a>
+            <form method="POST" action="{{ route('cobros.proforma.store', $cobro->id_cobro) }}">
+                @csrf
+                <button type="submit" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                    Guardar proforma
+                </button>
+            </form>
+        </div>
     </section>
 </div>
 </body>
