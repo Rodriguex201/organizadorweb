@@ -78,6 +78,32 @@ class CobrosService
     }
 
 
+
+
+    public function findCobroById(int $idCobro): ?object
+    {
+        return DB::table('valores_externos as ve')
+            ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
+            ->select([
+                've.*',
+                'cp.idclientes_potenciales as cliente_id',
+                'cp.nombre as cliente_nombre',
+                'cp.empresa as cliente_empresa',
+                'cp.nit as cliente_nit',
+                'cp.codigo as cliente_codigo',
+                'cp.contacto as cliente_contacto',
+                'cp.celular1 as cliente_celular1',
+                'cp.celular2 as cliente_celular2',
+                'cp.email as cliente_email',
+                'cp.direccion as cliente_direccion',
+                'cp.regimen as cliente_regimen',
+                'cp.modalidad as cliente_modalidad',
+                'cp.categoria as cliente_categoria',
+            ])
+            ->where('ve.id_cobro', $idCobro)
+            ->first();
+    }
+
     /**
      * TODO: Integrar lógica de persistencia para sg_proform y sg_proford.
      */
@@ -97,7 +123,7 @@ class CobrosService
     private function buildCobrosQuery(array $filters)
     {
         $query = DB::table('valores_externos as ve')
-            ->leftJoin('clientes_potenciales as cp', 'cp.id_cliente_potencial', '=', 've.id_cliente')
+            ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
             ->select([
                 've.id_cobro',
                 've.mes',
@@ -105,19 +131,24 @@ class CobrosService
                 've.id_cliente',
                 DB::raw('ve.`valor_total` as total'),
                 DB::raw('ve.`Proforma` as proforma'),
-
-                'cp.nombre as cliente_nombre',
-                'cp.apellido as cliente_apellido',
-                'cp.razon_social',
+                'cp.nombre',
+                'cp.empresa',
+                'cp.nit',
+                'cp.codigo',
+                'cp.contacto',
+                'cp.celular1',
+                'cp.email',
             ]);
 
         $mesNormalizado = $this->normalizarMes($filters['mes'] ?? null);
 
         return $query
             ->when($mesNormalizado, fn ($q, $mes) => $q->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes]))
-            ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->where('ve.año', (int) $anio))
-
-            ->when($filters['proforma'] ?? null, fn ($q, $proforma) => $q->whereRaw('LOWER(TRIM(ve.`Proforma`)) like ?', ['%' . mb_strtolower(trim($proforma)) . '%']));
+            ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->whereRaw('ve.`año` = ?', [(int) $anio]))
+            ->when(
+                $this->normalizarProforma($filters['proforma'] ?? null),
+                fn ($q, $proforma) => $q->whereRaw('ve.`Proforma` = ?', [$proforma]),
+            );
 
     }
 
@@ -173,6 +204,21 @@ class CobrosService
         }
 
         return null;
+    }
+
+    private function normalizarProforma(null|string|int $proforma): ?int
+    {
+        if ($proforma === null) {
+            return null;
+        }
+
+        $valor = trim((string) $proforma);
+
+        if ($valor === '' || !ctype_digit($valor)) {
+            return null;
+        }
+
+        return (int) $valor;
     }
 
 }

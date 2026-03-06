@@ -8,3 +8,5 @@ Route::get('/', function () {
 });
 
 Route::get('/cobros', [CobrosController::class, 'index'])->name('cobros.index');
+
+Route::get('/cobros/{id}', [CobrosController::class, 'show'])->name('cobros.show');

@@ -61,6 +61,7 @@
                     <th class="text-left px-4 py-3">Año</th>
                     <th class="text-left px-4 py-3">Cliente potencial</th>
                     <th class="text-right px-4 py-3">Total</th>
+                    <th class="text-left px-4 py-3">Acciones</th>
                 </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -72,12 +73,17 @@
 
                         <td class="px-4 py-3">{{ $cobro->anio }}</td>
 
-                        <td class="px-4 py-3">{{ trim(($cobro->cliente_nombre ?? '') . ' ' . ($cobro->cliente_apellido ?? '')) ?: ($cobro->razon_social ?? 'Sin nombre') }}</td>
+                        <td class="px-4 py-3">{{ $cobro->nombre ?: ($cobro->empresa ?: ($cobro->contacto ?: 'Sin nombre')) }}</td>
                         <td class="px-4 py-3 text-right">{{ number_format((float) ($cobro->total ?? 0), 2, ',', '.') }}</td>
+                        <td class="px-4 py-3">
+                            <a href="{{ route('cobros.show', $cobro->id_cobro) }}" class="inline-flex items-center rounded bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-200">
+                                Ver detalle
+                            </a>
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-slate-500">No hay cobros disponibles para los filtros seleccionados.</td>
+                        <td colspan="7" class="px-4 py-8 text-center text-slate-500">No hay cobros disponibles para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>
