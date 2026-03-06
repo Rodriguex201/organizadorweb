@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle de Cobro #{{ $cobro->id_cobro }}</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <p class="text-sm text-slate-500">Módulo Cobros</p>
+            <h1 class="text-2xl font-bold">Detalle de cobro #{{ $cobro->id_cobro }}</h1>
+        </div>
+        <a href="{{ route('cobros.index') }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
+            Volver al listado
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <section class="bg-white rounded-lg shadow p-5 lg:col-span-2">
+            <h2 class="text-lg font-semibold mb-4">Resumen del cobro</h2>
+            <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <dt class="text-slate-500">Mes</dt>
+                    <dd class="font-medium">{{ ucfirst((string) ($cobro->mes ?? '')) ?: 'N/D' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Año</dt>
+                    <dd class="font-medium">{{ $cobro->año ?? 'N/D' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">ID Cliente (ve.id_cliente)</dt>
+                    <dd class="font-medium">{{ $cobro->id_cliente ?? 'N/D' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Estado Proforma</dt>
+                    <dd>
+                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ (int) ($cobro->Proforma ?? 0) === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
+                            {{ (int) ($cobro->Proforma ?? 0) === 1 ? 'Generada' : 'Pendiente' }}
+                        </span>
+                    </dd>
+                </div>
+            </dl>
+
+            <div class="mt-6 border-t border-slate-200 pt-4">
+                <h3 class="font-semibold mb-3">Campos numéricos y monetarios de valores_externos</h3>
+                @php
+                    $numericFields = collect(get_object_vars($cobro))
+                        ->reject(fn ($value, $key) => str_starts_with($key, 'cliente_'))
+                        ->filter(function ($value) {
+                            if ($value === null || $value === '') {
+                                return false;
+                            }
+
+                            return is_numeric($value);
+                        });
+                @endphp
+
+                @if($numericFields->isEmpty())
+                    <p class="text-sm text-slate-500">No se encontraron campos numéricos para este cobro.</p>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
+                            <tr>
+                                <th class="text-left px-3 py-2">Campo</th>
+                                <th class="text-right px-3 py-2">Valor</th>
+                            </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                            @foreach($numericFields as $field => $value)
+                                <tr>
+                                    <td class="px-3 py-2 font-mono text-xs text-slate-700">{{ $field }}</td>
+                                    <td class="px-3 py-2 text-right">{{ number_format((float) $value, 2, ',', '.') }}</td>
+                                </tr>
+                            @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </section>
+
+        <section class="bg-white rounded-lg shadow p-5">
+            @php
+                $nombre = trim((string) ($cobro->cliente_nombre ?? ''));
+                $empresa = trim((string) ($cobro->cliente_empresa ?? ''));
+                $contacto = trim((string) ($cobro->cliente_contacto ?? ''));
+                $celular1 = trim((string) ($cobro->cliente_celular1 ?? ''));
+                $celular2 = trim((string) ($cobro->cliente_celular2 ?? ''));
+
+                $empresaMostrada = $empresa !== '' ? $empresa : ($nombre !== '' ? $nombre : null);
+                $mostrarNombre = $nombre !== '' && ($empresa === '' || strcasecmp($nombre, $empresa) !== 0);
+                $contactoMostrado = $contacto !== '' ? $contacto : null;
+                $celularMostrado = $celular1 !== '' ? $celular1 : ($celular2 !== '' ? $celular2 : null);
+
+                $camposOpcionales = [
+                    'NIT' => trim((string) ($cobro->cliente_nit ?? '')),
+                    'Código' => trim((string) ($cobro->cliente_codigo ?? '')),
+                    'Email' => trim((string) ($cobro->cliente_email ?? '')),
+                    'Dirección' => trim((string) ($cobro->cliente_direccion ?? '')),
+                    'Régimen' => trim((string) ($cobro->cliente_regimen ?? '')),
+                    'Modalidad' => trim((string) ($cobro->cliente_modalidad ?? '')),
+                    'Categoría' => trim((string) ($cobro->cliente_categoria ?? '')),
+                ];
+            @endphp
+
+            <h2 class="text-lg font-semibold mb-4">Datos del cliente</h2>
+            <dl class="space-y-3 text-sm">
+                <div>
+                    <dt class="text-slate-500">ID cliente potencial</dt>
+                    <dd class="font-medium">{{ $cobro->cliente_id ?? 'N/D' }}</dd>
+                </div>
+
+                @if($empresaMostrada)
+                    <div>
+                        <dt class="text-slate-500">Empresa</dt>
+                        <dd class="font-medium">{{ $empresaMostrada }}</dd>
+                    </div>
+                @endif
+
+                @if($mostrarNombre)
+                    <div>
+                        <dt class="text-slate-500">Nombre</dt>
+                        <dd>{{ $nombre }}</dd>
+                    </div>
+                @endif
+
+                @if($contactoMostrado)
+                    <div>
+                        <dt class="text-slate-500">Contacto</dt>
+                        <dd>{{ $contactoMostrado }}</dd>
+                    </div>
+                @endif
+
+                @if($celularMostrado)
+                    <div>
+                        <dt class="text-slate-500">Celular</dt>
+                        <dd>{{ $celularMostrado }}</dd>
+                    </div>
+                @endif
+
+                @foreach($camposOpcionales as $label => $valor)
+                    @if($valor !== '')
+                        <div>
+                            <dt class="text-slate-500">{{ $label }}</dt>
+                            <dd>{{ $valor }}</dd>
+                        </div>
+                    @endif
+                @endforeach
+
+                @if(!$empresaMostrada && !$mostrarNombre && !$contactoMostrado && !$celularMostrado && collect($camposOpcionales)->every(fn ($valor) => $valor === ''))
+                    <div>
+                        <dd class="text-slate-500">No hay información de cliente disponible para este registro.</dd>
+                    </div>
+                @endif
+            </dl>
+
+            <div class="mt-6 pt-4 border-t border-slate-200">
+                <a href="{{ route('cobros.proforma.preview', $cobro->id_cobro) }}" class="inline-flex w-full items-center justify-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    Generar proforma (vista previa)
+                </a>
+            </div>
+        </section>
+    </div>
+</div>
+</body>
+</html>
