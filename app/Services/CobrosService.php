@@ -61,20 +61,19 @@ class CobrosService
 
     public function debugSnapshot(array $filters = []): array
     {
-        $baseCount = DB::table('valores_externos as ve')->count();
+        $baseQuery = DB::table('valores_externos as ve');
+        $filteredQuery = $this->buildCobrosQuery($filters);
 
-        $joinedCount = DB::table('valores_externos as ve')
-            ->leftJoin('clientes_potenciales as cp', 'cp.id_cliente_potencial', '=', 've.id_cliente_potencial')
-            ->count();
-
-        $filteredCount = $this->buildCobrosQuery($filters)->count();
 
         return [
             'connection' => DB::connection()->getName(),
             'database' => DB::connection()->getDatabaseName(),
-            'base_count' => $baseCount,
-            'joined_count' => $joinedCount,
-            'filtered_count' => $filteredCount,
+
+            'base_count' => (clone $baseQuery)->count(),
+            'first_record' => (clone $baseQuery)->first(),
+            'sql' => $filteredQuery->toSql(),
+            'bindings' => $filteredQuery->getBindings(),
+            'filtered_count' => (clone $filteredQuery)->count(),
         ];
     }
 
@@ -98,14 +97,15 @@ class CobrosService
     private function buildCobrosQuery(array $filters)
     {
         $query = DB::table('valores_externos as ve')
-            ->leftJoin('clientes_potenciales as cp', 'cp.id_cliente_potencial', '=', 've.id_cliente_potencial')
+            ->leftJoin('clientes_potenciales as cp', 'cp.id_cliente_potencial', '=', 've.id_cliente')
             ->select([
                 've.id_cobro',
-                've.proforma',
                 've.mes',
                 DB::raw('ve.`año` as anio'),
-                've.id_cliente_potencial',
-                've.total',
+                've.id_cliente',
+                DB::raw('ve.`valor_total` as total'),
+                DB::raw('ve.`Proforma` as proforma'),
+
                 'cp.nombre as cliente_nombre',
                 'cp.apellido as cliente_apellido',
                 'cp.razon_social',
@@ -116,7 +116,9 @@ class CobrosService
         return $query
             ->when($mesNormalizado, fn ($q, $mes) => $q->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes]))
             ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->where('ve.año', (int) $anio))
-            ->when($filters['proforma'] ?? null, fn ($q, $proforma) => $q->where('ve.proforma', 'like', '%' . trim($proforma) . '%'));
+
+            ->when($filters['proforma'] ?? null, fn ($q, $proforma) => $q->whereRaw('LOWER(TRIM(ve.`Proforma`)) like ?', ['%' . mb_strtolower(trim($proforma)) . '%']));
+
     }
 
     private function ordenMesSql(): string
