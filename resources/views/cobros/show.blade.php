@@ -163,9 +163,10 @@
             </dl>
 
             <div class="mt-6 pt-4 border-t border-slate-200">
-                <button type="button" disabled class="w-full rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-500 cursor-not-allowed" title="Próximamente">
-                    Generar proforma (próximamente)
-                </button>
+                <a href="{{ route('cobros.proforma.preview', $cobro->id_cobro) }}" class="inline-flex w-full items-center justify-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    Generar proforma (vista previa)
+                </a>
+
             </div>
         </section>
     </div>

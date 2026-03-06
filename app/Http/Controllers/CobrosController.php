@@ -3,14 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Services\CobrosService;
+use App\Services\ProformaPreviewService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CobrosController extends Controller
 {
-    public function __construct(private readonly CobrosService $cobrosService)
-    {
+    public function __construct(
+        private readonly CobrosService $cobrosService,
+        private readonly ProformaPreviewService $proformaPreviewService,
+    ) {
     }
 
     public function index(Request $request): View
@@ -60,5 +63,23 @@ class CobrosController extends Controller
             'cobro' => $cobro,
         ]);
     }
+
+
+    public function previewProforma(int $id): View
+    {
+        $cobro = $this->cobrosService->findCobroById($id);
+
+        if (!$cobro) {
+            throw new NotFoundHttpException('Cobro no encontrado.');
+        }
+
+        $proforma = $this->proformaPreviewService->buildFromCobro($cobro);
+
+        return view('cobros.proforma-preview', [
+            'cobro' => $cobro,
+            'proforma' => $proforma,
+        ]);
+    }
+
 
 }
