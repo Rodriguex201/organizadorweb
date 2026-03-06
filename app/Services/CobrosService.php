@@ -4,9 +4,11 @@ namespace App\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
+
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+
 
 class CobrosService
 {
@@ -25,17 +27,20 @@ class CobrosService
         12 => 'diciembre',
     ];
 
+
     public function paginateCobros(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $page = Paginator::resolveCurrentPage();
 
         try {
+
             $query = $this->buildCobrosQuery($filters);
             $this->logCobrosDebug($query);
 
             return $query
                 ->orderByDesc('ve.año')
                 ->orderByRaw($this->ordenMesSql() . ' DESC')
+
                 ->orderByDesc('ve.id_cobro')
                 ->paginate($perPage)
                 ->withQueryString();
@@ -52,6 +57,7 @@ class CobrosService
             );
         }
     }
+
 
     public function debugSnapshot(array $filters = []): array
     {
@@ -72,6 +78,7 @@ class CobrosService
         ];
     }
 
+
     /**
      * TODO: Integrar lógica de persistencia para sg_proform y sg_proford.
      */
@@ -86,6 +93,7 @@ class CobrosService
             ],
         ];
     }
+
 
     private function buildCobrosQuery(array $filters)
     {
@@ -139,6 +147,7 @@ class CobrosService
         ]);
     }
 
+
     private function normalizarMes(null|string|int $mes): ?string
     {
         if ($mes === null) {
@@ -163,4 +172,5 @@ class CobrosService
 
         return null;
     }
+
 }
