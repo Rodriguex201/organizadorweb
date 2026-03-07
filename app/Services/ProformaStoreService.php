@@ -3,9 +3,27 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProformaStoreService
 {
+    private const CODIGOS_CONCEPTO_OFICIALES = ['0010', '0099', '0081', '0101', '0102', 'EXTRA'];
+
+    private const MESES_ES = [
+        'enero' => 1,
+        'febrero' => 2,
+        'marzo' => 3,
+        'abril' => 4,
+        'mayo' => 5,
+        'junio' => 6,
+        'julio' => 7,
+        'agosto' => 8,
+        'septiembre' => 9,
+        'octubre' => 10,
+        'noviembre' => 11,
+        'diciembre' => 12,
+    ];
+
     public function __construct(
         private readonly ProformaPreviewService $proformaPreviewService,
     ) {
@@ -17,7 +35,8 @@ class ProformaStoreService
             $preview = $this->proformaPreviewService->buildFromCobro($cobro);
 
             $nit = trim((string) ($cobro->cliente_nit ?? ''));
-            $mes = trim((string) ($cobro->mes ?? ''));
+            $mesTexto = trim((string) ($cobro->mes ?? ''));
+            $mes = $this->normalizarMesParaProforma($mesTexto);
             $anio = (int) ($cobro->año ?? 0);
             $emisora = (string) ($preview['cabecera']['empresa_emisora'] ?? 'SAS');
 
@@ -71,12 +90,26 @@ class ProformaStoreService
 
             $proformaId = (int) DB::table('sg_proform')->insertGetId($cabecera);
 
+            $catalogoConceptos = $this->obtenerCatalogoConceptos();
             $detalleRows = [];
             foreach ($lineas as $index => $linea) {
+                $codigoLinea = (string) ($linea['codigo'] ?? '');
+
+                // Código de prueba deshabilitado temporalmente (sin código oficial aún en tabla conceptos).
+                if ($codigoLinea === '01') {
+                    continue;
+                }
+
+                $concepto = $this->resolverConceptoDesdeCatalogo(
+                    $codigoLinea,
+                    (string) ($linea['concepto'] ?? ''),
+                    $catalogoConceptos,
+                );
+
                 $detalleRows[] = [
                     'proforma_id' => $proformaId,
-                    'ref_codigo' => (string) ($linea['codigo'] ?? ''),
-                    'descripcion' => (string) ($linea['concepto'] ?? ''),
+                    'ref_codigo' => $concepto['codigo'],
+                    'descripcion' => $concepto['nombre'],
                     'cantidad' => (float) ($linea['cantidad'] ?? 0),
                     'vr_unidad' => (float) ($linea['valor_unitario'] ?? 0),
                     'vr_parcial' => (float) ($linea['valor_parcial'] ?? 0),
@@ -132,5 +165,63 @@ class ProformaStoreService
 
         return $nombre !== '' ? $nombre : null;
     }
-}
 
+    private function normalizarMesParaProforma(null|string|int $mes): ?int
+    {
+        if ($mes === null) {
+            return null;
+        }
+
+        $valor = trim((string) $mes);
+        if ($valor === '') {
+            return null;
+        }
+
+        if (is_numeric($valor)) {
+            $mesNumero = (int) $valor;
+
+            return ($mesNumero >= 1 && $mesNumero <= 12) ? $mesNumero : null;
+        }
+
+        $mesNumero = self::MESES_ES[mb_strtolower($valor)] ?? null;
+
+        return $mesNumero;
+    }
+
+    /**
+     * @return array<string, object>
+     */
+    private function obtenerCatalogoConceptos(): array
+    {
+        return DB::table('conceptos')
+            ->select('codigo', 'nombre')
+            ->whereIn('codigo', self::CODIGOS_CONCEPTO_OFICIALES)
+            ->get()
+            ->mapWithKeys(fn ($concepto) => [(string) $concepto->codigo => $concepto])
+            ->all();
+    }
+
+    /**
+     * @param array<string, object> $catalogoConceptos
+     * @return array{codigo:string,nombre:string}
+     */
+    private function resolverConceptoDesdeCatalogo(string $codigo, string $descripcionFallback, array $catalogoConceptos): array
+    {
+        if (isset($catalogoConceptos[$codigo])) {
+            return [
+                'codigo' => (string) $catalogoConceptos[$codigo]->codigo,
+                'nombre' => (string) $catalogoConceptos[$codigo]->nombre,
+            ];
+        }
+
+        Log::warning('Concepto no encontrado en catálogo oficial para detalle de proforma, usando fallback.', [
+            'codigo' => $codigo,
+            'descripcion_fallback' => $descripcionFallback,
+        ]);
+
+        return [
+            'codigo' => $codigo,
+            'nombre' => $descripcionFallback,
+        ];
+    }
+}
