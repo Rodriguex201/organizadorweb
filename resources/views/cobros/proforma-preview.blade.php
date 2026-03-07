@@ -145,10 +145,22 @@
             Esta vista refleja la construcción de la proforma y permite confirmar el guardado en <code>sg_proform</code> y <code>sg_proford</code>.
         </p>
 
+        @php
+            $proformaPdfId = session('proforma_id') ?? ($proformaPersistidaId ?? null);
+        @endphp
+
         <div class="mt-4 flex justify-end gap-2">
             <a href="{{ route('cobros.show', $cobro->id_cobro) }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
                 Volver
             </a>
+            @if($proformaPdfId)
+                <a href="{{ route('proformas.pdf.show', $proformaPdfId) }}" target="_blank" class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    Ver PDF
+                </a>
+                <a href="{{ route('proformas.pdf.show', ['id' => $proformaPdfId, 'regenerar' => 1]) }}" target="_blank" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
+                    Regenerar PDF
+                </a>
+            @endif
             <form method="POST" action="{{ route('cobros.proforma.store', $cobro->id_cobro) }}">
                 @csrf
                 <button type="submit" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
