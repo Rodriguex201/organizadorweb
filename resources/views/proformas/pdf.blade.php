@@ -103,17 +103,6 @@
     </tbody>
 </table>
 
-<div class="section-title">Totales</div>
-
-<table class="card">
-    <tr><th>vlr_mens</th><td class="money">{{ number_format((float) ($cabecera->vlr_mens ?? 0), 2, ',', '.') }}</td></tr>
-    <tr><th>vlr_nom</th><td class="money">{{ number_format((float) ($cabecera->vlr_nom ?? 0), 2, ',', '.') }}</td></tr>
-    <tr><th>vlr_fe</th><td class="money">{{ number_format((float) ($cabecera->vlr_fe ?? 0), 2, ',', '.') }}</td></tr>
-    <tr><th>vlr_rec</th><td class="money">{{ number_format((float) ($cabecera->vlr_rec ?? 0), 2, ',', '.') }}</td></tr>
-    <tr><th>vlr_sop</th><td class="money">{{ number_format((float) ($cabecera->vlr_sop ?? 0), 2, ',', '.') }}</td></tr>
-    <tr><th>vext1</th><td class="money">{{ number_format((float) ($cabecera->vext1 ?? 0), 2, ',', '.') }}</td></tr>
-    <tr><th>vext2</th><td class="money">{{ number_format((float) ($cabecera->vext2 ?? 0), 2, ',', '.') }}</td></tr>
-</table>
 
 <div class="section-title">Total en letras</div>
 <div class="subtle">{{ $cabecera->total_letras ?? 'Pendiente de configuración.' }}</div>

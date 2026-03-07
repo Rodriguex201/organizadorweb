@@ -103,11 +103,16 @@ class ProformaPdfService
     private function resolverLogoPath(string $emisora): ?string
     {
         $em = strtoupper(trim($emisora));
-        if (!in_array($em, ['SAS', 'PCS', 'SMP'], true)) {
-            return null;
-        }
 
-        $path = public_path("images/logos/{$em}.png");
+        $logoPorEmisora = [
+            'PCS' => 'pcs.png',
+            'SAS' => 'rmsoft.png',
+            'SMP' => 'rmsoft.png',
+        ];
+
+        $logo = $logoPorEmisora[$em] ?? 'rmsoft.png';
+        $path = public_path("images/logos/{$logo}");
+
 
         return file_exists($path) ? $path : null;
     }
