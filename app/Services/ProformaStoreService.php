@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Log;
 
 class ProformaStoreService
 {
+
     private const CODIGOS_CONCEPTO_OFICIALES = ['0010', '0099', '0081', '0101', '0102', 'EXTRA'];
+
 
     private const MESES_ES = [
         'enero' => 1,
@@ -187,6 +189,7 @@ class ProformaStoreService
     }
 
 
+
     private function resolverEmpresaEmisoraDesdeRegimen(object $cobro): string
     {
         $regimen = strtoupper(trim((string) ($cobro->cliente_regimen ?? '')));
@@ -197,6 +200,7 @@ class ProformaStoreService
             default => 'SAS',
         };
     }
+
 
     private function normalizarMesParaProforma(null|string|int $mes): ?int
     {
@@ -219,6 +223,7 @@ class ProformaStoreService
 
         return $mesNumero;
     }
+
 
     /**
      * @return array<string, object>
@@ -256,4 +261,5 @@ class ProformaStoreService
             'nombre' => $descripcionFallback,
         ];
     }
+
 }

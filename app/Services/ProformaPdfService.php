@@ -113,6 +113,7 @@ class ProformaPdfService
         $logo = $logoPorEmisora[$em] ?? 'rmsoft.png';
         $path = public_path("images/logos/{$logo}");
 
+
         return file_exists($path) ? $path : null;
     }
 
