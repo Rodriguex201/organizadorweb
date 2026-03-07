@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Services\CobrosService;
+use App\Services\ProformaPdfService;
 use App\Services\ProformaPreviewService;
 use App\Services\ProformaStoreService;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class CobrosController extends Controller
@@ -16,6 +18,7 @@ class CobrosController extends Controller
         private readonly CobrosService $cobrosService,
         private readonly ProformaPreviewService $proformaPreviewService,
         private readonly ProformaStoreService $proformaStoreService,
+        private readonly ProformaPdfService $proformaPdfService,
     ) {
     }
 
@@ -62,8 +65,11 @@ class CobrosController extends Controller
             throw new NotFoundHttpException('Cobro no encontrado.');
         }
 
+        $proformaPersistidaId = $this->proformaStoreService->findExistingProformaIdFromCobro($cobro);
+
         return view('cobros.show', [
             'cobro' => $cobro,
+            'proformaPersistidaId' => $proformaPersistidaId,
         ]);
     }
 
@@ -77,10 +83,12 @@ class CobrosController extends Controller
         }
 
         $proforma = $this->proformaPreviewService->buildFromCobro($cobro);
+        $proformaPersistidaId = $this->proformaStoreService->findExistingProformaIdFromCobro($cobro);
 
         return view('cobros.proforma-preview', [
             'cobro' => $cobro,
             'proforma' => $proforma,
+            'proformaPersistidaId' => $proformaPersistidaId,
         ]);
     }
 
@@ -99,8 +107,20 @@ class CobrosController extends Controller
         return redirect()
             ->route('cobros.proforma.preview', $id)
             ->with('status', $resultado['message'])
-            ->with('status_type', $flashType);
+            ->with('status_type', $flashType)
+            ->with('proforma_id', $resultado['proforma_id'] ?? null);
     }
 
+    public function showProformaPdf(Request $request, int $id): BinaryFileResponse
+    {
+        $resultado = $this->proformaPdfService->generateForProformaId(
+            $id,
+            $request->boolean('regenerar'),
+        );
 
+        return response()->file($resultado['absolute_path'], [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$resultado['filename'].'"',
+        ]);
+    }
 }

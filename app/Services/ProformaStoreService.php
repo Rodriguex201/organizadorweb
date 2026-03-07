@@ -31,6 +31,26 @@ class ProformaStoreService
     ) {
     }
 
+
+    public function findExistingProformaIdFromCobro(object $cobro): ?int
+    {
+        $nit = trim((string) ($cobro->cliente_nit ?? ''));
+        $mesTexto = trim((string) ($cobro->mes ?? ''));
+        $mes = $this->normalizarMesParaProforma($mesTexto);
+        $anio = (int) ($cobro->año ?? 0);
+        $emisora = $this->resolverEmpresaEmisoraDesdeRegimen($cobro);
+
+        $proforma = DB::table('sg_proform')
+            ->select('id')
+            ->where('nit', $nit)
+            ->where('mes', $mes)
+            ->where('anio', $anio)
+            ->where('emisora', $emisora)
+            ->first();
+
+        return $proforma ? (int) $proforma->id : null;
+    }
+
     public function storeFromCobro(object $cobro): array
     {
         return DB::transaction(function () use ($cobro) {
@@ -167,6 +187,20 @@ class ProformaStoreService
 
         return $nombre !== '' ? $nombre : null;
     }
+
+
+
+    private function resolverEmpresaEmisoraDesdeRegimen(object $cobro): string
+    {
+        $regimen = strtoupper(trim((string) ($cobro->cliente_regimen ?? '')));
+
+        return match ($regimen) {
+            'PCS' => 'PCS',
+            'SMP' => 'SMP',
+            default => 'SAS',
+        };
+    }
+
 
     private function normalizarMesParaProforma(null|string|int $mes): ?int
     {
