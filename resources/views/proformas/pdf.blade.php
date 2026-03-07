@@ -27,6 +27,7 @@
 <body>
 @php
     $valorTotal = (float) ($cabecera->vtotal ?? 0);
+    $clientePdf = $cliente_pdf ?? ['direccion' => 'N/D', 'telefono' => 'N/D', 'correo' => 'N/D'];
 @endphp
 
 <table class="header">
@@ -60,13 +61,13 @@
     </tr>
     <tr>
         <th>Dirección</th>
-        <td>{{ $cabecera->direccion ?? 'N/D' }}</td>
+        <td>{{ $clientePdf['direccion'] }}</td>
         <th>Teléfono</th>
-        <td>{{ $cabecera->telefono ?? 'N/D' }}</td>
+        <td>{{ $clientePdf['telefono'] }}</td>
     </tr>
     <tr>
         <th>Correo</th>
-        <td colspan="3">{{ $cabecera->correo ?? 'N/D' }}</td>
+        <td colspan="3">{{ $clientePdf['correo'] }}</td>
 
     </tr>
 </table>
