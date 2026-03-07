@@ -5,6 +5,7 @@
     <title>Proforma #{{ $cabecera->nro_prof ?? $cabecera->id }}</title>
     <style>
         body { font-family: DejaVu Sans, sans-serif; color: #1f2937; font-size: 12px; }
+
         .header { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
         .header td { vertical-align: top; border: none; }
         .title { font-size: 20px; font-weight: bold; margin-bottom: 8px; }
@@ -42,10 +43,12 @@
                 <img src="{{ $logo_path }}" alt="Logo {{ $cabecera->emisora }}" style="max-height: 74px;">
             @else
                 <div class="subtle">Logo {{ $cabecera->emisora ?? 'N/D' }} pendiente</div>
+
             @endif
         </td>
     </tr>
 </table>
+
 
 <div class="section-title">Datos del cliente</div>
 <table class="card">
@@ -64,10 +67,12 @@
     <tr>
         <th>Correo</th>
         <td colspan="3">{{ $cabecera->correo ?? 'N/D' }}</td>
+
     </tr>
 </table>
 
 <div class="section-title">Detalle</div>
+
 <table class="card">
     <thead>
     <tr>
@@ -76,6 +81,7 @@
         <th class="text-center" style="width: 10%;">Cantidad</th>
         <th class="text-right" style="width: 17%;">Vr Unidad</th>
         <th class="text-right" style="width: 17%;">Valor Parcial</th>
+
     </tr>
     </thead>
     <tbody>
@@ -83,6 +89,7 @@
         <tr>
             <td>{{ $linea->ref_codigo }}</td>
             <td>{{ $linea->descripcion }}</td>
+
             <td class="text-center">{{ number_format((float) $linea->cantidad, 2, ',', '.') }}</td>
             <td class="money">{{ number_format((float) $linea->vr_unidad, 2, ',', '.') }}</td>
             <td class="money">{{ number_format((float) $linea->vr_parcial, 2, ',', '.') }}</td>
@@ -90,12 +97,14 @@
     @empty
         <tr>
             <td colspan="5" class="subtle">Sin líneas de detalle.</td>
+
         </tr>
     @endforelse
     </tbody>
 </table>
 
 <div class="section-title">Totales</div>
+
 <table class="card">
     <tr><th>vlr_mens</th><td class="money">{{ number_format((float) ($cabecera->vlr_mens ?? 0), 2, ',', '.') }}</td></tr>
     <tr><th>vlr_nom</th><td class="money">{{ number_format((float) ($cabecera->vlr_nom ?? 0), 2, ',', '.') }}</td></tr>
@@ -117,5 +126,6 @@
 <div class="footer-note">
     Esta proforma debe pagarse en su totalidad para habilitar la prestación del servicio.
 </div>
+
 </body>
 </html>
