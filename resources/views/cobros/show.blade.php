@@ -162,11 +162,16 @@
 
             </dl>
 
-            <div class="mt-6 pt-4 border-t border-slate-200">
+            <div class="mt-6 pt-4 border-t border-slate-200 space-y-2">
                 <a href="{{ route('cobros.proforma.preview', $cobro->id_cobro) }}" class="inline-flex w-full items-center justify-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
                     Generar proforma (vista previa)
                 </a>
 
+                @if(!empty($proformaPersistidaId))
+                    <a href="{{ route('proformas.pdf.show', $proformaPersistidaId) }}" target="_blank" class="inline-flex w-full items-center justify-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                        Ver PDF de proforma guardada
+                    </a>
+                @endif
             </div>
         </section>
     </div>

@@ -129,15 +129,16 @@ class ProformaPreviewService
             );
         }
 
-        $valorTerminalRecepcion = $this->toFloat($cobro->cliente_vlrextra2 ?? null);
-        if ($valorTerminalRecepcion > 0) {
-            $lineas[] = new LineaProforma(
-                codigo: '01',
-                concepto: 'VALOR TERMINAL RECEPCIÓN',
-                cantidad: 1,
-                valorUnitario: $valorTerminalRecepcion,
-            );
-        }
+        // Línea temporalmente desactivada: pendiente código oficial en tabla conceptos.
+        // $valorTerminalRecepcion = $this->toFloat($cobro->cliente_vlrextra2 ?? null);
+        // if ($valorTerminalRecepcion > 0) {
+        //     $lineas[] = new LineaProforma(
+        //         codigo: '01',
+        //         concepto: 'VALOR TERMINAL RECEPCIÓN',
+        //         cantidad: 1,
+        //         valorUnitario: $valorTerminalRecepcion,
+        //     );
+        // }
 
         return $lineas;
     }
@@ -171,8 +172,8 @@ class ProformaPreviewService
             + $this->toFloat($cobro->valor_facturas ?? null)
             + $this->toFloat($cobro->valor_documentos ?? null)
             + $this->toFloat($cobro->valor_acuse ?? null)
-            + $this->toFloat($cobro->cliente_vlrextra ?? null)
-            + $this->toFloat($cobro->cliente_vlrextra2 ?? null);
+            + $this->toFloat($cobro->cliente_vlrextra ?? null);
+            // + $this->toFloat($cobro->cliente_vlrextra2 ?? null); // Pendiente código oficial.
     }
 
     private function toFloat(mixed $valor): float
