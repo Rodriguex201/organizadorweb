@@ -51,6 +51,34 @@ class ProformasController extends Controller
         ]);
     }
 
+
+
+    public function dashboard(Request $request): View
+    {
+        $validated = $request->validate([
+            'mes' => ['nullable', 'string', 'max:20'],
+            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+        ]);
+
+        $periodo = $this->proformasService->normalizePeriodoFilters(
+            $validated['mes'] ?? null,
+            $validated['anio'] ?? null,
+        );
+
+        $dashboard = $this->proformasService->getDashboardData(
+            $periodo['mes'],
+            $periodo['anio'],
+        );
+
+        return view('proformas.dashboard', [
+            'dashboard' => $dashboard,
+            'filters' => $periodo,
+            'meses' => ProformasService::MESES,
+            'proformasService' => $this->proformasService,
+        ]);
+    }
+
+
     public function showPdf(Request $request, int $id): BinaryFileResponse
     {
         $resultado = $this->proformaPdfService->generateForProformaId(

@@ -13,9 +13,15 @@
             <h1 class="text-2xl font-bold">Listado de Proformas</h1>
             <p class="text-sm text-slate-600">Consulta administrativa sobre <code>sg_proform</code>.</p>
         </div>
-        <a href="{{ route('cobros.index') }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
-            Ir a Cobros
-        </a>
+
+        <div class="flex gap-2">
+            <a href="{{ route('proformas.dashboard') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
+                Ver dashboard
+            </a>
+            <a href="{{ route('cobros.index') }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
+                Ir a Cobros
+            </a>
+        </div>
     </div>
 
 

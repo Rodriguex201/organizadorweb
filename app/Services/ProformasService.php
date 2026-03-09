@@ -83,6 +83,65 @@ class ProformasService
     }
 
 
+    public function getDashboardData(int $mes, int $anio): array
+    {
+        $basePeriodo = DB::table('sg_proform as p')
+            ->where('p.mes', $mes)
+            ->where('p.anio', $anio);
+
+        $totalProformas = (clone $basePeriodo)->count();
+        $sumaTotal = (float) ((clone $basePeriodo)->sum('p.vtotal') ?? 0);
+
+        $totalesPorEstado = [];
+        foreach (self::ESTADOS as $estadoCodigo => $estadoLabel) {
+            $totalesPorEstado[$estadoCodigo] = [
+                'label' => $estadoLabel,
+                'cantidad' => (clone $basePeriodo)->where('p.estado', $estadoCodigo)->count(),
+                'total' => (float) ((clone $basePeriodo)->where('p.estado', $estadoCodigo)->sum('p.vtotal') ?? 0),
+            ];
+        }
+
+        $ultimasProformas = (clone $basePeriodo)
+            ->select([
+                'p.id',
+                'p.nro_prof',
+                'p.emp',
+                'p.nit',
+                'p.emisora',
+                'p.mes',
+                'p.anio',
+                'p.vtotal',
+                'p.estado',
+            ])
+            ->orderByDesc('p.id')
+            ->limit(15)
+            ->get();
+
+        return [
+            'periodo' => ['mes' => $mes, 'anio' => $anio],
+            'total_proformas' => $totalProformas,
+            'total_generadas' => $totalesPorEstado[self::ESTADO_GENERADA]['cantidad'] ?? 0,
+            'total_pagadas' => $totalesPorEstado[self::ESTADO_PAGADA]['cantidad'] ?? 0,
+            'total_facturadas' => $totalesPorEstado[self::ESTADO_FACTURADA]['cantidad'] ?? 0,
+            'suma_total_vtotal' => $sumaTotal,
+            'suma_total_por_estado' => $totalesPorEstado,
+            'total_periodo_filtrado' => $totalProformas,
+            'ultimas_proformas' => $ultimasProformas,
+        ];
+    }
+
+    public function normalizePeriodoFilters(null|string|int $mes, null|string|int $anio): array
+    {
+        $mesNormalizado = $this->normalizarMes($mes) ?? (int) now()->format('n');
+        $anioNormalizado = $this->normalizarEntero($anio) ?? (int) now()->format('Y');
+
+        return [
+            'mes' => $mesNormalizado,
+            'anio' => $anioNormalizado,
+        ];
+    }
+
+
     public function findProformaById(int $id): ?object
     {
         return DB::table('sg_proform as p')
