@@ -20,6 +20,7 @@ class ProformaEmailService
         $apiKey = trim((string) config('services.resend.key'));
         $fromAddress = trim((string) config('services.resend.from_address'));
         $fromName = trim((string) config('services.resend.from_name'));
+
         $replyTo = trim((string) config('services.resend.reply_to'));
 
         if ($apiKey === '' || $fromAddress === '' || $replyTo === '') {
@@ -28,13 +29,16 @@ class ProformaEmailService
 
         if ($this->isGmailAddress($fromAddress)) {
             throw new RuntimeException('RESEND_FROM_ADDRESS no puede ser gmail.com. Use un dominio remitente válido.');
+
         }
 
         $response = Http::withToken($apiKey)
             ->acceptJson()
             ->post('https://api.resend.com/emails', [
                 'from' => $fromName !== '' ? sprintf('%s <%s>', $fromName, $fromAddress) : $fromAddress,
+
                 'reply_to' => [$replyTo],
+
                 'to' => [$clienteEmail],
                 'subject' => sprintf('Proforma #%s', (string) ($proforma->nro_prof ?: $proforma->id)),
                 'text' => "Estimado cliente,\n\nAdjunto encontrará su proforma correspondiente al servicio contratado.\n\nPor favor revisar el documento adjunto.\n\nCordialmente,\nRM Soft",
@@ -99,4 +103,5 @@ class ProformaEmailService
 
         return str_ends_with($normalized, '@gmail.com') || str_ends_with($normalized, '@googlemail.com');
     }
+
 }

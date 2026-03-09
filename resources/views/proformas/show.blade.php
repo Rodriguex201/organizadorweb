@@ -105,6 +105,7 @@
             <a href="{{ route('proformas.dashboard') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">Ir al dashboard</a>
             <a href="{{ route('proformas.pdf.show', $proforma->id) }}" target="_blank" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">Ver PDF</a>
             <a href="{{ route('proformas.pdf.download', $proforma->id) }}" class="inline-flex items-center rounded bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-200">Descargar PDF</a>
+
             @if($canSendProforma)
                 <form method="POST" action="{{ route('proformas.enviar', $proforma->id) }}">
                     @csrf
@@ -113,6 +114,7 @@
             @else
                 <span class="inline-flex items-center rounded bg-slate-100 px-4 py-2 text-sm font-medium text-slate-500">Debe generar la proforma</span>
             @endif
+
 
         </div>
     </div>

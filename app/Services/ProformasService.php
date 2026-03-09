@@ -169,6 +169,7 @@ class ProformasService
     }
 
 
+
     public function canSendProforma(null|object $proforma): bool
     {
         if (!$proforma) {
@@ -185,6 +186,7 @@ class ProformasService
             && $nombrePdf !== ''
             && $estado >= self::ESTADO_GENERADA;
     }
+
 
     public function registrarEnvioExitoso(int $proformaId): void
     {
@@ -207,6 +209,7 @@ class ProformasService
         return ((int) ($enviado ?? 0)) === 1
             ? 'bg-emerald-100 text-emerald-700'
             : 'bg-slate-100 text-slate-700';
+
     }
 
     /**

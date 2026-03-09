@@ -126,6 +126,7 @@ class ProformasController extends Controller
             throw new NotFoundHttpException('Proforma no encontrada.');
         }
 
+
         if (!$this->proformasService->canSendProforma($proforma)) {
             return redirect()->back()->with('status', 'Primero debe generar la proforma antes de enviarla')->with('status_type', 'error');
         }
@@ -133,6 +134,7 @@ class ProformasController extends Controller
         try {
             $this->proformaEmailService->sendProforma($proforma);
             $this->proformasService->registrarEnvioExitoso($id);
+
 
             return redirect()->back()->with('status', 'Proforma enviada por correo correctamente.')->with('status_type', 'success');
         } catch (\Throwable $exception) {
