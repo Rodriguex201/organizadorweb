@@ -7,6 +7,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-slate-100 text-slate-800">
+
 <div id="admin-layout" class="min-h-screen md:flex">
     <aside id="admin-sidebar" class="w-full border-b border-slate-200 bg-slate-900 text-slate-100 transition-all duration-300 md:min-h-screen md:w-64 md:border-b-0 md:border-r">
         <div class="flex items-center justify-between px-5 py-4">
@@ -34,10 +35,12 @@
                 <span class="text-base">⚙️</span>
                 <span class="sidebar-label">Configuración</span>
             </a>
+
         </nav>
     </aside>
 
     <main class="flex-1 p-4 md:p-8">
+
         <header class="mb-4 flex items-center gap-3">
             <button id="sidebar-toggle" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded bg-slate-900 text-xl text-white transition-all duration-300 hover:bg-slate-800" aria-label="Colapsar o expandir menú lateral" aria-expanded="true">
                 ☰
@@ -87,5 +90,6 @@
         applyCollapsedState(false);
     })();
 </script>
+
 </body>
 </html>
