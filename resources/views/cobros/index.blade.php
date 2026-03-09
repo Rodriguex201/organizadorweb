@@ -10,7 +10,7 @@
             <p class="text-sm text-slate-600">Listado inicial desde <code>valores_externos</code> con datos de clientes potenciales.</p>
         </div>
         <a href="{{ route('proformas.index') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
-            Ver listado de proformas
+            Proformas Generadas
         </a>
     </div>
 
