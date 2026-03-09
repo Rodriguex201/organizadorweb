@@ -152,6 +152,7 @@ class CobrosController extends Controller
 
     private function mapCobroToRevisionData(object $cobro): array
     {
+
         $existeRevisionGuardada = $this->existeRevisionGuardada($cobro);
 
         return [
@@ -216,6 +217,7 @@ class CobrosController extends Controller
         }
 
         return 0.0;
+
     }
 
     public function previewProforma(int $id): View
