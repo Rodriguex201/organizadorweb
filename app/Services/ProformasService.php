@@ -57,6 +57,9 @@ class ProformasService
                 'p.estado',
                 'p.rpdf',
                 'p.npdf',
+                'p.enviado',
+                'p.fecha_envio',
+                'p.intentos_envio',
             ]);
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
@@ -157,9 +160,53 @@ class ProformasService
                 'p.estado',
                 'p.rpdf',
                 'p.npdf',
+                'p.enviado',
+                'p.fecha_envio',
+                'p.intentos_envio',
             ])
             ->where('p.id', $id)
             ->first();
+    }
+
+
+    public function canSendProforma(null|object $proforma): bool
+    {
+        if (!$proforma) {
+            return false;
+        }
+
+        $nroProf = trim((string) ($proforma->nro_prof ?? ''));
+        $rutaPdf = trim((string) ($proforma->rpdf ?? ''));
+        $nombrePdf = trim((string) ($proforma->npdf ?? ''));
+        $estado = (int) ($proforma->estado ?? 0);
+
+        return $nroProf !== ''
+            && $rutaPdf !== ''
+            && $nombrePdf !== ''
+            && $estado >= self::ESTADO_GENERADA;
+    }
+
+    public function registrarEnvioExitoso(int $proformaId): void
+    {
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update([
+                'enviado' => 1,
+                'fecha_envio' => now(),
+                'intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1'),
+            ]);
+    }
+
+    public function envioLabel(null|string|int $enviado): string
+    {
+        return ((int) ($enviado ?? 0)) === 1 ? 'Enviada' : 'No enviada';
+    }
+
+    public function envioBadgeClass(null|string|int $enviado): string
+    {
+        return ((int) ($enviado ?? 0)) === 1
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-slate-100 text-slate-700';
     }
 
     /**
