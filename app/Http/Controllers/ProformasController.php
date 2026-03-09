@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
+
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
 
 class ProformasController extends Controller
 {
@@ -73,6 +75,7 @@ class ProformasController extends Controller
 
     public function show(int $id): View
     {
+
         $proforma = $this->proformasService->findProformaById($id);
 
         if (!$proforma) {
@@ -106,5 +109,6 @@ class ProformasController extends Controller
         return $resultado['ok']
             ? $redirect->with('status', $resultado['message'])->with('status_type', 'success')
             : $redirect->with('status', $resultado['message'])->with('status_type', 'error');
+
     }
 }

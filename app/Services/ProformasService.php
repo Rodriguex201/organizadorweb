@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 class ProformasService
 {
+
     public const ESTADO_GENERADA = 2;
     public const ESTADO_PAGADA = 4;
     public const ESTADO_FACTURADA = 6;
@@ -15,6 +16,7 @@ class ProformasService
         self::ESTADO_GENERADA => 'Generada',
         self::ESTADO_PAGADA => 'Pagada',
         self::ESTADO_FACTURADA => 'Facturada',
+
     ];
 
     public const MESES = [
@@ -32,11 +34,13 @@ class ProformasService
         12 => 'diciembre',
     ];
 
+
     private const TRANSICIONES_VALIDAS = [
         self::ESTADO_GENERADA => [self::ESTADO_PAGADA],
         self::ESTADO_PAGADA => [self::ESTADO_FACTURADA],
         self::ESTADO_FACTURADA => [],
     ];
+
 
     public function paginateProformas(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
@@ -77,6 +81,7 @@ class ProformasService
             ->paginate($perPage)
             ->withQueryString();
     }
+
 
     public function findProformaById(int $id): ?object
     {
@@ -176,6 +181,7 @@ class ProformasService
         return in_array($destino, $permitidos, true);
     }
 
+
     public function estadoLabel(null|string|int $estado): string
     {
         $estadoInt = $this->normalizarEntero($estado);
@@ -198,6 +204,7 @@ class ProformasService
         return ucfirst(self::MESES[$mesInt] ?? (string) $mesInt);
     }
 
+
     public function estadoBadgeClass(null|string|int $estado): string
     {
         return match ((int) ($this->normalizarEntero($estado) ?? 0)) {
@@ -207,6 +214,7 @@ class ProformasService
             default => 'bg-slate-100 text-slate-700',
         };
     }
+
 
     private function normalizarEntero(null|string|int $valor): ?int
     {

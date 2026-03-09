@@ -18,11 +18,13 @@
         </a>
     </div>
 
+
     @if(session('status'))
         <div class="mb-4 rounded border px-4 py-3 text-sm {{ session('status_type') === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700' }}">
             {{ session('status') }}
         </div>
     @endif
+
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
         <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-8">
@@ -94,7 +96,9 @@
                 @forelse($proformas as $proforma)
                     @php
                         $estado = $proformasService->estadoLabel($proforma->estado);
+
                         $estadoClasses = $proformasService->estadoBadgeClass($proforma->estado);
+
                     @endphp
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3 font-medium">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</td>
@@ -113,6 +117,7 @@
                                 <a href="{{ route('proformas.pdf.show', $proforma->id) }}" target="_blank" class="inline-flex items-center rounded bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-200">Ver PDF</a>
                                 <a href="{{ route('proformas.pdf.download', $proforma->id) }}" class="inline-flex items-center rounded bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-200">Descargar PDF</a>
                                 <a href="{{ route('proformas.show', $proforma->id) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a>
+
 
                                 @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_PAGADA))
                                     <form method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}">
@@ -133,6 +138,7 @@
                                         <button type="submit" class="inline-flex items-center rounded bg-purple-100 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-200">Marcar facturada</button>
                                     </form>
                                 @endif
+
                             </div>
                         </td>
                     </tr>
