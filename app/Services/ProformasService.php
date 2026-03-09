@@ -162,6 +162,13 @@ class ProformasService
             ->first();
     }
 
+    public function registrarFechaEnvio(int $proformaId): void
+    {
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update(['fecha_envio' => now()]);
+    }
+
     /**
      * @return array{ok:bool,message:string,from:int,to:int}
      */
