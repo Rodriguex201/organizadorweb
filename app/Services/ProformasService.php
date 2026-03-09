@@ -169,6 +169,7 @@ class ProformasService
     }
 
 
+
     public function registrarEnvioExitoso(int $proformaId): void
     {
         DB::table('sg_proform')
@@ -190,6 +191,7 @@ class ProformasService
         return ((int) ($enviado ?? 0)) === 1
             ? 'bg-emerald-100 text-emerald-700'
             : 'bg-slate-100 text-slate-700';
+
     }
 
     /**

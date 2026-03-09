@@ -130,7 +130,9 @@
                                 <a href="{{ route('proformas.pdf.download', $proforma->id) }}" class="inline-flex items-center rounded bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-200">Descargar PDF</a>
                                 <form method="POST" action="{{ route('proformas.enviar', $proforma->id) }}">
                                     @csrf
+
                                     <button type="submit" class="inline-flex items-center rounded bg-cyan-100 px-3 py-1.5 text-xs font-medium text-cyan-700 hover:bg-cyan-200">{{ ((int) ($proforma->enviado ?? 0)) === 1 ? "Reenviar" : "Enviar" }} por correo</button>
+
                                 </form>
                                 <a href="{{ route('proformas.show', $proforma->id) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a>
 
