@@ -129,7 +129,7 @@ class ProformasController extends Controller
         try {
             $this->proformaEmailService->sendProforma($proforma);
 
-            $this->proformasService->registrarFechaEnvio($id);
+
 
             return redirect()->back()->with('status', 'Proforma enviada por correo correctamente.')->with('status_type', 'success');
         } catch (\Throwable $exception) {
