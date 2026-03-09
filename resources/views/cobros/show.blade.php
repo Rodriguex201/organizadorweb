@@ -163,6 +163,9 @@
             </dl>
 
             <div class="mt-6 pt-4 border-t border-slate-200 space-y-2">
+                <a href="{{ route('cobros.revisar', $cobro->id_cobro) }}" class="inline-flex w-full items-center justify-center rounded bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                    Revisar proforma manualmente
+                </a>
                 <a href="{{ route('cobros.proforma.preview', $cobro->id_cobro) }}" class="inline-flex w-full items-center justify-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
                     Generar proforma (vista previa)
                 </a>
