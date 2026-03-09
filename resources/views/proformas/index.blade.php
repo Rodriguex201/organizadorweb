@@ -94,6 +94,7 @@
                     <th class="px-4 py-3">Año</th>
                     <th class="px-4 py-3 text-right">Valor total</th>
                     <th class="px-4 py-3">Estado</th>
+                    <th class="px-4 py-3">Envío</th>
                     <th class="px-4 py-3">Fecha / ID</th>
                     <th class="px-4 py-3">Acciones</th>
                 </tr>
@@ -102,9 +103,9 @@
                 @forelse($proformas as $proforma)
                     @php
                         $estado = $proformasService->estadoLabel($proforma->estado);
-
                         $estadoClasses = $proformasService->estadoBadgeClass($proforma->estado);
-
+                        $envioEstado = $proformasService->envioLabel($proforma->enviado ?? 0);
+                        $envioClasses = $proformasService->envioBadgeClass($proforma->enviado ?? 0);
                     @endphp
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3 font-medium">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</td>
@@ -117,11 +118,20 @@
                         <td class="px-4 py-3">
                             <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $estadoClasses }}">{{ $estado }}</span>
                         </td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $envioClasses }}">{{ $envioEstado }}</span>
+                            <p class="mt-1 text-xs text-slate-500">Intentos: {{ (int) ($proforma->intentos_envio ?? 0) }}</p>
+                            <p class="text-xs text-slate-500">Último: {{ $proforma->fecha_envio ? \Illuminate\Support\Carbon::parse($proforma->fecha_envio)->format('Y-m-d H:i') : "N/D" }}</p>
+                        </td>
                         <td class="px-4 py-3 text-xs text-slate-600">ID: {{ $proforma->id }}</td>
                         <td class="px-4 py-3">
                             <div class="flex flex-wrap gap-2">
                                 <a href="{{ route('proformas.pdf.show', $proforma->id) }}" target="_blank" class="inline-flex items-center rounded bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-200">Ver PDF</a>
                                 <a href="{{ route('proformas.pdf.download', $proforma->id) }}" class="inline-flex items-center rounded bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-200">Descargar PDF</a>
+                                <form method="POST" action="{{ route('proformas.enviar', $proforma->id) }}">
+                                    @csrf
+                                    <button type="submit" class="inline-flex items-center rounded bg-cyan-100 px-3 py-1.5 text-xs font-medium text-cyan-700 hover:bg-cyan-200">{{ ((int) ($proforma->enviado ?? 0)) === 1 ? "Reenviar" : "Enviar" }} por correo</button>
+                                </form>
                                 <a href="{{ route('proformas.show', $proforma->id) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a>
 
 
@@ -150,7 +160,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
+                        <td colspan="11" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>

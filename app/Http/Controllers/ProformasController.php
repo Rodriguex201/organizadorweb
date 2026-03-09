@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ProformaEmailService;
 use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
 
@@ -17,6 +18,7 @@ class ProformasController extends Controller
     public function __construct(
         private readonly ProformasService $proformasService,
         private readonly ProformaPdfService $proformaPdfService,
+        private readonly ProformaEmailService $proformaEmailService,
     ) {
     }
 
@@ -114,6 +116,26 @@ class ProformasController extends Controller
             'proforma' => $proforma,
             'proformasService' => $this->proformasService,
         ]);
+    }
+
+    public function enviarCorreo(int $id): RedirectResponse
+    {
+        $proforma = $this->proformasService->findProformaById($id);
+
+        if (!$proforma) {
+            throw new NotFoundHttpException('Proforma no encontrada.');
+        }
+
+        try {
+            $this->proformaEmailService->sendProforma($proforma);
+            $this->proformasService->registrarEnvioExitoso($id);
+
+            return redirect()->back()->with('status', 'Proforma enviada por correo correctamente.')->with('status_type', 'success');
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->back()->with('status', 'No se pudo enviar el correo: '.$exception->getMessage())->with('status_type', 'error');
+        }
     }
 
     public function updateEstado(Request $request, int $id): RedirectResponse
