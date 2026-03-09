@@ -170,6 +170,24 @@ class ProformasService
 
 
 
+    public function canSendProforma(null|object $proforma): bool
+    {
+        if (!$proforma) {
+            return false;
+        }
+
+        $nroProf = trim((string) ($proforma->nro_prof ?? ''));
+        $rutaPdf = trim((string) ($proforma->rpdf ?? ''));
+        $nombrePdf = trim((string) ($proforma->npdf ?? ''));
+        $estado = (int) ($proforma->estado ?? 0);
+
+        return $nroProf !== ''
+            && $rutaPdf !== ''
+            && $nombrePdf !== ''
+            && $estado >= self::ESTADO_GENERADA;
+    }
+
+
     public function registrarEnvioExitoso(int $proformaId): void
     {
         DB::table('sg_proform')
