@@ -8,6 +8,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 
 class CobrosService
@@ -100,15 +101,77 @@ class CobrosService
                 'cp.regimen as cliente_regimen',
                 'cp.modalidad as cliente_modalidad',
                 'cp.categoria as cliente_categoria',
+                'cp.vlrprincipal as cliente_vlrprincipal',
+                'cp.numequipos as cliente_numequipos',
+                'cp.vlrterminal as cliente_vlrterminal',
+                'cp.vlrnomina as cliente_vlrnomina',
+                'cp.numeromoviles as cliente_numeromoviles',
+                'cp.vlrmovil as cliente_vlrmovil',
+                'cp.numero_empleados as cliente_numero_empleados',
                 'cp.vlrfactura as cliente_vlrfactura',
                 'cp.vlrecepcion as cliente_vlrecepcion',
                 'cp.vlrsoporte as cliente_vlrsoporte',
+                'cp.nominaterminal as cliente_nominaterminal',
                 'cp.vlrextra as cliente_vlrextra',
                 'cp.vlrextra2 as cliente_vlrextra2',
 
             ])
             ->where('ve.id_cobro', $idCobro)
             ->first();
+    }
+
+
+    public function updateCobroRevision(int $idCobro, array $data): bool
+    {
+        $allowedColumns = [
+            'numero_equipos' => 'numero_equipos',
+            'valor_principal' => 'valor_principal',
+            'valor_terminal' => 'valor_terminal',
+            'empleados' => 'empleados',
+            'valor_nomina' => 'vlrnomina',
+            'numero_moviles' => 'numero_moviles',
+            'valor_movil' => 'valor_movil',
+            'total_mensualidad' => 'valor_mensualidad',
+            'facturas' => 'numero_facturas',
+            'nota_debito' => 'numero_nota_debito',
+            'nota_credito' => 'numero_nota_credito',
+            'total_facturas' => 'total_facturas',
+            'valor_facturas' => 'valor_facturas',
+            'soporte' => 'numero_documento_soporte',
+            'nota_ajuste' => 'numero_nota_ajuste',
+            'total_documentos' => 'total_documentos',
+            'valor_documentos' => 'valor_documentos',
+            'acuse' => 'numero_acuse',
+            'valor_acuse' => 'valor_acuse',
+            'otro_valor_extra' => 'otro_valor_extra',
+            'valor_terminal_recepcion' => 'valor_terminal_recepcion',
+            'valor_total_proforma' => 'valor_total',
+            'precio_factura' => 'precio_factura',
+            'precio_soporte' => 'precio_soporte',
+            'precio_acuse' => 'precio_acuse',
+        ];
+
+        $payload = [];
+
+        foreach ($allowedColumns as $inputKey => $column) {
+            if (!array_key_exists($inputKey, $data)) {
+                continue;
+            }
+
+            if (!Schema::hasColumn('valores_externos', $column)) {
+                continue;
+            }
+
+            $payload[$column] = (float) $data[$inputKey];
+        }
+
+        if ($payload === []) {
+            return false;
+        }
+
+        return DB::table('valores_externos')
+            ->where('id_cobro', $idCobro)
+            ->update($payload) > 0;
     }
 
     /**

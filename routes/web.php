@@ -11,6 +11,8 @@ Route::get('/', function () {
 Route::get('/cobros', [CobrosController::class, 'index'])->name('cobros.index');
 
 Route::get('/cobros/{id}', [CobrosController::class, 'show'])->name('cobros.show');
+Route::get('/cobros/{id}/revisar', [CobrosController::class, 'revisar'])->name('cobros.revisar');
+Route::post('/cobros/{id}/revisar', [CobrosController::class, 'guardarRevision'])->name('cobros.revisar.guardar');
 
 Route::get('/cobros/{id}/proforma/preview', [CobrosController::class, 'previewProforma'])->name('cobros.proforma.preview');
 Route::post('/cobros/{id}/proforma', [CobrosController::class, 'storeProforma'])->name('cobros.proforma.store');
