@@ -1,12 +1,8 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Proformas</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-</head>
-<body class="bg-slate-100 text-slate-800">
+@extends('layouts.admin')
+
+@section('title', 'Dashboard de Proformas')
+
+@section('content')
 <div class="mx-auto max-w-7xl px-4 py-8">
     <div class="mb-6 flex items-center justify-between gap-3">
         <div>
@@ -39,7 +35,7 @@
         </form>
     </div>
 
-    <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div class="rounded-lg bg-white p-4 shadow">
             <p class="text-xs uppercase text-slate-500">Total proformas</p>
             <p class="mt-1 text-2xl font-bold">{{ number_format((int) $dashboard['total_proformas'], 0, ',', '.') }}</p>
@@ -47,6 +43,10 @@
         <div class="rounded-lg bg-white p-4 shadow">
             <p class="text-xs uppercase text-slate-500">Generadas</p>
             <p class="mt-1 text-2xl font-bold text-blue-700">{{ number_format((int) $dashboard['total_generadas'], 0, ',', '.') }}</p>
+        </div>
+        <div class="rounded-lg bg-white p-4 shadow">
+            <p class="text-xs uppercase text-slate-500">Enviadas</p>
+            <p class="mt-1 text-2xl font-bold text-indigo-700">{{ number_format((int) $dashboard['total_enviadas'], 0, ',', '.') }}</p>
         </div>
         <div class="rounded-lg bg-white p-4 shadow">
             <p class="text-xs uppercase text-slate-500">Pagadas</p>
@@ -70,7 +70,7 @@
             <div class="mt-3 space-y-2 text-sm">
                 @foreach($dashboard['suma_total_por_estado'] as $estadoCodigo => $datosEstado)
                     <div class="flex items-center justify-between">
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $proformasService->estadoBadgeClass($estadoCodigo) }}">{{ $datosEstado['label'] }}</span>
+                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($estadoCodigo) }}">{{ $datosEstado['label'] }}</span>
                         <span class="font-medium">{{ number_format((int) $datosEstado['cantidad'], 0, ',', '.') }} / $ {{ number_format((float) $datosEstado['total'], 2, ',', '.') }}</span>
                     </div>
                 @endforeach
@@ -108,7 +108,7 @@
                         <td class="px-4 py-3">{{ $proforma->anio ?: 'N/D' }}</td>
                         <td class="px-4 py-3 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
                         <td class="px-4 py-3">
-                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $proformasService->estadoBadgeClass($proforma->estado) }}">{{ $proformasService->estadoLabel($proforma->estado) }}</span>
+                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}">{{ $proformasService->estadoLabel($proforma->estado) }}</span>
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex flex-wrap gap-2">
@@ -127,5 +127,5 @@
         </div>
     </div>
 </div>
-</body>
-</html>
+
+@endsection
