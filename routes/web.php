@@ -24,7 +24,7 @@ Route::get('/proformas/dashboard', [ProformasController::class, 'dashboard'])->n
 Route::get('/proformas/{id}', [ProformasController::class, 'show'])->name('proformas.show');
 Route::get('/proformas/{id}/pdf', [ProformasController::class, 'showPdf'])->name('proformas.pdf.show');
 Route::get('/proformas/{id}/pdf/download', [ProformasController::class, 'downloadPdf'])->name('proformas.pdf.download');
-
+Route::post('/proformas/{id}/enviar', [ProformasController::class, 'enviarCorreo'])->name('proformas.enviar');
 
 Route::patch('/proformas/{id}/estado', [ProformasController::class, 'updateEstado'])->name('proformas.estado.update');
 
