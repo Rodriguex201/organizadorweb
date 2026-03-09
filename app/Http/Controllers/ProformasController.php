@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
+
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
 
 class ProformasController extends Controller
 {
@@ -71,6 +75,40 @@ class ProformasController extends Controller
 
     public function show(int $id): View
     {
-        return view('proformas.show', ['proformaId' => $id]);
+
+        $proforma = $this->proformasService->findProformaById($id);
+
+        if (!$proforma) {
+            throw new NotFoundHttpException('Proforma no encontrada.');
+        }
+
+        return view('proformas.show', [
+            'proforma' => $proforma,
+            'proformasService' => $this->proformasService,
+        ]);
+    }
+
+    public function updateEstado(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'estado' => ['required', 'integer'],
+            'redirect_to' => ['nullable', 'string', 'in:index,show'],
+        ]);
+
+        $resultado = $this->proformasService->updateEstado($id, (int) $validated['estado']);
+
+        $routeName = ($validated['redirect_to'] ?? 'index') === 'show' ? 'proformas.show' : 'proformas.index';
+        $routeParams = $routeName === 'proformas.show' ? ['id' => $id] : [];
+
+        $redirect = redirect()->route($routeName, $routeParams);
+
+        if ($routeName === 'proformas.index') {
+            $redirect->withInput();
+        }
+
+        return $resultado['ok']
+            ? $redirect->with('status', $resultado['message'])->with('status_type', 'success')
+            : $redirect->with('status', $resultado['message'])->with('status_type', 'error');
+
     }
 }

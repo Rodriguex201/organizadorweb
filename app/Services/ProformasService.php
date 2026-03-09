@@ -7,10 +7,16 @@ use Illuminate\Support\Facades\DB;
 
 class ProformasService
 {
+
+    public const ESTADO_GENERADA = 2;
+    public const ESTADO_PAGADA = 4;
+    public const ESTADO_FACTURADA = 6;
+
     public const ESTADOS = [
-        2 => 'Generada',
-        4 => 'Pagada',
-        6 => 'Facturada',
+        self::ESTADO_GENERADA => 'Generada',
+        self::ESTADO_PAGADA => 'Pagada',
+        self::ESTADO_FACTURADA => 'Facturada',
+
     ];
 
     public const MESES = [
@@ -27,6 +33,14 @@ class ProformasService
         11 => 'noviembre',
         12 => 'diciembre',
     ];
+
+
+    private const TRANSICIONES_VALIDAS = [
+        self::ESTADO_GENERADA => [self::ESTADO_PAGADA],
+        self::ESTADO_PAGADA => [self::ESTADO_FACTURADA],
+        self::ESTADO_FACTURADA => [],
+    ];
+
 
     public function paginateProformas(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
@@ -68,6 +82,106 @@ class ProformasService
             ->withQueryString();
     }
 
+
+    public function findProformaById(int $id): ?object
+    {
+        return DB::table('sg_proform as p')
+            ->select([
+                'p.id',
+                'p.nro_prof',
+                'p.emp',
+                'p.nit',
+                'p.emisora',
+                'p.mes',
+                'p.anio',
+                'p.vtotal',
+                'p.estado',
+                'p.rpdf',
+                'p.npdf',
+            ])
+            ->where('p.id', $id)
+            ->first();
+    }
+
+    /**
+     * @return array{ok:bool,message:string,from:int,to:int}
+     */
+    public function updateEstado(int $proformaId, int $nuevoEstado): array
+    {
+        $proforma = DB::table('sg_proform')
+            ->select(['id', 'estado'])
+            ->where('id', $proformaId)
+            ->first();
+
+        if (!$proforma) {
+            return [
+                'ok' => false,
+                'message' => 'La proforma no existe.',
+                'from' => 0,
+                'to' => $nuevoEstado,
+            ];
+        }
+
+        $estadoActual = (int) ($proforma->estado ?? 0);
+
+        if (!isset(self::ESTADOS[$nuevoEstado])) {
+            return [
+                'ok' => false,
+                'message' => 'Estado destino inválido.',
+                'from' => $estadoActual,
+                'to' => $nuevoEstado,
+            ];
+        }
+
+        if ($estadoActual === $nuevoEstado) {
+            return [
+                'ok' => false,
+                'message' => 'La proforma ya tiene ese estado.',
+                'from' => $estadoActual,
+                'to' => $nuevoEstado,
+            ];
+        }
+
+        if (!$this->canTransition($estadoActual, $nuevoEstado)) {
+            return [
+                'ok' => false,
+                'message' => 'Transición de estado no permitida.',
+                'from' => $estadoActual,
+                'to' => $nuevoEstado,
+            ];
+        }
+
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update(['estado' => $nuevoEstado]);
+
+        return [
+            'ok' => true,
+            'message' => sprintf(
+                'Estado actualizado de %s a %s.',
+                $this->estadoLabel($estadoActual),
+                $this->estadoLabel($nuevoEstado),
+            ),
+            'from' => $estadoActual,
+            'to' => $nuevoEstado,
+        ];
+    }
+
+    public function canTransition(null|string|int $estadoActual, null|string|int $estadoDestino): bool
+    {
+        $origen = $this->normalizarEntero($estadoActual);
+        $destino = $this->normalizarEntero($estadoDestino);
+
+        if ($origen === null || $destino === null) {
+            return false;
+        }
+
+        $permitidos = self::TRANSICIONES_VALIDAS[$origen] ?? [];
+
+        return in_array($destino, $permitidos, true);
+    }
+
+
     public function estadoLabel(null|string|int $estado): string
     {
         $estadoInt = $this->normalizarEntero($estado);
@@ -89,6 +203,18 @@ class ProformasService
 
         return ucfirst(self::MESES[$mesInt] ?? (string) $mesInt);
     }
+
+
+    public function estadoBadgeClass(null|string|int $estado): string
+    {
+        return match ((int) ($this->normalizarEntero($estado) ?? 0)) {
+            self::ESTADO_GENERADA => 'bg-blue-100 text-blue-700',
+            self::ESTADO_PAGADA => 'bg-emerald-100 text-emerald-700',
+            self::ESTADO_FACTURADA => 'bg-purple-100 text-purple-700',
+            default => 'bg-slate-100 text-slate-700',
+        };
+    }
+
 
     private function normalizarEntero(null|string|int $valor): ?int
     {
