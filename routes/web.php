@@ -16,9 +16,13 @@ Route::get('/cobros/{id}/proforma/preview', [CobrosController::class, 'previewPr
 Route::post('/cobros/{id}/proforma', [CobrosController::class, 'storeProforma'])->name('cobros.proforma.store');
 
 Route::get('/proformas', [ProformasController::class, 'index'])->name('proformas.index');
+
 Route::get('/proformas/dashboard', [ProformasController::class, 'dashboard'])->name('proformas.dashboard');
+
 Route::get('/proformas/{id}', [ProformasController::class, 'show'])->name('proformas.show');
 Route::get('/proformas/{id}/pdf', [ProformasController::class, 'showPdf'])->name('proformas.pdf.show');
 Route::get('/proformas/{id}/pdf/download', [ProformasController::class, 'downloadPdf'])->name('proformas.pdf.download');
 
+
 Route::patch('/proformas/{id}/estado', [ProformasController::class, 'updateEstado'])->name('proformas.estado.update');
+
