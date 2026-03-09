@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CobrosService;
+use App\Services\RevisarProformaCalculator;
 use App\Services\ProformaPdfService;
 use App\Services\ProformaPreviewService;
 use App\Services\ProformaStoreService;
@@ -19,6 +20,7 @@ class CobrosController extends Controller
         private readonly ProformaPreviewService $proformaPreviewService,
         private readonly ProformaStoreService $proformaStoreService,
         private readonly ProformaPdfService $proformaPdfService,
+        private readonly RevisarProformaCalculator $revisarProformaCalculator,
     ) {
     }
 
@@ -73,6 +75,104 @@ class CobrosController extends Controller
         ]);
     }
 
+
+
+    public function revisar(int $id): View
+    {
+        $cobro = $this->cobrosService->findCobroById($id);
+
+        if (!$cobro) {
+            throw new NotFoundHttpException('Cobro no encontrado.');
+        }
+
+        $formData = $this->revisarProformaCalculator->calculate($this->mapCobroToRevisionData($cobro));
+
+        return view('cobros.revisar', [
+            'cobro' => $cobro,
+            'formData' => $formData,
+        ]);
+    }
+
+    public function guardarRevision(Request $request, int $id): RedirectResponse|View
+    {
+        $cobro = $this->cobrosService->findCobroById($id);
+
+        if (!$cobro) {
+            throw new NotFoundHttpException('Cobro no encontrado.');
+        }
+
+        $validated = $request->validate([
+            'numero_equipos' => ['nullable', 'numeric', 'min:0'],
+            'valor_principal' => ['nullable', 'numeric', 'min:0'],
+            'valor_terminal' => ['nullable', 'numeric', 'min:0'],
+            'empleados' => ['nullable', 'numeric', 'min:0'],
+            'valor_nomina' => ['nullable', 'numeric', 'min:0'],
+            'numero_moviles' => ['nullable', 'numeric', 'min:0'],
+            'valor_movil' => ['nullable', 'numeric', 'min:0'],
+            'facturas' => ['nullable', 'numeric', 'min:0'],
+            'nota_debito' => ['nullable', 'numeric', 'min:0'],
+            'nota_credito' => ['nullable', 'numeric', 'min:0'],
+            'soporte' => ['nullable', 'numeric', 'min:0'],
+            'nota_ajuste' => ['nullable', 'numeric', 'min:0'],
+            'acuse' => ['nullable', 'numeric', 'min:0'],
+            'otro_valor_extra' => ['nullable', 'numeric', 'min:0'],
+            'valor_terminal_recepcion' => ['nullable', 'numeric', 'min:0'],
+            'precio_factura' => ['nullable', 'numeric', 'min:0'],
+            'precio_soporte' => ['nullable', 'numeric', 'min:0'],
+            'precio_acuse' => ['nullable', 'numeric', 'min:0'],
+            'accion' => ['nullable', 'in:recalcular,guardar,generar'],
+        ]);
+
+        $formData = $this->revisarProformaCalculator->calculate($validated);
+        $accion = $validated['accion'] ?? 'guardar';
+
+        if ($accion === 'recalcular') {
+            return view('cobros.revisar', [
+                'cobro' => $cobro,
+                'formData' => $formData,
+            ])->with('status', 'Valores recalculados en pantalla. Aún no se guardan.')->with('status_type', 'warning');
+        }
+
+        $this->cobrosService->updateCobroRevision($id, $formData);
+
+        if ($accion === 'generar') {
+            $cobroActualizado = $this->cobrosService->findCobroById($id);
+            $resultado = $this->proformaStoreService->storeFromCobro($cobroActualizado ?: $cobro);
+
+            return redirect()
+                ->route('cobros.proforma.preview', $id)
+                ->with('status', $resultado['message'].' Revisión guardada. Flujo de envío por correo pendiente para fase siguiente.')
+                ->with('status_type', $resultado['duplicated'] ? 'warning' : 'success');
+        }
+
+        return redirect()
+            ->route('cobros.revisar', $id)
+            ->with('status', 'Revisión guardada correctamente.');
+    }
+
+    private function mapCobroToRevisionData(object $cobro): array
+    {
+        return [
+            'numero_equipos' => $cobro->numero_equipos ?? 0,
+            'valor_principal' => $cobro->valor_principal ?? 0,
+            'valor_terminal' => $cobro->valor_terminal ?? 0,
+            'empleados' => $cobro->empleados ?? 0,
+            'valor_nomina' => $cobro->vlrnomina ?? ($cobro->valor_nomina ?? 0),
+            'numero_moviles' => $cobro->numero_moviles ?? 0,
+            'valor_movil' => $cobro->valor_movil ?? 0,
+            'facturas' => $cobro->numero_facturas ?? 0,
+            'nota_debito' => $cobro->numero_nota_debito ?? 0,
+            'nota_credito' => $cobro->numero_nota_credito ?? 0,
+            'soporte' => $cobro->numero_documento_soporte ?? 0,
+            'nota_ajuste' => $cobro->numero_nota_ajuste ?? 0,
+            'acuse' => $cobro->numero_acuse ?? 0,
+            'otro_valor_extra' => $cobro->otro_valor_extra ?? ($cobro->cliente_vlrextra ?? 0),
+            'valor_terminal_recepcion' => $cobro->valor_terminal_recepcion ?? ($cobro->cliente_vlrextra2 ?? 0),
+            'precio_factura' => $cobro->precio_factura ?? ($cobro->cliente_vlrfactura ?? 0),
+            'precio_soporte' => $cobro->precio_soporte ?? ($cobro->cliente_vlrsoporte ?? 0),
+            'precio_acuse' => $cobro->precio_acuse ?? ($cobro->cliente_vlrecepcion ?? 0),
+        ];
+    }
 
     public function previewProforma(int $id): View
     {
