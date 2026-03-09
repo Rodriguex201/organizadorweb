@@ -54,6 +54,7 @@ class ProformaPdfService
         $data = [
             'cabecera' => $cabecera,
             'detalle' => $detalle,
+            'cliente_pdf' => $this->resolverDatosClientePdf($cabecera),
             'mes_nombre' => $this->resolverNombreMes((int) ($cabecera->mes ?? 0)),
             'fecha_emision' => now()->format('Y-m-d'),
             'logo_path' => $this->resolverLogoPath((string) ($cabecera->emisora ?? '')),
@@ -120,5 +121,31 @@ class ProformaPdfService
     private function construirRutaRelativa(string $ruta, string $archivo): string
     {
         return trim($ruta, '/').'/'.ltrim($archivo, '/');
+    }
+
+    private function resolverDatosClientePdf(object $cabecera): array
+    {
+        $nit = trim((string) ($cabecera->nit ?? ''));
+
+        $clientePotencial = null;
+        if ($nit !== '') {
+            $clientePotencial = DB::table('clientes_potenciales')
+                ->select(['direccion', 'celular1', 'email'])
+                ->where('nit', $nit)
+                ->first();
+        }
+
+        return [
+            'direccion' => $this->valorOPlaceholder($clientePotencial->direccion ?? null),
+            'telefono' => $this->valorOPlaceholder($clientePotencial->celular1 ?? null),
+            'correo' => $this->valorOPlaceholder($clientePotencial->email ?? null),
+        ];
+    }
+
+    private function valorOPlaceholder(mixed $valor): string
+    {
+        $valorNormalizado = trim((string) ($valor ?? ''));
+
+        return $valorNormalizado !== '' ? $valorNormalizado : 'N/D';
     }
 }
