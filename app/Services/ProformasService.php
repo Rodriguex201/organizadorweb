@@ -57,6 +57,9 @@ class ProformasService
                 'p.estado',
                 'p.rpdf',
                 'p.npdf',
+                'p.enviado',
+                'p.fecha_envio',
+                'p.intentos_envio',
             ]);
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
@@ -157,16 +160,38 @@ class ProformasService
                 'p.estado',
                 'p.rpdf',
                 'p.npdf',
+                'p.enviado',
+                'p.fecha_envio',
+                'p.intentos_envio',
             ])
             ->where('p.id', $id)
             ->first();
     }
 
-    public function registrarFechaEnvio(int $proformaId): void
+
+
+    public function registrarEnvioExitoso(int $proformaId): void
     {
         DB::table('sg_proform')
             ->where('id', $proformaId)
-            ->update(['fecha_envio' => now()]);
+            ->update([
+                'enviado' => 1,
+                'fecha_envio' => now(),
+                'intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1'),
+            ]);
+    }
+
+    public function envioLabel(null|string|int $enviado): string
+    {
+        return ((int) ($enviado ?? 0)) === 1 ? 'Enviada' : 'No enviada';
+    }
+
+    public function envioBadgeClass(null|string|int $enviado): string
+    {
+        return ((int) ($enviado ?? 0)) === 1
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-slate-100 text-slate-700';
+
     }
 
     /**

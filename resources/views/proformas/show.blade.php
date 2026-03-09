@@ -21,9 +21,14 @@
                 <h1 class="text-xl font-bold">Detalle de proforma #{{ $proforma->nro_prof ?: $proforma->id }}</h1>
                 <p class="mt-1 text-sm text-slate-600">Gestión manual de estado de la proforma.</p>
             </div>
-            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $proformasService->estadoBadgeClass($proforma->estado) }}">
-                {{ $proformasService->estadoLabel($proforma->estado) }}
-            </span>
+            <div class="flex flex-col items-end gap-2">
+                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $proformasService->estadoBadgeClass($proforma->estado) }}">
+                    {{ $proformasService->estadoLabel($proforma->estado) }}
+                </span>
+                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $proformasService->envioBadgeClass($proforma->enviado ?? 0) }}">
+                    {{ $proformasService->envioLabel($proforma->enviado ?? 0) }}
+                </span>
+            </div>
         </div>
 
         <dl class="grid grid-cols-1 gap-4 rounded border border-slate-200 bg-slate-50 p-4 text-sm md:grid-cols-3">
@@ -50,6 +55,14 @@
             <div>
                 <dt class="text-slate-500">ID</dt>
                 <dd class="font-medium">{{ $proforma->id }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-500">Último envío</dt>
+                <dd class="font-medium">{{ $proforma->fecha_envio ? \Illuminate\Support\Carbon::parse($proforma->fecha_envio)->format('Y-m-d H:i') : 'N/D' }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-500">Intentos de envío</dt>
+                <dd class="font-medium">{{ (int) ($proforma->intentos_envio ?? 0) }}</dd>
             </div>
         </dl>
 
@@ -90,7 +103,9 @@
             <a href="{{ route('proformas.pdf.download', $proforma->id) }}" class="inline-flex items-center rounded bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-200">Descargar PDF</a>
             <form method="POST" action="{{ route('proformas.enviar', $proforma->id) }}">
                 @csrf
-                <button type="submit" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-200">Enviar por correo</button>
+
+                <button type="submit" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-200">{{ ((int) ($proforma->enviado ?? 0)) === 1 ? "Reenviar" : "Enviar" }} por correo</button>
+
             </form>
 
         </div>
