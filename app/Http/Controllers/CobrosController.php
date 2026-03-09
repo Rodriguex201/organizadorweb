@@ -152,26 +152,72 @@ class CobrosController extends Controller
 
     private function mapCobroToRevisionData(object $cobro): array
     {
+
+        $existeRevisionGuardada = $this->existeRevisionGuardada($cobro);
+
         return [
-            'numero_equipos' => $cobro->numero_equipos ?? 0,
-            'valor_principal' => $cobro->valor_principal ?? 0,
-            'valor_terminal' => $cobro->valor_terminal ?? 0,
-            'empleados' => $cobro->empleados ?? 0,
-            'valor_nomina' => $cobro->vlrnomina ?? ($cobro->valor_nomina ?? 0),
-            'numero_moviles' => $cobro->numero_moviles ?? 0,
-            'valor_movil' => $cobro->valor_movil ?? 0,
-            'facturas' => $cobro->numero_facturas ?? 0,
-            'nota_debito' => $cobro->numero_nota_debito ?? 0,
-            'nota_credito' => $cobro->numero_nota_credito ?? 0,
-            'soporte' => $cobro->numero_documento_soporte ?? 0,
-            'nota_ajuste' => $cobro->numero_nota_ajuste ?? 0,
-            'acuse' => $cobro->numero_acuse ?? 0,
-            'otro_valor_extra' => $cobro->otro_valor_extra ?? ($cobro->cliente_vlrextra ?? 0),
-            'valor_terminal_recepcion' => $cobro->valor_terminal_recepcion ?? ($cobro->cliente_vlrextra2 ?? 0),
-            'precio_factura' => $cobro->precio_factura ?? ($cobro->cliente_vlrfactura ?? 0),
-            'precio_soporte' => $cobro->precio_soporte ?? ($cobro->cliente_vlrsoporte ?? 0),
-            'precio_acuse' => $cobro->precio_acuse ?? ($cobro->cliente_vlrecepcion ?? 0),
+            'numero_equipos' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_equipos ?? null, $cobro->cliente_numequipos ?? null),
+            'valor_principal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_principal ?? null, $cobro->cliente_vlrprincipal ?? null),
+            'valor_terminal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal ?? null, $cobro->cliente_vlrterminal ?? null),
+            'empleados' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->empleados ?? null, $cobro->cliente_numero_empleados ?? null),
+            'valor_nomina' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->vlrnomina ?? null, $cobro->cliente_vlrnomina ?? null),
+            'numero_moviles' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_moviles ?? null, $cobro->cliente_numeromoviles ?? null),
+            'valor_movil' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_movil ?? null, $cobro->cliente_vlrmovil ?? null),
+            'facturas' => (float) ($cobro->numero_facturas ?? 0),
+            'nota_debito' => (float) ($cobro->numero_nota_debito ?? 0),
+            'nota_credito' => (float) ($cobro->numero_nota_credito ?? 0),
+            'soporte' => (float) ($cobro->numero_documento_soporte ?? 0),
+            'nota_ajuste' => (float) ($cobro->numero_nota_ajuste ?? 0),
+            'acuse' => (float) ($cobro->numero_acuse ?? 0),
+            'otro_valor_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra ?? null, $cobro->cliente_vlrextra ?? null),
+            'valor_terminal_recepcion' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
+            'precio_factura' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_factura ?? null, $cobro->cliente_vlrfactura ?? null),
+            'precio_soporte' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_soporte ?? null, $cobro->cliente_vlrsoporte ?? null),
+            'precio_acuse' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_acuse ?? null, $cobro->cliente_vlrecepcion ?? null),
         ];
+    }
+
+    private function existeRevisionGuardada(object $cobro): bool
+    {
+        $indicadores = [
+            $cobro->precio_factura ?? null,
+            $cobro->precio_soporte ?? null,
+            $cobro->precio_acuse ?? null,
+            $cobro->total_facturas ?? null,
+            $cobro->total_documentos ?? null,
+            $cobro->valor_terminal_recepcion ?? null,
+            $cobro->otro_valor_extra ?? null,
+        ];
+
+        foreach ($indicadores as $valor) {
+            if ($valor !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function valorRevisionOBase(bool $existeRevisionGuardada, mixed $valorRevision, mixed $valorBase): float
+    {
+        if ($existeRevisionGuardada && $valorRevision !== null) {
+            return (float) $valorRevision;
+        }
+
+        if (!$existeRevisionGuardada && $valorBase !== null) {
+            return (float) $valorBase;
+        }
+
+        if ($valorRevision !== null) {
+            return (float) $valorRevision;
+        }
+
+        if ($valorBase !== null) {
+            return (float) $valorBase;
+        }
+
+        return 0.0;
+
     }
 
     public function previewProforma(int $id): View
