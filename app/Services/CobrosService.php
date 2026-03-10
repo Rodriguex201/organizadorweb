@@ -38,11 +38,17 @@ class CobrosService
             $query = $this->buildCobrosQuery($filters);
             $this->logCobrosDebug($query);
 
-            return $query
-                ->orderByDesc('ve.año')
-                ->orderByRaw($this->ordenMesSql() . ' DESC')
+            $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
 
-                ->orderByDesc('ve.id_cobro')
+            return $query
+                ->when(
+                    $ordenFecha,
+                    fn ($q, $direccion) => $q->orderBy('cp.fecha_arriendo', $direccion),
+                    fn ($q) => $q
+                        ->orderByDesc('ve.año')
+                        ->orderByRaw($this->ordenMesSql() . ' DESC')
+                        ->orderByDesc('ve.id_cobro'),
+                )
                 ->paginate($perPage)
                 ->withQueryString();
         } catch (QueryException) {
@@ -211,6 +217,15 @@ class CobrosService
             ->when(
                 $this->normalizarProforma($filters['proforma'] ?? null),
                 fn ($q, $proforma) => $q->whereRaw('ve.`Proforma` = ?', [$proforma]),
+            )
+            ->when(
+                $this->normalizarBuscar($filters['buscar'] ?? null),
+                fn ($q, $buscar) => $q->where(function ($subQuery) use ($buscar) {
+                    $subQuery
+                        ->where('cp.nombre', 'like', "%{$buscar}%")
+                        ->orWhere('cp.codigo', 'like', "%{$buscar}%")
+                        ->orWhere('cp.empresa', 'like', "%{$buscar}%");
+                }),
             );
 
     }
@@ -269,6 +284,28 @@ class CobrosService
         return null;
     }
 
+
+    private function normalizarBuscar(null|string $buscar): ?string
+    {
+        if ($buscar === null) {
+            return null;
+        }
+
+        $valor = trim($buscar);
+
+        return $valor === '' ? null : $valor;
+    }
+
+    private function normalizarOrdenFecha(null|string $orden): ?string
+    {
+        if ($orden === null) {
+            return null;
+        }
+
+        $valor = mb_strtolower(trim($orden));
+
+        return in_array($valor, ['asc', 'desc'], true) ? $valor : null;
+    }
     private function normalizarProforma(null|string|int $proforma): ?int
     {
         if ($proforma === null) {

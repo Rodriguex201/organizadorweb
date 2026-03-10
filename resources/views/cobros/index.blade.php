@@ -15,7 +15,7 @@
     </div>
 
     <div class="bg-white rounded-lg shadow p-4 mb-6">
-        <form method="GET" action="{{ route('cobros.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <form method="GET" action="{{ route('cobros.index') }}" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div>
                 <label for="mes" class="block text-sm font-medium mb-1">Mes</label>
 
@@ -44,6 +44,15 @@
                        class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
             </div>
 
+            <div>
+                <label for="buscar" class="block text-sm font-medium mb-1">Buscar</label>
+                <input id="buscar" name="buscar" type="text" value="{{ $filters['buscar'] ?? '' }}"
+                       placeholder="Nombre, código o empresa"
+                       class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+
+            <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
+
             <div class="flex gap-2">
                 <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Filtrar</button>
                 <a href="{{ route('cobros.index') }}" class="bg-slate-200 text-slate-700 px-4 py-2 rounded hover:bg-slate-300">Limpiar</a>
@@ -56,7 +65,22 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
                 <tr>
-                    <th class="text-left px-4 py-3">Fecha Arriendo</th>
+
+                    <th class="text-left px-4 py-3">
+                        @php
+                            $ordenFechaActual = $filters['orden_fecha'] ?? null;
+                            $siguienteOrdenFecha = $ordenFechaActual === 'asc' ? 'desc' : 'asc';
+                        @endphp
+                        <a href="{{ route('cobros.index', array_merge(request()->query(), ['orden_fecha' => $siguienteOrdenFecha])) }}" class="inline-flex items-center gap-1 hover:text-slate-900">
+                            <span>Fecha Arriendo</span>
+                            @if($ordenFechaActual === 'asc')
+                                <span aria-hidden="true">↑</span>
+                            @elseif($ordenFechaActual === 'desc')
+                                <span aria-hidden="true">↓</span>
+                            @endif
+                        </a>
+                    </th>
+
                     <th class="text-left px-4 py-3">Código</th>
                     <th class="text-left px-4 py-3">Cliente Potencial</th>
                     <th class="text-left px-4 py-3">Régimen</th>
