@@ -53,6 +53,85 @@ class ProformasController extends Controller
         ]);
     }
 
+    public function confirmarEnvioMasivo(Request $request, int $grupo): View
+    {
+        if (!in_array($grupo, [7, 27], true)) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'mes' => ['nullable', 'string', 'max:20'],
+            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+        ]);
+
+        $resumen = $this->proformasService->buildBatchEnvioResumen($grupo);
+
+        return view('proformas.confirmar-envio-masivo', [
+            'grupo' => $grupo,
+            'resumen' => $resumen,
+            'filtrosPeriodo' => [
+                'mes' => $validated['mes'] ?? null,
+                'anio' => $validated['anio'] ?? null,
+            ],
+        ]);
+    }
+
+    public function enviarMasivo(Request $request, int $grupo): RedirectResponse
+    {
+        if (!in_array($grupo, [7, 27], true)) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'proformas' => ['required', 'array', 'min:1'],
+            'proformas.*' => ['integer'],
+            'mes' => ['nullable', 'string', 'max:20'],
+            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+        ]);
+
+        $ids = array_values(array_unique(array_map('intval', $validated['proformas'] ?? [])));
+        $candidatas = $this->proformasService->findBatchCandidatesByIds($grupo, $ids);
+
+        $enviadas = 0;
+        $fallidas = [];
+
+        foreach ($candidatas as $proforma) {
+            try {
+                $this->proformaEmailService->sendProforma($proforma);
+                $this->proformasService->registrarEnvioExitoso((int) $proforma->id);
+                $enviadas++;
+            } catch (\Throwable $exception) {
+                $this->proformasService->registrarIntentoFallido((int) $proforma->id);
+                $fallidas[] = [
+                    'id' => $proforma->id,
+                    'nro_prof' => $proforma->nro_prof,
+                    'error' => $exception->getMessage(),
+                ];
+                report($exception);
+            }
+        }
+
+        $omitidas = max(0, count($ids) - $enviadas - count($fallidas));
+
+        $statusType = count($fallidas) > 0 ? 'error' : 'success';
+        $message = "Envío masivo grupo {$grupo} finalizado. Enviadas: {$enviadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
+
+        if ($fallidas !== []) {
+            $message .= ' Fallas: '.collect($fallidas)
+                ->take(3)
+                ->map(fn (array $fallida) => sprintf('#%s (%s)', $fallida['nro_prof'] ?: $fallida['id'], $fallida['error']))
+                ->implode(' | ');
+        }
+
+        return redirect()
+            ->route('proformas.index', [
+                'mes' => $validated['mes'] ?? null,
+                'anio' => $validated['anio'] ?? null,
+            ])
+            ->with('status', $message)
+            ->with('status_type', $statusType);
+    }
+
 
 
     public function dashboard(Request $request): View

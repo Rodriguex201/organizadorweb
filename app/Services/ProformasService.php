@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ProformasService
 {
@@ -112,6 +114,63 @@ class ProformasService
         DB::table('sg_proform')->where('id', $proformaId)->update(['enviado' => 1, 'fecha_envio' => now(), 'estado' => self::ESTADO_ENVIADA, 'intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1')]);
     }
 
+    public function registrarIntentoFallido(int $proformaId): void
+    {
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update(['intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1')]);
+    }
+
+    public function buildBatchEnvioResumen(int $grupoFecha): array
+    {
+        $proformas = $this->queryProformasByGrupoFecha($grupoFecha)->get();
+
+        $omitidasPorMotivo = [
+            'sin_correo' => 0,
+            'sin_pdf' => 0,
+            'ya_enviadas' => 0,
+            'no_generadas' => 0,
+        ];
+
+        $validas = [];
+        $omitidasDetalle = [];
+
+        foreach ($proformas as $proforma) {
+            $motivo = $this->resolveInvalidReasonForBatch($proforma);
+
+            if ($motivo === null) {
+                $validas[] = $proforma;
+
+                continue;
+            }
+
+            $omitidasPorMotivo[$motivo]++;
+            $omitidasDetalle[] = [
+                'id' => $proforma->id,
+                'nro_prof' => $proforma->nro_prof,
+                'empresa' => $proforma->emp,
+                'motivo' => $motivo,
+            ];
+        }
+
+        return [
+            'grupo' => $grupoFecha,
+            'total_encontradas' => $proformas->count(),
+            'validas' => collect($validas),
+            'validas_count' => count($validas),
+            'omitidas_count' => count($omitidasDetalle),
+            'omitidas_por_motivo' => $omitidasPorMotivo,
+            'omitidas_detalle' => $omitidasDetalle,
+        ];
+    }
+
+    public function findBatchCandidatesByIds(int $grupoFecha, array $ids): Collection
+    {
+        return $this->queryProformasByGrupoFecha($grupoFecha)
+            ->whereIn('p.id', $ids)
+            ->get();
+    }
+
     public function envioLabel(null|string|int $enviado): string
     {
         return ((int) ($enviado ?? 0)) === 1 ? 'Enviada' : 'No enviada';
@@ -186,5 +245,65 @@ class ProformasService
         }
         $mesInt = array_search($mesTexto, self::MESES, true);
         return $mesInt !== false ? (int) $mesInt : null;
+    }
+
+    private function queryProformasByGrupoFecha(int $grupoFecha)
+    {
+        $diaArriendo = "CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED)";
+
+        return DB::table('sg_proform as p')
+            ->leftJoin('clientes_potenciales as cp', 'cp.nit', '=', 'p.nit')
+            ->select([
+                'p.id',
+                'p.nro_prof',
+                'p.emp',
+                'p.nit',
+                'p.estado',
+                'p.enviado',
+                'p.rpdf',
+                'p.npdf',
+                'cp.email as cliente_email',
+                'cp.fecha_arriendo as cliente_fecha_arriendo',
+            ])
+            ->where(function ($query) use ($grupoFecha, $diaArriendo) {
+                if ($grupoFecha === 7) {
+                    $query->whereRaw("{$diaArriendo} BETWEEN 1 AND 12");
+
+                    return;
+                }
+
+                $query->whereRaw("{$diaArriendo} BETWEEN 22 AND 31");
+            });
+    }
+
+    private function resolveInvalidReasonForBatch(object $proforma): ?string
+    {
+        if ((int) ($proforma->estado ?? 0) !== self::ESTADO_GENERADA) {
+            return 'no_generadas';
+        }
+
+        if ((int) ($proforma->enviado ?? 0) === 1) {
+            return 'ya_enviadas';
+        }
+
+        $email = trim((string) ($proforma->cliente_email ?? ''));
+        if ($email === '') {
+            return 'sin_correo';
+        }
+
+        $rutaPdf = trim((string) ($proforma->rpdf ?? ''));
+        $nombrePdf = trim((string) ($proforma->npdf ?? ''));
+
+        if ($rutaPdf === '' || $nombrePdf === '') {
+            return 'sin_pdf';
+        }
+
+        $relativePath = trim($rutaPdf, '/').'/'.ltrim($nombrePdf, '/');
+
+        if (!Storage::disk('local')->exists($relativePath)) {
+            return 'sin_pdf';
+        }
+
+        return null;
     }
 }
