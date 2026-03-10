@@ -32,6 +32,8 @@ class CobrosController extends Controller
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'ano' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'proforma' => ['nullable', 'string', 'max:100'],
+            'buscar' => ['nullable', 'string', 'max:100'],
+            'orden_fecha' => ['nullable', 'in:asc,desc'],
             'debug' => ['nullable'],
         ]);
 
@@ -40,6 +42,8 @@ class CobrosController extends Controller
             'mes' => $validated['mes'] ?? null,
             'anio' => $validated['anio'] ?? $validated['ano'] ?? null,
             'proforma' => $validated['proforma'] ?? null,
+            'buscar' => $validated['buscar'] ?? null,
+            'orden_fecha' => $validated['orden_fecha'] ?? null,
         ];
 
 
