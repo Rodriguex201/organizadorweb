@@ -41,7 +41,7 @@ class ProformaEmailService
 
                 'to' => [$clienteEmail],
                 'subject' => sprintf('Proforma #%s', (string) ($proforma->nro_prof ?: $proforma->id)),
-                'text' => "Estimado cliente,\n\nAdjunto encontrará su proforma correspondiente al servicio contratado.\n\nPor favor revisar el documento adjunto.\n\nCordialmente,\nRM Soft",
+                'text' => "Cordial saludo,\n\nBuen día,\n\nNos permitimos adjuntar  la proforma correspondiente a  los servicios contratados.\n\n*** RECUERDE HACER EL PAGO DE LA PROFORMA EN SU TOTALIDAD, NO PARCIALMENTE ***\n\nEnviar soporte de pago a este correo o la linea telefónica de cartera por WhatsApp 3128133868, con sus datos y factura que se abona.\n\nCordialmente,\nRM Soft",
                 'attachments' => [
                     [
                         'filename' => $pdf['filename'],
