@@ -10,7 +10,7 @@
             <h1 class="text-2xl font-bold">Revisión manual de proforma</h1>
             <p class="text-sm text-slate-600">Cobro #{{ $cobro->id_cobro }} · {{ ucfirst((string) ($cobro->mes ?? '')) }} {{ $cobro->año ?? '' }}</p>
         </div>
-        <a href="{{ route('cobros.show', $cobro->id_cobro) }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
+        <a href="{{ route('cobros.show', array_merge(['id' => $cobro->id_cobro], request()->query())) }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
             Volver al detalle
         </a>
     </div>

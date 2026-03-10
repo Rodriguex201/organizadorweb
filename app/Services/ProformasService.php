@@ -37,7 +37,7 @@ class ProformasService
 
     public function paginateProformas(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = DB::table('sg_proform as p')->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio']);
+        $query = DB::table('sg_proform as p')->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio']);
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
         $nit = trim((string) ($filters['nit'] ?? ''));
         $empresa = trim((string) ($filters['empresa'] ?? ''));
@@ -98,7 +98,7 @@ class ProformasService
 
     public function findProformaById(int $id): ?object
     {
-        return DB::table('sg_proform as p')->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])->where('p.id', $id)->first();
+        return DB::table('sg_proform as p')->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])->where('p.id', $id)->first();
     }
 
     public function canSendProforma(null|object $proforma): bool
