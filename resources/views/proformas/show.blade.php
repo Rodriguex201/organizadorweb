@@ -25,7 +25,9 @@
             <h1 class="text-2xl font-bold text-slate-900">Detalle de proforma #{{ $proforma->nro_prof ?: $proforma->id }}</h1>
             <p class="mt-1 text-sm text-slate-600">Vista consolidada de información operativa y técnica.</p>
         </div>
-        <a href="{{ route('proformas.index') }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Volver al listado</a>
+
+        <a href="{{ route('proformas.index', request()->query()) }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Volver al listado</a>
+
     </div>
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
