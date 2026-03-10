@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CobrosController;
+use App\Http\Controllers\ConfiguracionEstadoProformaController;
 use App\Http\Controllers\ProformasController;
 use Illuminate\Support\Facades\Route;
 
@@ -28,3 +29,6 @@ Route::post('/proformas/{id}/enviar', [ProformasController::class, 'enviarCorreo
 
 Route::patch('/proformas/{id}/estado', [ProformasController::class, 'updateEstado'])->name('proformas.estado.update');
 
+
+Route::get('/configuracion/estados-proforma', [ConfiguracionEstadoProformaController::class, 'index'])->name('configuracion.estados-proforma.index');
+Route::patch('/configuracion/estados-proforma/{estadoCodigo}', [ConfiguracionEstadoProformaController::class, 'update'])->name('configuracion.estados-proforma.update');

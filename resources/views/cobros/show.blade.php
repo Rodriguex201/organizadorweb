@@ -1,12 +1,8 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detalle de Cobro #{{ $cobro->id_cobro }}</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-</head>
-<body class="bg-slate-100 text-slate-800">
+@extends('layouts.admin')
+
+@section('title', 'Detalle de Cobro')
+
+@section('content')
 <div class="max-w-6xl mx-auto px-4 py-8 space-y-6">
     <div class="flex items-center justify-between">
         <div>
@@ -179,5 +175,4 @@
         </section>
     </div>
 </div>
-</body>
-</html>
+@endsection

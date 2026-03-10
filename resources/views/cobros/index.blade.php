@@ -1,12 +1,8 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cobros</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-</head>
-<body class="bg-slate-100 text-slate-800">
+@extends('layouts.admin')
+
+@section('title', 'Cobros')
+
+@section('content')
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="mb-6 flex items-center justify-between gap-3">
         <div>
@@ -100,5 +96,4 @@
         </div>
     </div>
 </div>
-</body>
-</html>
+@endsection
