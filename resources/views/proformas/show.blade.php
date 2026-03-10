@@ -75,6 +75,7 @@
             </dl>
         </section>
 
+
         <section class="rounded-lg bg-white p-5 shadow">
             <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Envío</h2>
             <dl class="mt-3 space-y-3 text-sm">
