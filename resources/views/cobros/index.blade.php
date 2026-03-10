@@ -56,26 +56,22 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
                 <tr>
-                    <th class="text-left px-4 py-3">ID Cobro</th>
-                    <th class="text-left px-4 py-3">Proforma</th>
-                    <th class="text-left px-4 py-3">Mes</th>
-                    <th class="text-left px-4 py-3">Año</th>
-                    <th class="text-left px-4 py-3">Cliente potencial</th>
-                    <th class="text-right px-4 py-3">Total</th>
+                    <th class="text-left px-4 py-3">Fecha Arriendo</th>
+                    <th class="text-left px-4 py-3">Código</th>
+                    <th class="text-left px-4 py-3">Cliente Potencial</th>
+                    <th class="text-left px-4 py-3">Régimen</th>
+                    <th class="text-right px-4 py-3">Valor Total</th>
                     <th class="text-left px-4 py-3">Acciones</th>
                 </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                 @forelse($cobros as $cobro)
                     <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-3">{{ $cobro->id_cobro }}</td>
-                        <td class="px-4 py-3 font-medium">{{ $cobro->proforma }}</td>
-                        <td class="px-4 py-3">{{ $cobro->mes }}</td>
-
-                        <td class="px-4 py-3">{{ $cobro->anio }}</td>
-
-                        <td class="px-4 py-3">{{ $cobro->nombre ?: ($cobro->empresa ?: ($cobro->contacto ?: 'Sin nombre')) }}</td>
-                        <td class="px-4 py-3 text-right">{{ number_format((float) ($cobro->total ?? 0), 2, ',', '.') }}</td>
+                        <td class="px-4 py-3">{{ $cobro->fecha_arriendo ? \Carbon\Carbon::parse($cobro->fecha_arriendo)->format('d/m/Y') : '—' }}</td>
+                        <td class="px-4 py-3 font-medium">{{ $cobro->codigo ?: '—' }}</td>
+                        <td class="px-4 py-3">{{ $cobro->nombre ?: 'Sin nombre' }}</td>
+                        <td class="px-4 py-3">{{ $cobro->regimen ?: '—' }}</td>
+                        <td class="px-4 py-3 text-right">${{ number_format((float) ($cobro->valor_total ?? 0), 0, ',', '.') }}</td>
                         <td class="px-4 py-3">
                             <a href="{{ route('cobros.show', $cobro->id_cobro) }}" class="inline-flex items-center rounded bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-200">
                                 Ver detalle
@@ -84,7 +80,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="px-4 py-8 text-center text-slate-500">No hay cobros disponibles para los filtros seleccionados.</td>
+                        <td colspan="6" class="px-4 py-8 text-center text-slate-500">No hay cobros disponibles para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>

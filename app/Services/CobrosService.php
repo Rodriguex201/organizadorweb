@@ -196,18 +196,11 @@ class CobrosService
             ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
             ->select([
                 've.id_cobro',
-                've.mes',
-                DB::raw('ve.`año` as anio'),
-                've.id_cliente',
-                DB::raw('ve.`valor_total` as total'),
-                DB::raw('ve.`Proforma` as proforma'),
-                'cp.nombre',
-                'cp.empresa',
-                'cp.nit',
+                'cp.fecha_arriendo',
                 'cp.codigo',
-                'cp.contacto',
-                'cp.celular1',
-                'cp.email',
+                'cp.nombre',
+                'cp.regimen',
+                DB::raw('ve.`valor_total` as valor_total'),
             ]);
 
         $mesNormalizado = $this->normalizarMes($filters['mes'] ?? null);
