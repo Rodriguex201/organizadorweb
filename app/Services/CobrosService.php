@@ -226,6 +226,22 @@ class CobrosService
                         ->orWhere('cp.codigo', 'like', "%{$buscar}%")
                         ->orWhere('cp.empresa', 'like', "%{$buscar}%");
                 }),
+            )
+            ->when(
+                $this->normalizarGrupoFecha($filters['grupo_fecha'] ?? null),
+                function ($q, int $grupoFecha) {
+                    $diaArriendo = "CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED)";
+
+                    if ($grupoFecha === 7) {
+                        $q->whereRaw("{$diaArriendo} BETWEEN 1 AND 12");
+
+                        return;
+                    }
+
+                    if ($grupoFecha === 27) {
+                        $q->whereRaw("{$diaArriendo} BETWEEN 22 AND 31");
+                    }
+                },
             );
 
     }
@@ -306,6 +322,22 @@ class CobrosService
 
         return in_array($valor, ['asc', 'desc'], true) ? $valor : null;
     }
+
+    private function normalizarGrupoFecha(null|string|int $grupoFecha): ?int
+    {
+        if ($grupoFecha === null) {
+            return null;
+        }
+
+        $valor = trim((string) $grupoFecha);
+
+        if (!in_array($valor, ['7', '27'], true)) {
+            return null;
+        }
+
+        return (int) $valor;
+    }
+
     private function normalizarProforma(null|string|int $proforma): ?int
     {
         if ($proforma === null) {

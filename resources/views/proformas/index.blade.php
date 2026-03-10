@@ -20,13 +20,11 @@
         </div>
     </div>
 
-
     @if(session('status'))
         <div class="mb-4 rounded border px-4 py-3 text-sm {{ session('status_type') === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700' }}">
             {{ session('status') }}
         </div>
     @endif
-
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
         <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-8">
@@ -82,17 +80,13 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-600">
                 <tr>
-                    <th class="px-4 py-3">Número</th>
-                    <th class="px-4 py-3">Empresa</th>
-                    <th class="px-4 py-3">NIT</th>
-                    <th class="px-4 py-3">Emisora</th>
-                    <th class="px-4 py-3">Mes</th>
-                    <th class="px-4 py-3">Año</th>
-                    <th class="px-4 py-3 text-right">Valor total</th>
-                    <th class="px-4 py-3">Estado</th>
-                    <th class="px-4 py-3">Envío</th>
-                    <th class="px-4 py-3">Fecha / ID</th>
-                    <th class="px-4 py-3">Acciones</th>
+                    <th class="px-3 py-2">Número</th>
+                    <th class="px-3 py-2">Empresa</th>
+                    <th class="px-3 py-2">Periodo</th>
+                    <th class="px-3 py-2 text-right">Valor total</th>
+                    <th class="px-3 py-2">Estado</th>
+                    <th class="px-3 py-2">Envío</th>
+                    <th class="px-3 py-2 text-right">Acción</th>
                 </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -101,80 +95,31 @@
                         $estado = $proformasService->estadoLabel($proforma->estado);
                         $envioEstado = $proformasService->envioLabel($proforma->enviado ?? 0);
                         $envioClasses = $proformasService->envioBadgeClass($proforma->enviado ?? 0);
-
-                        $canSendProforma = $proformasService->canSendProforma($proforma);
-
                     @endphp
                     <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-3 font-medium">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</td>
-                        <td class="px-4 py-3">{{ $proforma->emp ?: 'N/D' }}</td>
-                        <td class="px-4 py-3">{{ $proforma->nit ?: 'N/D' }}</td>
-                        <td class="px-4 py-3">{{ $proforma->emisora ?: 'N/D' }}</td>
-                        <td class="px-4 py-3">{{ $proformasService->monthLabel($proforma->mes) }}</td>
-                        <td class="px-4 py-3">{{ $proforma->anio ?: 'N/D' }}</td>
-                        <td class="px-4 py-3 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
-                        <td class="px-4 py-3">
+                        <td class="px-3 py-2">
+                            <p class="font-medium text-slate-800">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</p>
+                            <p class="text-xs text-slate-500">ID {{ $proforma->id }}</p>
+                        </td>
+                        <td class="px-3 py-2">
+                            <p class="font-medium text-slate-800">{{ $proforma->emp ?: 'N/D' }}</p>
+                            <p class="text-xs text-slate-500">NIT: {{ $proforma->nit ?: 'N/D' }}</p>
+                        </td>
+                        <td class="px-3 py-2 text-slate-700">{{ $proformasService->monthLabel($proforma->mes) }} {{ $proforma->anio ?: 'N/D' }}</td>
+                        <td class="px-3 py-2 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
+                        <td class="px-3 py-2">
                             <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}">{{ $estado }}</span>
                         </td>
-                        <td class="px-4 py-3">
+                        <td class="px-3 py-2">
                             <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $envioClasses }}">{{ $envioEstado }}</span>
-                            <p class="mt-1 text-xs text-slate-500">Intentos: {{ (int) ($proforma->intentos_envio ?? 0) }}</p>
-                            <p class="text-xs text-slate-500">Último: {{ $proforma->fecha_envio ? \Illuminate\Support\Carbon::parse($proforma->fecha_envio)->format('Y-m-d H:i') : "N/D" }}</p>
                         </td>
-                        <td class="px-4 py-3 text-xs text-slate-600">ID: {{ $proforma->id }}</td>
-                        <td class="px-4 py-3">
-                            <div class="flex flex-wrap gap-2">
-                                <a href="{{ route('proformas.pdf.show', $proforma->id) }}" target="_blank" class="inline-flex items-center rounded bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-200">Ver PDF</a>
-                                <a href="{{ route('proformas.pdf.download', $proforma->id) }}" class="inline-flex items-center rounded bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-200">Descargar PDF</a>
-
-                                @if($canSendProforma)
-                                    <form method="POST" action="{{ route('proformas.enviar', $proforma->id) }}">
-                                        @csrf
-                                        <button type="submit" class="inline-flex items-center rounded bg-cyan-100 px-3 py-1.5 text-xs font-medium text-cyan-700 hover:bg-cyan-200">{{ ((int) ($proforma->enviado ?? 0)) === 1 ? "Reenviar" : "Enviar" }} por correo</button>
-                                    </form>
-                                @else
-                                    <span class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">Debe generar la proforma</span>
-                                @endif
-
-                                <a href="{{ route('proformas.show', $proforma->id) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a>
-
-
-                                @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_ENVIADA))
-                                    <form method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="hidden" name="estado" value="{{ \App\Services\ProformasService::ESTADO_ENVIADA }}">
-                                        <input type="hidden" name="redirect_to" value="index">
-                                        <button type="submit" class="inline-flex items-center rounded bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-200">Marcar enviada</button>
-                                    </form>
-                                @endif
-
-                                @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_PAGADA))
-                                    <form method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="hidden" name="estado" value="{{ \App\Services\ProformasService::ESTADO_PAGADA }}">
-                                        <input type="hidden" name="redirect_to" value="index">
-                                        <button type="submit" class="inline-flex items-center rounded bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-200">Marcar pagada</button>
-                                    </form>
-                                @endif
-
-                                @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_FACTURADA))
-                                    <form method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="hidden" name="estado" value="{{ \App\Services\ProformasService::ESTADO_FACTURADA }}">
-                                        <input type="hidden" name="redirect_to" value="index">
-                                        <button type="submit" class="inline-flex items-center rounded bg-purple-100 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-200">Marcar facturada</button>
-                                    </form>
-                                @endif
-
-                            </div>
+                        <td class="px-3 py-2 text-right">
+                            <a href="{{ route('proformas.show', array_merge(['id' => $proforma->id], request()->query())) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="11" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
+                        <td colspan="7" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>
@@ -186,5 +131,4 @@
         </div>
     </div>
 </div>
-
 @endsection
