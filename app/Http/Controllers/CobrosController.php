@@ -34,6 +34,7 @@ class CobrosController extends Controller
             'proforma' => ['nullable', 'string', 'max:100'],
             'buscar' => ['nullable', 'string', 'max:100'],
             'orden_fecha' => ['nullable', 'in:asc,desc'],
+            'grupo_fecha' => ['nullable', 'in:7,27'],
             'debug' => ['nullable'],
         ]);
 
@@ -44,6 +45,7 @@ class CobrosController extends Controller
             'proforma' => $validated['proforma'] ?? null,
             'buscar' => $validated['buscar'] ?? null,
             'orden_fecha' => $validated['orden_fecha'] ?? null,
+            'grupo_fecha' => $validated['grupo_fecha'] ?? null,
         ];
 
 
