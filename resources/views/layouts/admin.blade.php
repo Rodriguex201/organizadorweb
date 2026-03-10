@@ -54,12 +54,16 @@
 
 <script>
     (() => {
-        const layout = document.getElementById('admin-layout');
+
+        const SIDEBAR_COLLAPSED_KEY = 'sidebarCollapsed';
+
         const sidebar = document.getElementById('admin-sidebar');
         const toggle = document.getElementById('sidebar-toggle');
         const brand = document.getElementById('sidebar-brand');
 
-        if (!layout || !sidebar || !toggle) return;
+
+        if (!sidebar || !toggle) return;
+
 
         const applyCollapsedState = (collapsed) => {
             sidebar.classList.toggle('md:w-64', !collapsed);
@@ -81,13 +85,23 @@
             toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         };
 
-        let collapsed = false;
+
+        const getStoredCollapsedState = () => {
+            return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+        };
+
+        const setStoredCollapsedState = (collapsed) => {
+            localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? 'true' : 'false');
+        };
+
+        let collapsed = getStoredCollapsedState();
+        applyCollapsedState(collapsed);
+
         toggle.addEventListener('click', () => {
             collapsed = !collapsed;
             applyCollapsedState(collapsed);
+            setStoredCollapsedState(collapsed);
         });
-
-        applyCollapsedState(false);
     })();
 </script>
 
