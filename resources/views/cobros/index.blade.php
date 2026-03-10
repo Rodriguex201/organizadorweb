@@ -28,7 +28,6 @@
                         </option>
                     @endforeach
                 </select>
-                <p class="mt-1 text-xs text-slate-500">Puedes seleccionar un mes o buscar por número (1-12) en la URL, por ejemplo: <code>?mes=3</code>.</p>
             </div>
 
             <div>
