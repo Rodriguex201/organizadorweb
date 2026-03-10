@@ -10,7 +10,13 @@
             <p class="text-sm text-slate-600">Consulta administrativa sobre <code>sg_proform</code>.</p>
         </div>
 
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ route('proformas.envio-masivo.confirmar', ['grupo' => 7, 'mes' => $filters['mes'] ?? null, 'anio' => $filters['anio'] ?? null]) }}" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-200">
+                Enviar grupo 7
+            </a>
+            <a href="{{ route('proformas.envio-masivo.confirmar', ['grupo' => 27, 'mes' => $filters['mes'] ?? null, 'anio' => $filters['anio'] ?? null]) }}" class="inline-flex items-center rounded bg-sky-100 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200">
+                Enviar grupo 27
+            </a>
             <a href="{{ route('proformas.dashboard') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
                 Ver dashboard
             </a>
