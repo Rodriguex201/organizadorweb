@@ -65,6 +65,7 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
                 <tr>
+
                     <th class="text-left px-4 py-3">
                         @php
                             $ordenFechaActual = $filters['orden_fecha'] ?? null;
@@ -79,6 +80,7 @@
                             @endif
                         </a>
                     </th>
+
                     <th class="text-left px-4 py-3">Código</th>
                     <th class="text-left px-4 py-3">Cliente Potencial</th>
                     <th class="text-left px-4 py-3">Régimen</th>
