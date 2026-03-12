@@ -196,6 +196,15 @@ class CobrosService
     }
 
 
+
+    public function normalizePeriodoFilters(null|string|int $mes, null|string|int $anio): array
+    {
+        return [
+            'mes' => $this->normalizarMes($mes) ?? self::MESES[(int) now()->format('n')],
+            'anio' => $this->normalizarEntero($anio) ?? (int) now()->format('Y'),
+        ];
+    }
+
     private function buildCobrosQuery(array $filters)
     {
         $query = DB::table('valores_externos as ve')
@@ -210,10 +219,12 @@ class CobrosService
             ]);
 
         $mesNormalizado = $this->normalizarMes($filters['mes'] ?? null);
+        $anioNormalizado = $this->normalizarEntero($filters['anio'] ?? null);
+        $mesNumero = $mesNormalizado ? array_search($mesNormalizado, self::MESES, true) : null;
 
         return $query
             ->when($mesNormalizado, fn ($q, $mes) => $q->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes]))
-            ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->whereRaw('ve.`año` = ?', [(int) $anio]))
+            ->when($anioNormalizado, fn ($q, $anio) => $q->whereRaw('ve.`año` = ?', [$anio]))
             ->when(
                 $this->normalizarProforma($filters['proforma'] ?? null),
                 fn ($q, $proforma) => $q->whereRaw('ve.`Proforma` = ?', [$proforma]),
@@ -229,17 +240,26 @@ class CobrosService
             )
             ->when(
                 $this->normalizarGrupoFecha($filters['grupo_fecha'] ?? null),
-                function ($q, int $grupoFecha) {
-                    $diaArriendo = "CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED)";
+                function ($q, int $grupoFecha) use ($mesNumero, $anioNormalizado) {
+                    $fechaArriendoNormalizada = "REPLACE(cp.fecha_arriendo, '/', '-')";
+                    $diaArriendo = "CAST(SUBSTRING_INDEX({$fechaArriendoNormalizada}, '-', 1) AS UNSIGNED)";
+                    $mesArriendo = "CAST(SUBSTRING_INDEX(SUBSTRING_INDEX({$fechaArriendoNormalizada}, '-', 2), '-', -1) AS UNSIGNED)";
+                    $anioArriendo = "CAST(SUBSTRING_INDEX({$fechaArriendoNormalizada}, '-', -1) AS UNSIGNED)";
 
                     if ($grupoFecha === 7) {
                         $q->whereRaw("{$diaArriendo} BETWEEN 1 AND 12");
-
-                        return;
                     }
 
                     if ($grupoFecha === 27) {
                         $q->whereRaw("{$diaArriendo} BETWEEN 22 AND 31");
+                    }
+
+                    if ($mesNumero !== null && $mesNumero !== false) {
+                        $q->whereRaw("{$mesArriendo} = ?", [(int) $mesNumero]);
+                    }
+
+                    if ($anioNormalizado !== null) {
+                        $q->whereRaw("{$anioArriendo} = ?", [$anioNormalizado]);
                     }
                 },
             );
@@ -300,6 +320,22 @@ class CobrosService
         return null;
     }
 
+
+
+    private function normalizarEntero(null|string|int $valor): ?int
+    {
+        if ($valor === null) {
+            return null;
+        }
+
+        $string = trim((string) $valor);
+
+        if ($string === '' || !ctype_digit($string)) {
+            return null;
+        }
+
+        return (int) $string;
+    }
 
     private function normalizarBuscar(null|string $buscar): ?string
     {

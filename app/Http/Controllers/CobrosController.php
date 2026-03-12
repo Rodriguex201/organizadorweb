@@ -39,9 +39,16 @@ class CobrosController extends Controller
         ]);
 
 
+        $mes = $request->exists('mes') ? ($validated['mes'] ?? null) : null;
+        $anio = $request->exists('anio')
+            ? ($validated['anio'] ?? null)
+            : ($request->exists('ano') ? ($validated['ano'] ?? null) : null);
+
+        $periodo = $this->cobrosService->normalizePeriodoFilters($mes, $anio);
+
         $filters = [
-            'mes' => $validated['mes'] ?? null,
-            'anio' => $validated['anio'] ?? $validated['ano'] ?? null,
+            'mes' => $periodo['mes'],
+            'anio' => $periodo['anio'],
             'proforma' => $validated['proforma'] ?? null,
             'buscar' => $validated['buscar'] ?? null,
             'orden_fecha' => $validated['orden_fecha'] ?? null,
