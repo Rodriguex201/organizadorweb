@@ -196,6 +196,15 @@ class CobrosService
     }
 
 
+
+    public function normalizePeriodoFilters(null|string|int $mes, null|string|int $anio): array
+    {
+        return [
+            'mes' => $this->normalizarMes($mes) ?? self::MESES[(int) now()->format('n')],
+            'anio' => $this->normalizarEntero($anio) ?? (int) now()->format('Y'),
+        ];
+    }
+
     private function buildCobrosQuery(array $filters)
     {
         $query = DB::table('valores_externos as ve')
@@ -300,6 +309,22 @@ class CobrosService
         return null;
     }
 
+
+
+    private function normalizarEntero(null|string|int $valor): ?int
+    {
+        if ($valor === null) {
+            return null;
+        }
+
+        $string = trim((string) $valor);
+
+        if ($string === '' || !ctype_digit($string)) {
+            return null;
+        }
+
+        return (int) $string;
+    }
 
     private function normalizarBuscar(null|string $buscar): ?string
     {
