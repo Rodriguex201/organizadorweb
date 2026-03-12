@@ -34,13 +34,18 @@ class ProformasController extends Controller
             'estado' => ['nullable', 'integer', 'min:0'],
         ]);
 
+        $periodo = $this->proformasService->normalizePeriodoFilters(
+            $request->exists('mes') ? ($validated['mes'] ?? null) : null,
+            $request->exists('anio') ? ($validated['anio'] ?? null) : null,
+        );
+
         $filters = [
             'nro_prof' => $validated['nro_prof'] ?? null,
             'nit' => $validated['nit'] ?? null,
             'empresa' => $validated['empresa'] ?? null,
             'emisora' => $validated['emisora'] ?? null,
-            'mes' => $validated['mes'] ?? null,
-            'anio' => $validated['anio'] ?? null,
+            'mes' => $periodo['mes'],
+            'anio' => $periodo['anio'],
             'estado' => $validated['estado'] ?? null,
         ];
 
