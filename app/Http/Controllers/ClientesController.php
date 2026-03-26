@@ -201,8 +201,9 @@ class ClientesController extends Controller
             'correo' => 'correo',
             'telefono' => 'telefono',
             'contacto' => 'contacto',
-            'ciudad' => 'ciudad',
-            'ciudad_codigo' => 'ciudad_codigo',
+
+            'departamento' => 'departamento',
+
             'fecha_inicio' => 'fecha_inicio',
             'fecha_arriendo' => 'fecha_arriendo',
             'fecha_cotizacion' => 'fecha_cotizacion',
@@ -258,8 +259,9 @@ class ClientesController extends Controller
             'correo' => $pick(['email', 'correo']),
             'telefono' => $pick(['celular1', 'telefono', 'celular']),
             'contacto' => $pick(['contacto']),
-            'ciudad' => $pick(['ciudad', 'city', 'municipio']),
-            'ciudad_codigo' => $pick(['citycodigo', 'ciudad_codigo', 'id_ciudad']),
+
+            'departamento' => $pick(['departamento']),
+
             'fecha_inicio' => $pick(['fecha_inicio', 'fechainicio']),
             'fecha_arriendo' => $pick(['fecha_arriendo']),
             'fecha_cotizacion' => $pick(['fecha_cotizacion']),
