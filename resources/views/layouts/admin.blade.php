@@ -15,7 +15,7 @@
         </div>
 
         <nav class="space-y-1 px-3 pb-4">
-            <a href="{{ url('/') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->is('/') ? 'bg-slate-800' : '' }}">
+            <a href="{{ url('/') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('clientes.*') || request()->is('/') ? 'bg-slate-800' : '' }}">
                 <span class="text-base">🏠</span>
                 <span class="sidebar-label">Inicio</span>
             </a>

@@ -1,13 +1,20 @@
 <?php
 
+use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
 use App\Http\Controllers\ProformasController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::redirect('/', '/clientes')->name('home');
+
+Route::get('/clientes', [ClientesController::class, 'index'])->name('clientes.index');
+Route::get('/clientes/create', [ClientesController::class, 'create'])->name('clientes.create');
+Route::post('/clientes', [ClientesController::class, 'store'])->name('clientes.store');
+Route::get('/clientes/{id}', [ClientesController::class, 'show'])->name('clientes.show');
+Route::get('/clientes/{id}/edit', [ClientesController::class, 'edit'])->name('clientes.edit');
+Route::put('/clientes/{id}', [ClientesController::class, 'update'])->name('clientes.update');
+Route::patch('/clientes/{id}/retirar', [ClientesController::class, 'retirar'])->name('clientes.retirar');
 
 Route::get('/cobros', [CobrosController::class, 'index'])->name('cobros.index');
 
