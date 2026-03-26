@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CiudadesController;
 use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
@@ -7,6 +8,8 @@ use App\Http\Controllers\ProformasController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/clientes')->name('home');
+
+Route::get('/ciudades/buscar', [CiudadesController::class, 'buscar'])->name('ciudades.buscar');
 
 Route::get('/clientes', [ClientesController::class, 'index'])->name('clientes.index');
 Route::get('/clientes/create', [ClientesController::class, 'create'])->name('clientes.create');
