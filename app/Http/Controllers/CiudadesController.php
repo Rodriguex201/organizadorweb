@@ -22,6 +22,7 @@ class CiudadesController extends Controller
         try {
             $resultados = DB::table('xxxxcity')
                 ->select([
+
                 'citynomb',
                 'citydepto',
             ])
@@ -34,6 +35,7 @@ class CiudadesController extends Controller
             ->get()
             ->map(static function ($city) {
                 return [
+
                     'citynomb' => $city->citynomb,
                     'citydepto' => $city->citydepto,
                     'label' => trim(($city->citynomb ?? '').', '.($city->citydepto ?? ''), ', '),

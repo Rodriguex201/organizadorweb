@@ -72,7 +72,9 @@
             <input
                 id="ciudad_busqueda"
                 type="text"
+
                 value="{{ $value('departamento', $mapping['departamento']) }}"
+
                 placeholder="Ej: Med"
                 class="w-full border border-slate-300 rounded px-3 py-2"
             >
@@ -87,7 +89,9 @@
             </button>
         </div>
 
+
         <input type="hidden" name="departamento" id="departamento" value="{{ $value('departamento', $mapping['departamento']) }}">
+
 
         <p id="ciudad_estado" class="mt-2 text-xs text-slate-500"></p>
         <div id="ciudad_resultados" class="mt-2 hidden rounded border border-slate-200 bg-white"></div>
@@ -126,11 +130,13 @@
             (() => {
                 const inputBusqueda = document.getElementById('ciudad_busqueda');
                 const botonBuscar = document.getElementById('ciudad_buscar_btn');
+
                 const inputDepartamento = document.getElementById('departamento');
                 const estado = document.getElementById('ciudad_estado');
                 const resultados = document.getElementById('ciudad_resultados');
 
                 if (!inputBusqueda || !botonBuscar || !inputDepartamento || !estado || !resultados) {
+
                     return;
                 }
 
@@ -164,7 +170,9 @@
 
                         opcion.addEventListener('click', () => {
                             inputBusqueda.value = item.label;
+
                             inputDepartamento.value = item.label;
+
                             setEstado('Ciudad seleccionada.');
                             limpiarResultados();
                         });
@@ -175,7 +183,9 @@
 
 
                 inputBusqueda.addEventListener('input', () => {
+
                     inputDepartamento.value = inputBusqueda.value.trim();
+
                     limpiarResultados();
                     setEstado('Usa la lupa para buscar y seleccionar una ciudad.');
                 });
@@ -183,7 +193,9 @@
                 botonBuscar.addEventListener('click', async () => {
                     const termino = inputBusqueda.value.trim();
 
+
                     inputDepartamento.value = termino;
+
 
                     if (termino.length < 3) {
                         limpiarResultados();
