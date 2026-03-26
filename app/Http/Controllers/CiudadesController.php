@@ -37,8 +37,8 @@ class CiudadesController extends Controller
                 return [
 
                     'citynomb' => $city->citynomb,
-                    'citydepto' => $city->citydepto,
-                    'label' => trim(($city->citynomb ?? '').', '.($city->citydepto ?? ''), ', '),
+                    'label' => $city->citynomb,
+
                 ];
             })
                 ->values();
