@@ -22,6 +22,7 @@ class CiudadesController extends Controller
         try {
             $resultados = DB::table('xxxxcity')
                 ->select([
+
                 'citynomb',
                 'citydepto',
             ])
@@ -34,8 +35,10 @@ class CiudadesController extends Controller
             ->get()
             ->map(static function ($city) {
                 return [
+
                     'citynomb' => $city->citynomb,
                     'label' => $city->citynomb,
+
                 ];
             })
                 ->values();
