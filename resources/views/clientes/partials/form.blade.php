@@ -1,5 +1,9 @@
 @php
     $cliente = $cliente ?? null;
+    $catalogos = $catalogos ?? [];
+    $clases = $catalogos['clases']['options'] ?? [];
+    $modalidades = $catalogos['modalidad']['options'] ?? [];
+    $llegos = $catalogos['llego']['options'] ?? [];
 
     $value = static function (string $input, ?string $column = null) use ($cliente) {
         $fallback = $column && $cliente ? ($cliente->{$column} ?? null) : null;
@@ -8,6 +12,10 @@
     };
 
     $fieldUnavailable = static fn (?string $column): bool => $column === null;
+
+    $selectedClase = (string) $value('clase', $mapping['clase'] ?? null);
+    $selectedModalidad = (string) $value('modalidad', $mapping['modalidad'] ?? null);
+    $selectedLlego = (string) $value('llego', $mapping['llego'] ?? null);
 @endphp
 
 @if($errors->has('general'))
@@ -20,12 +28,6 @@
     <div>
         <label class="block text-sm font-medium mb-1" for="nit">NIT</label>
         <input id="nit" name="nit" type="text" value="{{ $value('nit', $mapping['nit']) }}" @disabled($fieldUnavailable($mapping['nit']))
-               class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
-    </div>
-
-    <div>
-        <label class="block text-sm font-medium mb-1" for="dv">DV</label>
-        <input id="dv" name="dv" type="text" value="{{ $value('dv', $mapping['dv']) }}" @disabled($fieldUnavailable($mapping['dv']))
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
     </div>
 
@@ -48,20 +50,14 @@
     </div>
 
     <div>
-        <label class="block text-sm font-medium mb-1" for="correo">Correo</label>
-        <input id="correo" name="correo" type="email" value="{{ $value('correo', $mapping['correo']) }}" @disabled($fieldUnavailable($mapping['correo']))
+        <label class="block text-sm font-medium mb-1" for="celular1">Celular</label>
+        <input id="celular1" name="celular1" type="text" value="{{ $value('celular1', $mapping['celular1']) }}" @disabled($fieldUnavailable($mapping['celular1']))
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
     </div>
 
     <div>
-        <label class="block text-sm font-medium mb-1" for="telefono">Teléfono</label>
-        <input id="telefono" name="telefono" type="text" value="{{ $value('telefono', $mapping['telefono']) }}" @disabled($fieldUnavailable($mapping['telefono']))
-               class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
-    </div>
-
-    <div>
-        <label class="block text-sm font-medium mb-1" for="contacto">Contacto</label>
-        <input id="contacto" name="contacto" type="text" value="{{ $value('contacto', $mapping['contacto']) }}" @disabled($fieldUnavailable($mapping['contacto']))
+        <label class="block text-sm font-medium mb-1" for="email">Email</label>
+        <input id="email" name="email" type="email" value="{{ $value('email', $mapping['email']) }}" @disabled($fieldUnavailable($mapping['email']))
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
     </div>
 
@@ -99,26 +95,41 @@
 
     <div>
         <label class="block text-sm font-medium mb-1" for="fecha_inicio">Fecha inicio</label>
-        <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ $value('fecha_inicio', $mapping['fecha_inicio']) }}" @disabled($fieldUnavailable($mapping['fecha_inicio']))
+        <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ $value('fecha_inicio', $mapping['fecha_llegada']) }}" @disabled($fieldUnavailable($mapping['fecha_llegada']))
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
     </div>
 
     <div>
-        <label class="block text-sm font-medium mb-1" for="fecha_arriendo">Fecha arriendo</label>
-        <input id="fecha_arriendo" name="fecha_arriendo" type="date" value="{{ $value('fecha_arriendo', $mapping['fecha_arriendo']) }}" @disabled($fieldUnavailable($mapping['fecha_arriendo']))
+        <label class="block text-sm font-medium mb-1" for="clase">Clase</label>
+        <select id="clase" name="clase" @disabled($fieldUnavailable($mapping['clase']) || $clases === [])
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+            <option value="">Selecciona una opción</option>
+            @foreach($clases as $opcion)
+                <option value="{{ $opcion['id'] }}" @selected($selectedClase === (string) $opcion['id'] || $selectedClase === $opcion['label'])>{{ $opcion['label'] }}</option>
+            @endforeach
+        </select>
     </div>
 
     <div>
-        <label class="block text-sm font-medium mb-1" for="fecha_cotizacion">Fecha cotización</label>
-        <input id="fecha_cotizacion" name="fecha_cotizacion" type="date" value="{{ $value('fecha_cotizacion', $mapping['fecha_cotizacion']) }}" @disabled($fieldUnavailable($mapping['fecha_cotizacion']))
-               class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+        <label class="block text-sm font-medium mb-1" for="modalidad">Modalidad</label>
+        <select id="modalidad" name="modalidad" @disabled($fieldUnavailable($mapping['modalidad']) || $modalidades === [])
+                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+            <option value="">Selecciona una opción</option>
+            @foreach($modalidades as $opcion)
+                <option value="{{ $opcion['id'] }}" @selected($selectedModalidad === (string) $opcion['id'] || $selectedModalidad === $opcion['label'])>{{ $opcion['label'] }}</option>
+            @endforeach
+        </select>
     </div>
 
     <div>
-        <label class="block text-sm font-medium mb-1" for="contrato">Contrato / Modalidad</label>
-        <input id="contrato" name="contrato" type="text" value="{{ $value('contrato', $mapping['contrato']) }}" @disabled($fieldUnavailable($mapping['contrato']))
-               class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+        <label class="block text-sm font-medium mb-1" for="llego">Cómo llegó</label>
+        <select id="llego" name="llego" @disabled($fieldUnavailable($mapping['llego']) || $llegos === [])
+                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+            <option value="">Selecciona una opción</option>
+            @foreach($llegos as $opcion)
+                <option value="{{ $opcion['id'] }}" @selected($selectedLlego === (string) $opcion['id'] || $selectedLlego === $opcion['label'])>{{ $opcion['label'] }}</option>
+            @endforeach
+        </select>
     </div>
 </div>
 

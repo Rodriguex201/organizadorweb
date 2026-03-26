@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 class ClientesController extends Controller
 {
@@ -96,13 +97,17 @@ class ClientesController extends Controller
     {
         return view('clientes.create', [
             'mapping' => $this->resolveColumnMapping(),
+            'catalogos' => $this->loadFormCatalogs(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $mapping = $this->resolveColumnMapping();
-        $payload = $this->buildPayload($request, $mapping);
+        $catalogos = $this->loadFormCatalogs();
+
+        $validated = $request->validate($this->rules($catalogos));
+        $payload = $this->buildPayload($validated, $mapping, $catalogos);
 
         if ($payload === []) {
             return back()->withInput()->withErrors([
@@ -137,13 +142,17 @@ class ClientesController extends Controller
             'cliente' => $cliente,
             'clienteId' => $id,
             'mapping' => $mapping,
+            'catalogos' => $this->loadFormCatalogs(),
         ]);
     }
 
     public function update(Request $request, int $id): RedirectResponse
     {
         $mapping = $this->resolveColumnMapping();
-        $payload = $this->buildPayload($request, $mapping);
+        $catalogos = $this->loadFormCatalogs();
+
+        $validated = $request->validate($this->rules($catalogos));
+        $payload = $this->buildPayload($validated, $mapping, $catalogos);
 
         if ($payload === []) {
             return back()->withInput()->withErrors([
@@ -188,26 +197,19 @@ class ClientesController extends Controller
         return redirect()->route('clientes.index')->with('status', 'Cliente marcado como retirado.');
     }
 
-    private function buildPayload(Request $request, array $mapping): array
+    private function buildPayload(array $validated, array $mapping, array $catalogos): array
     {
         $payload = [];
 
         $inputToLogical = [
             'nit' => 'nit',
-            'dv' => 'dv',
             'nombre' => 'nombre',
             'codigo' => 'codigo',
             'empresa' => 'empresa',
-            'correo' => 'correo',
-            'telefono' => 'telefono',
-            'contacto' => 'contacto',
-
+            'email' => 'email',
+            'celular1' => 'celular1',
             'departamento' => 'departamento',
-
-            'fecha_inicio' => 'fecha_inicio',
-            'fecha_arriendo' => 'fecha_arriendo',
-            'fecha_cotizacion' => 'fecha_cotizacion',
-            'contrato' => 'contrato',
+            'fecha_inicio' => 'fecha_llegada',
         ];
 
         foreach ($inputToLogical as $input => $logicalKey) {
@@ -216,14 +218,141 @@ class ClientesController extends Controller
                 continue;
             }
 
-            if (!$request->has($input)) {
+            if (!array_key_exists($input, $validated)) {
                 continue;
             }
 
-            $payload[$column] = $request->input($input) !== '' ? $request->input($input) : null;
+            $payload[$column] = $validated[$input] !== '' ? $validated[$input] : null;
         }
 
+        $this->mapCatalogValue($payload, $validated, $mapping['clase'] ?? null, 'clase', $catalogos['clases']);
+        $this->mapCatalogValue($payload, $validated, $mapping['modalidad'] ?? null, 'modalidad', $catalogos['modalidad']);
+        $this->mapCatalogValue($payload, $validated, $mapping['llego'] ?? null, 'llego', $catalogos['llego']);
+
         return $payload;
+    }
+
+    private function mapCatalogValue(array &$payload, array $validated, ?string $targetColumn, string $inputKey, array $catalogo): void
+    {
+        if (!$targetColumn || !array_key_exists($inputKey, $validated)) {
+            return;
+        }
+
+        $selectedId = $validated[$inputKey];
+        if ($selectedId === null || $selectedId === '') {
+            $payload[$targetColumn] = null;
+
+            return;
+        }
+
+        $option = $catalogo['by_id'][(string) $selectedId] ?? null;
+        if (!$option) {
+            return;
+        }
+
+        $payload[$targetColumn] = $this->storesForeignId($targetColumn)
+            ? $option['id']
+            : $option['label'];
+    }
+
+    private function rules(array $catalogos): array
+    {
+        return [
+            'nit' => ['nullable', 'string', 'max:30'],
+            'nombre' => ['nullable', 'string', 'max:150'],
+            'empresa' => ['nullable', 'string', 'max:150'],
+            'celular1' => ['nullable', 'string', 'max:30'],
+            'email' => ['nullable', 'email', 'max:150'],
+            'codigo' => ['nullable', 'string', 'max:50'],
+            'fecha_inicio' => ['nullable', 'date'],
+            'departamento' => ['nullable', 'string', 'max:150'],
+            'clase' => $this->catalogRule($catalogos['clases']),
+            'modalidad' => $this->catalogRule($catalogos['modalidad']),
+            'llego' => $this->catalogRule($catalogos['llego']),
+        ];
+    }
+
+    private function catalogRule(array $catalogo): array
+    {
+        if ($catalogo['ids'] === []) {
+            return ['nullable'];
+        }
+
+        return ['nullable', Rule::in($catalogo['ids'])];
+    }
+
+    private function loadFormCatalogs(): array
+    {
+        return [
+            'clases' => $this->loadCatalog('clases', ['idclases', 'id'], ['clase', 'nombre']),
+            'modalidad' => $this->loadCatalog('modalidad', ['idmodalidad', 'id'], ['modalidad', 'nombre']),
+            'llego' => $this->loadCatalog('llego', ['idllego', 'id'], ['llego', 'nombre']),
+        ];
+    }
+
+    private function loadCatalog(string $table, array $idCandidates, array $labelCandidates): array
+    {
+        if (!Schema::hasTable($table)) {
+            return ['options' => [], 'by_id' => [], 'ids' => []];
+        }
+
+        $columns = Schema::getColumnListing($table);
+        $idColumn = $this->firstExistingColumn($columns, $idCandidates);
+        $labelColumn = $this->firstExistingColumn($columns, $labelCandidates);
+
+        if (!$idColumn || !$labelColumn) {
+            return ['options' => [], 'by_id' => [], 'ids' => []];
+        }
+
+        $rows = DB::table($table)
+            ->select([$idColumn, $labelColumn])
+            ->orderBy($labelColumn)
+            ->get();
+
+        $options = [];
+        $byId = [];
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $id = $row->{$idColumn};
+            $label = $row->{$labelColumn};
+            $item = [
+                'id' => $id,
+                'label' => (string) $label,
+            ];
+
+            $options[] = $item;
+            $byId[(string) $id] = $item;
+            $ids[] = (string) $id;
+        }
+
+        return [
+            'options' => $options,
+            'by_id' => $byId,
+            'ids' => $ids,
+        ];
+    }
+
+    private function firstExistingColumn(array $columns, array $candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            if (in_array($candidate, $columns, true)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function storesForeignId(string $targetColumn): bool
+    {
+        try {
+            $type = Schema::getColumnType('clientes_potenciales', $targetColumn);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return in_array($type, ['integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true);
     }
 
     private function resolveColumnMapping(): array
@@ -256,16 +385,22 @@ class ClientesController extends Controller
             'nombre' => $pick(['nombre']),
             'codigo' => $pick(['codigo']),
             'empresa' => $pick(['empresa', 'emp']),
+            'email' => $pick(['email', 'correo']),
             'correo' => $pick(['email', 'correo']),
+            'celular1' => $pick(['celular1', 'telefono', 'celular']),
             'telefono' => $pick(['celular1', 'telefono', 'celular']),
             'contacto' => $pick(['contacto']),
 
             'departamento' => $pick(['departamento']),
 
-            'fecha_inicio' => $pick(['fecha_inicio', 'fechainicio']),
+            'fecha_llegada' => $pick(['fecha_llegada', 'fecha_inicio', 'fechainicio']),
+            'fecha_inicio' => $pick(['fecha_llegada', 'fecha_inicio', 'fechainicio']),
             'fecha_arriendo' => $pick(['fecha_arriendo']),
             'fecha_cotizacion' => $pick(['fecha_cotizacion']),
             'fecha_retiro' => $pick(['fecha_retiro']),
+            'clase' => $pick(['clase', 'idclase', 'idclases']),
+            'modalidad' => $pick(['modalidad']),
+            'llego' => $pick(['llego', 'idllego']),
             'contrato' => $pick(['modalidad', 'contrato']),
             'retirado_flag' => $pick(['retirado']),
         ];
