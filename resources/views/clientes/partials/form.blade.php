@@ -24,11 +24,25 @@
     </div>
 @endif
 
+@if($errors->any() && !$errors->has('general'))
+    <div class="mb-4 rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <p class="font-medium">Revisa los campos del formulario:</p>
+        <ul class="mt-2 list-disc pl-5">
+            @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+@endif
+
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
         <label class="block text-sm font-medium mb-1" for="nit">NIT</label>
         <input id="nit" name="nit" type="text" value="{{ $value('nit', $mapping['nit']) }}" @disabled($fieldUnavailable($mapping['nit']))
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+        @error('nit')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
     </div>
 
     <div>
@@ -41,6 +55,9 @@
         <label class="block text-sm font-medium mb-1" for="codigo">Código</label>
         <input id="codigo" name="codigo" type="text" value="{{ $value('codigo', $mapping['codigo']) }}" @disabled($fieldUnavailable($mapping['codigo']))
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+        @error('codigo')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
     </div>
 
     <div>

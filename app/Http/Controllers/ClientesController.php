@@ -106,7 +106,10 @@ class ClientesController extends Controller
         $mapping = $this->resolveColumnMapping();
         $catalogos = $this->loadFormCatalogs();
 
-        $validated = $request->validate($this->rules($catalogos));
+        $validated = $request->validate(
+            $this->rules($catalogos, $mapping, true),
+            $this->validationMessages()
+        );
         $payload = $this->buildPayload($validated, $mapping, $catalogos);
 
         if ($payload === []) {
@@ -151,7 +154,7 @@ class ClientesController extends Controller
         $mapping = $this->resolveColumnMapping();
         $catalogos = $this->loadFormCatalogs();
 
-        $validated = $request->validate($this->rules($catalogos));
+        $validated = $request->validate($this->rules($catalogos, $mapping));
         $payload = $this->buildPayload($validated, $mapping, $catalogos);
 
         if ($payload === []) {
@@ -199,6 +202,22 @@ class ClientesController extends Controller
 
     private function buildPayload(array $validated, array $mapping, array $catalogos): array
     {
+        $textInputsToUppercase = [
+            'nit',
+            'nombre',
+            'codigo',
+            'empresa',
+            'departamento',
+        ];
+
+        foreach ($textInputsToUppercase as $field) {
+            if (!array_key_exists($field, $validated)) {
+                continue;
+            }
+
+            $validated[$field] = $this->toUppercase($validated[$field]);
+        }
+
         $payload = [];
 
         $inputToLogical = [
@@ -252,12 +271,12 @@ class ClientesController extends Controller
 
         $payload[$targetColumn] = $this->storesForeignId($targetColumn)
             ? $option['id']
-            : $option['label'];
+            : $this->toUppercase($option['label']);
     }
 
-    private function rules(array $catalogos): array
+    private function rules(array $catalogos, array $mapping, bool $withUnique = false): array
     {
-        return [
+        $rules = [
             'nit' => ['nullable', 'string', 'max:30'],
             'nombre' => ['nullable', 'string', 'max:150'],
             'empresa' => ['nullable', 'string', 'max:150'],
@@ -270,6 +289,37 @@ class ClientesController extends Controller
             'modalidad' => $this->catalogRule($catalogos['modalidad']),
             'llego' => $this->catalogRule($catalogos['llego']),
         ];
+
+        if ($withUnique) {
+            if ($mapping['nit']) {
+                $rules['nit'][] = Rule::unique('clientes_potenciales', $mapping['nit']);
+            }
+
+            if ($mapping['codigo']) {
+                $rules['codigo'][] = Rule::unique('clientes_potenciales', $mapping['codigo']);
+            }
+        }
+
+        return $rules;
+    }
+
+    private function validationMessages(): array
+    {
+        return [
+            'nit.unique' => 'El NIT ingresado ya existe en clientes potenciales.',
+            'codigo.unique' => 'El código ingresado ya existe en clientes potenciales.',
+        ];
+    }
+
+    private function toUppercase(mixed $value): mixed
+    {
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        return function_exists('mb_strtoupper')
+            ? mb_strtoupper($value, 'UTF-8')
+            : strtoupper($value);
     }
 
     private function catalogRule(array $catalogo): array
