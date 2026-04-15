@@ -62,6 +62,7 @@
                     <th class="text-left px-4 py-3">Contacto</th>
                     <th class="text-left px-4 py-3">Fecha inicio</th>
                     <th class="text-left px-4 py-3">Fecha arriendo</th>
+                    <th class="text-left px-4 py-3">IP empresa</th>
                     <th class="text-left px-4 py-3">Fecha cotización</th>
                     <th class="text-left px-4 py-3">Fecha retiro</th>
                     <th class="text-left px-4 py-3">Contrato / Modalidad</th>
@@ -80,7 +81,10 @@
                         <td class="px-4 py-3">{{ $cliente->telefono ?: '—' }}</td>
                         <td class="px-4 py-3">{{ $cliente->contacto ?: '—' }}</td>
                         <td class="px-4 py-3">{{ $cliente->fecha_inicio ?: '—' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->fecha_arriendo ?: '—' }}</td>
+                        <td class="px-4 py-3">
+                            {{ \Illuminate\Support\Carbon::make($cliente->fecha_arriendo)?->format('d-m-Y') ?: '—' }}
+                        </td>
+                        <td class="px-4 py-3">{{ $cliente->ip_empresa ?: '—' }}</td>
                         <td class="px-4 py-3">{{ $cliente->fecha_cotizacion ?: '—' }}</td>
                         <td class="px-4 py-3">{{ $cliente->fecha_retiro ?: '—' }}</td>
                         <td class="px-4 py-3">{{ $cliente->contrato ?: '—' }}</td>
@@ -102,7 +106,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="14" class="px-4 py-8 text-center text-slate-500">No hay clientes disponibles para los filtros seleccionados.</td>
+                        <td colspan="15" class="px-4 py-8 text-center text-slate-500">No hay clientes disponibles para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>
