@@ -118,6 +118,10 @@ class ClientesController extends Controller
             ]);
         }
 
+        if (Schema::hasColumn('clientes_potenciales', 'usuarios_idusuario')) {
+            $payload['usuarios_idusuario'] = session('idusuario');
+        }
+
         DB::table('clientes_potenciales')->insert($payload);
 
         return redirect()->route('clientes.index')->with('status', 'Cliente creado correctamente.');

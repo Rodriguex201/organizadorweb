@@ -41,11 +41,23 @@
 
     <main class="flex-1 p-4 md:p-8">
 
-        <header class="mb-4 flex items-center gap-3">
-            <button id="sidebar-toggle" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded bg-slate-900 text-xl text-white transition-all duration-300 hover:bg-slate-800" aria-label="Colapsar o expandir menú lateral" aria-expanded="true">
-                ☰
-            </button>
-            <h1 class="text-sm font-medium text-slate-500">Panel administrativo</h1>
+        <header class="mb-4 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <button id="sidebar-toggle" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded bg-slate-900 text-xl text-white transition-all duration-300 hover:bg-slate-800" aria-label="Colapsar o expandir menú lateral" aria-expanded="true">
+                    ☰
+                </button>
+                <h1 class="text-sm font-medium text-slate-500">Panel administrativo</h1>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <span class="text-sm text-slate-500">Usuario: {{ session('usuario') }}</span>
+                <form action="{{ route('logout') }}" method="POST">
+                    @csrf
+                    <button type="submit" class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                        Cerrar sesión
+                    </button>
+                </form>
+            </div>
         </header>
 
         @yield('content')
