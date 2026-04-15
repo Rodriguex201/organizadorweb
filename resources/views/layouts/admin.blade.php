@@ -9,59 +9,65 @@
 <body class="bg-slate-100 text-slate-800">
 
 <div id="admin-layout" class="min-h-screen md:flex">
-    <aside id="admin-sidebar" class="w-full border-b border-slate-200 bg-slate-900 text-slate-100 transition-all duration-300 md:min-h-screen md:w-64 md:border-b-0 md:border-r">
-        <div class="flex items-center justify-between px-5 py-4">
-            <span id="sidebar-brand" class="text-lg font-semibold transition-all duration-300">OrganizadorWeb</span>
+    <aside id="admin-sidebar" class="h-screen w-full border-b border-slate-200 bg-slate-900 text-slate-100 transition-all duration-300 md:w-64 md:border-b-0 md:border-r">
+        <div class="flex h-full flex-col">
+            <div class="flex-1 overflow-y-auto">
+                <div class="flex items-center justify-between px-5 py-4">
+                    <span id="sidebar-brand" class="text-lg font-semibold transition-all duration-300">OrganizadorWeb</span>
+                </div>
+
+                <nav class="space-y-1 px-3 pb-4">
+                    <a href="{{ url('/') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('clientes.*') || request()->is('/') ? 'bg-slate-800' : '' }}">
+                        <span class="text-base">🏠</span>
+                        <span class="sidebar-label">Inicio</span>
+                    </a>
+                    <a href="{{ route('cobros.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('cobros.*') ? 'bg-slate-800' : '' }}">
+                        <span class="text-base">💰</span>
+                        <span class="sidebar-label">Cobros</span>
+                    </a>
+                    <a href="{{ route('proformas.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('proformas.index', 'proformas.show') ? 'bg-slate-800' : '' }}">
+                        <span class="text-base">📄</span>
+                        <span class="sidebar-label">Proformas</span>
+                    </a>
+                    <a href="{{ route('proformas.dashboard') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('proformas.dashboard') ? 'bg-slate-800' : '' }}">
+                        <span class="text-base">📊</span>
+                        <span class="sidebar-label">Dashboard</span>
+                    </a>
+                    @if(esAdmin())
+                        <a href="{{ route('configuracion.estados-proforma.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('configuracion.estados-proforma.*') ? 'bg-slate-800' : '' }}">
+                            <span class="text-base">⚙️</span>
+                            <span class="sidebar-label">Configuración</span>
+                        </a>
+                    @endif
+                </nav>
+            </div>
+
+            <div class="mt-auto border-t border-slate-800 px-3 py-4">
+                <div class="mb-3 space-y-1 text-xs text-slate-400 sidebar-label">
+                    <p class="truncate">{{ session('usuario', 'usuario') }}</p>
+                    <p class="uppercase tracking-wide">
+                        Rol: {{ session('rol_nombre', session('rol_id', 'sin rol')) }}
+                    </p>
+                </div>
+                <form action="{{ route('logout') }}" method="POST">
+                    @csrf
+                    <button type="submit" class="flex w-full items-center justify-center gap-2 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                        <span class="text-base">🚪</span>
+                        <span class="sidebar-label">Cerrar sesión</span>
+                    </button>
+                </form>
+            </div>
         </div>
-
-        <nav class="space-y-1 px-3 pb-4">
-            <a href="{{ url('/') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('clientes.*') || request()->is('/') ? 'bg-slate-800' : '' }}">
-                <span class="text-base">🏠</span>
-                <span class="sidebar-label">Inicio</span>
-            </a>
-            <a href="{{ route('cobros.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('cobros.*') ? 'bg-slate-800' : '' }}">
-                <span class="text-base">💰</span>
-                <span class="sidebar-label">Cobros</span>
-            </a>
-            <a href="{{ route('proformas.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('proformas.index', 'proformas.show') ? 'bg-slate-800' : '' }}">
-                <span class="text-base">📄</span>
-                <span class="sidebar-label">Proformas</span>
-            </a>
-            <a href="{{ route('proformas.dashboard') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('proformas.dashboard') ? 'bg-slate-800' : '' }}">
-                <span class="text-base">📊</span>
-                <span class="sidebar-label">Dashboard</span>
-            </a>
-            @if(esAdmin())
-                <a href="{{ route('configuracion.estados-proforma.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('configuracion.estados-proforma.*') ? 'bg-slate-800' : '' }}">
-                    <span class="text-base">⚙️</span>
-                    <span class="sidebar-label">Configuración</span>
-                </a>
-            @endif
-
-        </nav>
     </aside>
 
     <main class="flex-1 p-4 md:p-8">
 
-        <header class="mb-4 flex items-center justify-between gap-3">
+        <header class="mb-4 flex items-center gap-3">
             <div class="flex items-center gap-3">
                 <button id="sidebar-toggle" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded bg-slate-900 text-xl text-white transition-all duration-300 hover:bg-slate-800" aria-label="Colapsar o expandir menú lateral" aria-expanded="true">
                     ☰
                 </button>
                 <h1 class="text-sm font-medium text-slate-500">Panel administrativo</h1>
-            </div>
-
-            <div class="flex items-center gap-3">
-                <span class="text-sm text-slate-500">Usuario: {{ session('usuario') }}</span>
-                <span class="rounded-full bg-slate-200 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
-                    Rol: {{ session('rol', 'sin rol') }}
-                </span>
-                <form action="{{ route('logout') }}" method="POST">
-                    @csrf
-                    <button type="submit" class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
-                        Cerrar sesión
-                    </button>
-                </form>
             </div>
         </header>
 
