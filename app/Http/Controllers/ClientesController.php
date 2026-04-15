@@ -32,6 +32,7 @@ class ClientesController extends Controller
             $mapping['fecha_arriendo'] ? "{$mapping['fecha_arriendo']} as fecha_arriendo" : DB::raw('NULL as fecha_arriendo'),
             $mapping['fecha_cotizacion'] ? "{$mapping['fecha_cotizacion']} as fecha_cotizacion" : DB::raw('NULL as fecha_cotizacion'),
             $mapping['fecha_retiro'] ? "{$mapping['fecha_retiro']} as fecha_retiro" : DB::raw('NULL as fecha_retiro'),
+            $mapping['ip_empresa'] ? "{$mapping['ip_empresa']} as ip_empresa" : DB::raw('NULL as ip_empresa'),
             $mapping['contrato'] ? "{$mapping['contrato']} as contrato" : DB::raw('NULL as contrato'),
         ];
 
@@ -212,6 +213,7 @@ class ClientesController extends Controller
             'codigo',
             'empresa',
             'departamento',
+            'ip_empresa',
         ];
 
         foreach ($textInputsToUppercase as $field) {
@@ -233,6 +235,8 @@ class ClientesController extends Controller
             'celular1' => 'celular1',
             'departamento' => 'departamento',
             'fecha_inicio' => 'fecha_llegada',
+            'fecha_arriendo' => 'fecha_arriendo',
+            'ip_empresa' => 'ip_empresa',
         ];
 
         foreach ($inputToLogical as $input => $logicalKey) {
@@ -288,6 +292,8 @@ class ClientesController extends Controller
             'email' => ['nullable', 'email', 'max:150'],
             'codigo' => ['nullable', 'string', 'max:50'],
             'fecha_inicio' => ['nullable', 'date'],
+            'fecha_arriendo' => ['nullable', 'date'],
+            'ip_empresa' => ['nullable', 'string', 'max:255'],
             'departamento' => ['nullable', 'string', 'max:150'],
             'clase' => $this->catalogRule($catalogos['clases']),
             'modalidad' => $this->catalogRule($catalogos['modalidad']),
@@ -452,6 +458,7 @@ class ClientesController extends Controller
             'fecha_arriendo' => $pick(['fecha_arriendo']),
             'fecha_cotizacion' => $pick(['fecha_cotizacion']),
             'fecha_retiro' => $pick(['fecha_retiro']),
+            'ip_empresa' => $pick(['ip_empresa']),
             'clase' => $pick(['clase', 'idclase', 'idclases']),
             'modalidad' => $pick(['modalidad']),
             'llego' => $pick(['llego', 'idllego']),

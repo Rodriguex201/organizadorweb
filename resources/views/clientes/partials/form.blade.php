@@ -117,6 +117,18 @@
     </div>
 
     <div>
+        <label class="block text-sm font-medium mb-1" for="fecha_arriendo">Fecha arriendo</label>
+        <input id="fecha_arriendo" name="fecha_arriendo" type="date" value="{{ $value('fecha_arriendo', $mapping['fecha_arriendo']) }}" @disabled($fieldUnavailable($mapping['fecha_arriendo']))
+               class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+    </div>
+
+    <div>
+        <label class="block text-sm font-medium mb-1" for="ip_empresa">IP empresa</label>
+        <input id="ip_empresa" name="ip_empresa" type="text" value="{{ $value('ip_empresa', $mapping['ip_empresa'] ?? null) }}" @disabled($fieldUnavailable($mapping['ip_empresa'] ?? null))
+               class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+    </div>
+
+    <div>
         <label class="block text-sm font-medium mb-1" for="clase">Clase</label>
         <select id="clase" name="clase" @disabled($fieldUnavailable($mapping['clase']) || $clases === [])
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
