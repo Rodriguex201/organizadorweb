@@ -29,7 +29,16 @@ class AuthController extends Controller
         ]);
 
         $usuario = DB::table('usuarios')
+            ->leftJoin('roles', 'roles.idroles', '=', 'usuarios.roles_idroles')
             ->where('nombre', $credentials['usuario'])
+            ->select([
+                'usuarios.idusuario',
+                'usuarios.nombre',
+                'usuarios.estado',
+                'usuarios.contrasena',
+                'usuarios.roles_idroles',
+                'roles.rol as rol_nombre',
+            ])
             ->first();
 
         if (
@@ -48,6 +57,8 @@ class AuthController extends Controller
         $request->session()->put([
             'idusuario' => $usuario->idusuario,
             'usuario' => $usuario->nombre,
+            'roles_idroles' => $usuario->roles_idroles,
+            'rol' => $usuario->rol_nombre,
         ]);
 
         return redirect('/');
@@ -55,7 +66,7 @@ class AuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
-        $request->session()->forget(['idusuario', 'usuario']);
+        $request->session()->forget(['idusuario', 'usuario', 'roles_idroles', 'rol']);
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
