@@ -33,7 +33,7 @@
                         <span class="text-base">📊</span>
                         <span class="sidebar-label">Dashboard</span>
                     </a>
-                    @if(esAdmin())
+                   @if(session('rol_id') == 1)
                         <a href="{{ route('configuracion.estados-proforma.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('configuracion.estados-proforma.*') ? 'bg-slate-800' : '' }}">
                             <span class="text-base">⚙️</span>
                             <span class="sidebar-label">Configuración</span>
