@@ -57,6 +57,8 @@ class AuthController extends Controller
         $request->session()->put([
             'idusuario' => $usuario->idusuario,
             'usuario' => $usuario->nombre,
+            'rol_id' => $usuario->roles_idroles,
+            'rol_nombre' => $usuario->rol_nombre,
             'roles_idroles' => $usuario->roles_idroles,
             'rol' => $usuario->rol_nombre,
         ]);
@@ -66,7 +68,7 @@ class AuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
-        $request->session()->forget(['idusuario', 'usuario', 'roles_idroles', 'rol']);
+        $request->session()->forget(['idusuario', 'usuario', 'rol_id', 'rol_nombre', 'roles_idroles', 'rol']);
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
