@@ -31,10 +31,12 @@
                 <span class="text-base">📊</span>
                 <span class="sidebar-label">Dashboard</span>
             </a>
-            <a href="{{ route('configuracion.estados-proforma.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('configuracion.estados-proforma.*') ? 'bg-slate-800' : '' }}">
-                <span class="text-base">⚙️</span>
-                <span class="sidebar-label">Configuración</span>
-            </a>
+            @if(esAdmin())
+                <a href="{{ route('configuracion.estados-proforma.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('configuracion.estados-proforma.*') ? 'bg-slate-800' : '' }}">
+                    <span class="text-base">⚙️</span>
+                    <span class="sidebar-label">Configuración</span>
+                </a>
+            @endif
 
         </nav>
     </aside>
@@ -51,6 +53,9 @@
 
             <div class="flex items-center gap-3">
                 <span class="text-sm text-slate-500">Usuario: {{ session('usuario') }}</span>
+                <span class="rounded-full bg-slate-200 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                    Rol: {{ session('rol', 'sin rol') }}
+                </span>
                 <form action="{{ route('logout') }}" method="POST">
                     @csrf
                     <button type="submit" class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">

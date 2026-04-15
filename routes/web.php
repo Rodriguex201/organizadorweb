@@ -39,16 +39,22 @@ Route::middleware('auth.custom')->group(function (): void {
 
     Route::get('/proformas/dashboard', [ProformasController::class, 'dashboard'])->name('proformas.dashboard');
 
-    Route::get('/proformas/envio-masivo/{grupo}/confirmar', [ProformasController::class, 'confirmarEnvioMasivo'])->name('proformas.envio-masivo.confirmar');
-    Route::post('/proformas/envio-masivo/{grupo}', [ProformasController::class, 'enviarMasivo'])->name('proformas.envio-masivo.enviar');
+    Route::middleware('role.admin')->group(function (): void {
+        Route::get('/proformas/envio-masivo/{grupo}/confirmar', [ProformasController::class, 'confirmarEnvioMasivo'])->name('proformas.envio-masivo.confirmar');
+        Route::post('/proformas/envio-masivo/{grupo}', [ProformasController::class, 'enviarMasivo'])->name('proformas.envio-masivo.enviar');
+    });
 
     Route::get('/proformas/{id}', [ProformasController::class, 'show'])->name('proformas.show');
     Route::get('/proformas/{id}/pdf', [ProformasController::class, 'showPdf'])->name('proformas.pdf.show');
     Route::get('/proformas/{id}/pdf/download', [ProformasController::class, 'downloadPdf'])->name('proformas.pdf.download');
     Route::post('/proformas/{id}/enviar', [ProformasController::class, 'enviarCorreo'])->name('proformas.enviar');
 
-    Route::patch('/proformas/{id}/estado', [ProformasController::class, 'updateEstado'])->name('proformas.estado.update');
+    Route::patch('/proformas/{id}/estado', [ProformasController::class, 'updateEstado'])
+        ->middleware('role:admin,user')
+        ->name('proformas.estado.update');
 
-    Route::get('/configuracion/estados-proforma', [ConfiguracionEstadoProformaController::class, 'index'])->name('configuracion.estados-proforma.index');
-    Route::patch('/configuracion/estados-proforma/{estadoCodigo}', [ConfiguracionEstadoProformaController::class, 'update'])->name('configuracion.estados-proforma.update');
+    Route::middleware('role.admin')->group(function (): void {
+        Route::get('/configuracion/estados-proforma', [ConfiguracionEstadoProformaController::class, 'index'])->name('configuracion.estados-proforma.index');
+        Route::patch('/configuracion/estados-proforma/{estadoCodigo}', [ConfiguracionEstadoProformaController::class, 'update'])->name('configuracion.estados-proforma.update');
+    });
 });
