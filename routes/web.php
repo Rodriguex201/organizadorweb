@@ -3,6 +3,7 @@
 use App\Http\Controllers\CiudadesController;
 use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\CobrosController;
+use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
 use App\Http\Controllers\ProformasController;
 use App\Http\Controllers\AuthController;
@@ -54,6 +55,9 @@ Route::middleware('auth.custom')->group(function (): void {
         ->name('proformas.estado.update');
 
     Route::middleware('role.admin')->group(function (): void {
+        Route::get('/configuracion/directorio', [ConfiguracionDirectorioController::class, 'index'])->name('configuracion.directorio.index');
+        Route::put('/configuracion/directorio', [ConfiguracionDirectorioController::class, 'update'])->name('configuracion.directorio.update');
+
         Route::get('/configuracion/estados-proforma', [ConfiguracionEstadoProformaController::class, 'index'])->name('configuracion.estados-proforma.index');
         Route::patch('/configuracion/estados-proforma/{estadoCodigo}', [ConfiguracionEstadoProformaController::class, 'update'])->name('configuracion.estados-proforma.update');
     });
