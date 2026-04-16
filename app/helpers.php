@@ -1,15 +1,19 @@
 <?php
 
 if (!function_exists('esAdmin')) {
-    function esAdmin()
+    function esAdmin(): bool
     {
-        return session('rol_id') == 1;
+        $rolNombre = session('rol_nombre', session('rol'));
+
+        return is_string($rolNombre) && strtolower(trim($rolNombre)) === 'admin';
     }
 }
 
 if (!function_exists('esUsuario')) {
-    function esUsuario()
+    function esUsuario(): bool
     {
-        return session('rol_id') == 2;
+        $rolNombre = session('rol_nombre', session('rol'));
+
+        return is_string($rolNombre) && strtolower(trim($rolNombre)) === 'user';
     }
 }
