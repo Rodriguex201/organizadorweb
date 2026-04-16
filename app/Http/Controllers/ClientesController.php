@@ -465,6 +465,12 @@ class ClientesController extends Controller
 
             $rutaFinal = $this->joinWindowsPath($rutaBase, $nombreEmpresa);
 
+            dd([
+                'ruta_base' => $rutaBase,
+                'existe' => file_exists($rutaBase),
+                'permiso_escritura' => is_writable($rutaBase),
+            ]);
+
             File::makeDirectory($rutaFinal, 0777, true, true);
 
             foreach ($this->subcarpetasCliente() as $subcarpeta) {
