@@ -9,19 +9,26 @@ use Illuminate\View\View;
 
 class ConfiguracionDirectorioController extends Controller
 {
-    public function index(): View
-    {
-        abort_unless(esAdmin(), 403, 'Esta sección es solo para administradores.');
+public function index(): View
+{
+    abort_unless(
+        strtolower(session('rol_nombre', '')) === 'admin',
+        403,
+        'Esta sección es solo para administradores.'
+    );
 
-        return view('configuracion.directorio', [
-            'configuracion' => ConfiguracionDirectorio::query()->first(),
-        ]);
-    }
+    return view('configuracion.directorio', [
+        'configuracion' => ConfiguracionDirectorio::query()->first(),
+    ]);
+}
 
-    public function update(Request $request): RedirectResponse
-    {
-        abort_unless(esAdmin(), 403, 'Esta sección es solo para administradores.');
-
+public function update(Request $request): RedirectResponse
+{
+    abort_unless(
+        strtolower(session('rol_nombre', '')) === 'admin',
+        403,
+        'Esta sección es solo para administradores.'
+    );
         $validated = $request->validate([
             'ruta_clientes' => ['required', 'string', 'max:500'],
         ], [

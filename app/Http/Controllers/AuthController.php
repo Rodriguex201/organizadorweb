@@ -18,57 +18,57 @@ class AuthController extends Controller
         return view('auth.login');
     }
 
-    public function login(Request $request): RedirectResponse
-    {
-        $credentials = $request->validate([
-            'usuario' => ['required', 'string'],
-            'clave' => ['required', 'string'],
-        ], [
-            'usuario.required' => 'El usuario es obligatorio.',
-            'clave.required' => 'La contraseña es obligatoria.',
-        ]);
+public function login(Request $request): RedirectResponse
+{
+    $credentials = $request->validate([
+        'usuario' => ['required', 'string'],
+        'clave' => ['required', 'string'],
+    ], [
+        'usuario.required' => 'El usuario es obligatorio.',
+        'clave.required' => 'La contraseña es obligatoria.',
+    ]);
 
-        $usuario = DB::table('usuarios')
-            ->leftJoin('roles', 'roles.idroles', '=', 'usuarios.roles_idroles')
-            ->where('nombre', $credentials['usuario'])
-            ->select([
-                'usuarios.idusuario',
-                'usuarios.nombre',
-                'usuarios.estado',
-                'usuarios.contrasena',
-                'usuarios.roles_idroles',
-                'roles.rol as rol_nombre',
-            ])
-            ->first();
+    // 🔹 Buscar usuario
+    $usuario = DB::table('usuarios')
+        ->where('nombre', $credentials['usuario'])
+        ->first();
 
-        if (
-            !$usuario
-            || (int) ($usuario->estado ?? 0) !== 1
-            || $usuario->contrasena !== md5($credentials['clave'])
-        ) {
-            return back()
-                ->withInput($request->except('clave'))
-                ->withErrors([
-                    'usuario' => 'Credenciales inválidas o usuario inactivo.',
-                ]);
-        }
-
-        $rolNombre = is_string($usuario->rol_nombre)
-            ? strtolower(trim($usuario->rol_nombre))
-            : null;
-
-        $request->session()->regenerate();
-        $request->session()->put([
-            'idusuario' => $usuario->idusuario,
-            'usuario' => $usuario->nombre,
-            'rol_id' => $usuario->roles_idroles,
-            'rol_nombre' => $rolNombre,
-            'roles_idroles' => $usuario->roles_idroles,
-            'rol' => $rolNombre,
-        ]);
-
-        return redirect('/');
+    // 🔹 Validar credenciales
+    if (
+        !$usuario
+        || (int) ($usuario->estado ?? 0) !== 1
+        || $usuario->contrasena !== md5($credentials['clave'])
+    ) {
+        return back()
+            ->withInput($request->except('clave'))
+            ->withErrors([
+                'usuario' => 'Credenciales inválidas o usuario inactivo.',
+            ]);
     }
+
+    // 🔹 Buscar rol
+    $rol = DB::table('roles')
+        ->where('idroles', $usuario->roles_idroles)
+        ->first();
+
+    // 🔹 Nombre del rol seguro
+    $rolNombre = $rol && isset($rol->rol)
+        ? strtolower(trim($rol->rol))
+        : 'sin rol';
+
+    // 🔹 Guardar sesión
+    $request->session()->regenerate();
+
+    $request->session()->put([
+        'idusuario' => $usuario->idusuario,
+        'usuario' => $usuario->nombre,
+        'rol_id' => $usuario->roles_idroles,
+        'rol_nombre' => $rolNombre,
+        'rol' => $rolNombre,
+    ]);
+
+    return redirect('/');
+}
 
     public function logout(Request $request): RedirectResponse
     {

@@ -33,7 +33,8 @@
                         <span class="text-base">📊</span>
                         <span class="sidebar-label">Dashboard</span>
                     </a>
-                    @if(esAdmin())
+                    
+                    @if(strtolower(trim(session('rol_nombre'))) === 'admin')
                         <div class="rounded px-3 py-2 {{ request()->routeIs('configuracion.*') ? 'bg-slate-800' : '' }}">
                             <div class="flex items-center gap-3 text-sm font-medium">
                                 <span class="text-base">⚙️</span>
