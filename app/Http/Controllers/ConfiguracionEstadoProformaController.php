@@ -15,7 +15,11 @@ class ConfiguracionEstadoProformaController extends Controller
 
     public function index(): View
     {
-        abort_unless(esAdmin(), 403, 'Esta sección es solo para administradores.');
+        abort_unless(
+            strtolower(session('rol_nombre', '')) === 'admin',
+            403,
+            'Esta sección es solo para administradores.'
+        );
 
         return view('configuracion.estados-proforma', [
             'estadosConfig' => $this->configService->all(),
@@ -24,7 +28,11 @@ class ConfiguracionEstadoProformaController extends Controller
 
     public function update(Request $request, int $estadoCodigo): RedirectResponse
     {
-        abort_unless(esAdmin(), 403, 'Esta sección es solo para administradores.');
+        abort_unless(
+            strtolower(session('rol_nombre', '')) === 'admin',
+            403,
+            'Esta sección es solo para administradores.'
+        );
 
         $validated = $request->validate([
             'color_fondo' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
