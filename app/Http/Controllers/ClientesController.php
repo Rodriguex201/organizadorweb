@@ -6,7 +6,10 @@ use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use App\Models\ConfiguracionDirectorio;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
@@ -123,7 +126,15 @@ class ClientesController extends Controller
             $payload['usuarios_idusuario'] = session('idusuario');
         }
 
-        DB::table('clientes_potenciales')->insert($payload);
+        $clienteId = null;
+
+        if ($mapping['id']) {
+            $clienteId = DB::table('clientes_potenciales')->insertGetId($payload, $mapping['id']);
+        } else {
+            DB::table('clientes_potenciales')->insert($payload);
+        }
+
+        $this->crearEstructuraDirectoriosCliente($payload, $mapping, $clienteId);
 
         return redirect()->route('clientes.index')->with('status', 'Cliente creado correctamente.');
     }
@@ -413,6 +424,117 @@ class ClientesController extends Controller
         }
 
         return in_array($type, ['integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true);
+    }
+
+
+    private function crearEstructuraDirectoriosCliente(array $payload, array $mapping, mixed $clienteId): void
+    {
+        try {
+            $config = ConfiguracionDirectorio::query()->first();
+            $rutaBase = trim((string) ($config?->ruta_clientes ?? ''));
+
+            if ($rutaBase === '') {
+                Log::warning('No hay ruta base configurada para directorios de clientes.', [
+                    'cliente_id' => $clienteId,
+                ]);
+
+                return;
+            }
+
+            if (!file_exists($rutaBase)) {
+                Log::error('Ruta base no existe', [
+                    'cliente_id' => $clienteId,
+                    'ruta_base' => $rutaBase,
+                ]);
+
+                return;
+            }
+
+            $codigo = (string) ($payload[$mapping['codigo'] ?? ''] ?? '');
+            $empresa = (string) ($payload[$mapping['empresa'] ?? ''] ?? '');
+            $nombreEmpresa = $this->normalizeFolderName($codigo . '__' . $empresa);
+
+            if ($nombreEmpresa === '__') {
+                Log::warning('No se pudo generar nombre de carpeta para cliente.', [
+                    'cliente_id' => $clienteId,
+                    'ruta_base' => $rutaBase,
+                ]);
+
+                return;
+            }
+
+            $rutaFinal = $this->joinWindowsPath($rutaBase, $nombreEmpresa);
+
+            File::makeDirectory($rutaFinal, 0777, true, true);
+
+            foreach ($this->subcarpetasCliente() as $subcarpeta) {
+                $rutaSubcarpeta = $this->joinWindowsPath($rutaFinal, $subcarpeta);
+                File::makeDirectory($rutaSubcarpeta, 0777, true, true);
+            }
+
+            Log::info('Carpeta creada', [
+                'cliente_id' => $clienteId,
+                'ruta_base' => $rutaBase,
+                'ruta_final' => $rutaFinal,
+            ]);
+        } catch (\Throwable $exception) {
+            Log::error('Error al crear carpeta de cliente.', [
+                'cliente_id' => $clienteId,
+                'ruta_base' => $rutaBase ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function normalizeFolderName(string $value): string
+    {
+        $value = trim($value);
+        $value = $this->removeAccents($value);
+        $value = $this->toUppercase($value);
+        $value = preg_replace('/[\\\/:*?"<>|]/u', ' ', $value) ?? $value;
+        $value = str_replace(['.', ',', ';'], ' ', $value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+
+        return trim($value);
+    }
+
+    private function removeAccents(string $value): string
+    {
+        $replacements = [
+            'Á' => 'A',
+            'É' => 'E',
+            'Í' => 'I',
+            'Ó' => 'O',
+            'Ú' => 'U',
+            'Ñ' => 'N',
+            'á' => 'A',
+            'é' => 'E',
+            'í' => 'I',
+            'ó' => 'O',
+            'ú' => 'U',
+            'ñ' => 'N',
+        ];
+
+        return strtr($value, $replacements);
+    }
+
+    private function joinWindowsPath(string $basePath, string $segment): string
+    {
+        return rtrim($basePath, '\\') . DIRECTORY_SEPARATOR . ltrim($segment, '\\');
+    }
+
+    private function subcarpetasCliente(): array
+    {
+        return [
+            $this->normalizeFolderName('Capacitaciones'),
+            $this->normalizeFolderName('Cartera'),
+            $this->normalizeFolderName('Desarrollo de software'),
+            $this->normalizeFolderName('Documentos'),
+            $this->normalizeFolderName('Documentos historicos'),
+            $this->normalizeFolderName('Equipos de computo'),
+            $this->normalizeFolderName('Sistemas de informacion'),
+            $this->normalizeFolderName('soporte'),
+        ];
     }
 
     private function resolveColumnMapping(): array
