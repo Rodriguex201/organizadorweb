@@ -53,14 +53,18 @@ class AuthController extends Controller
                 ]);
         }
 
+        $rolNombre = is_string($usuario->rol_nombre)
+            ? strtolower(trim($usuario->rol_nombre))
+            : null;
+
         $request->session()->regenerate();
         $request->session()->put([
             'idusuario' => $usuario->idusuario,
             'usuario' => $usuario->nombre,
             'rol_id' => $usuario->roles_idroles,
-            'rol_nombre' => $usuario->rol_nombre,
+            'rol_nombre' => $rolNombre,
             'roles_idroles' => $usuario->roles_idroles,
-            'rol' => $usuario->rol_nombre,
+            'rol' => $rolNombre,
         ]);
 
         return redirect('/');

@@ -33,7 +33,7 @@
                         <span class="text-base">📊</span>
                         <span class="sidebar-label">Dashboard</span>
                     </a>
-                    @if(session('rol_id') == 1)
+                    @if(esAdmin())
                         <div class="rounded px-3 py-2 {{ request()->routeIs('configuracion.*') ? 'bg-slate-800' : '' }}">
                             <div class="flex items-center gap-3 text-sm font-medium">
                                 <span class="text-base">⚙️</span>
@@ -52,7 +52,7 @@
                 <div class="mb-3 space-y-1 text-xs text-slate-400 sidebar-label">
                     <p class="truncate">{{ session('usuario', 'usuario') }}</p>
                     <p class="uppercase tracking-wide">
-                        Rol: {{ session('rol_nombre', session('rol_id', 'sin rol')) }}
+                        Rol: {{ session('rol_nombre', session('rol', 'sin rol')) }}
                     </p>
                 </div>
                 <form action="{{ route('logout') }}" method="POST">

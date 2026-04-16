@@ -13,9 +13,9 @@ class RoleAdminMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-if (session('rol_id') != 1) {
-    abort(403, 'Esta sección es solo para administradores.');
-}
+        if (session('rol_nombre') !== 'admin') {
+            abort(403, 'Esta sección es solo para administradores.');
+        }
 
         return $next($request);
     }
