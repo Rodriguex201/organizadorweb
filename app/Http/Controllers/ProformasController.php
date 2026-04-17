@@ -259,7 +259,7 @@ public function index(Request $request): View
 
             return redirect()
                 ->route('proformas.index')
-                ->with('warning', 'La proforma cambió de estado y ya no coincide con el filtro actual.');
+                ->with('warning', 'La proforma cambió de estado y ya no coincide con el filtro.');
         }
 
         return redirect()->route('proformas.index');
