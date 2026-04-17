@@ -36,26 +36,26 @@
         <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-8">
             <div>
                 <label for="nro_prof" class="mb-1 block text-sm font-medium">Número</label>
-                <input id="nro_prof" name="nro_prof" value="{{ $filters['nro_prof'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="nro_prof" name="nro_prof" value="{{ request('nro_prof', session('proformas.numero')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="nit" class="mb-1 block text-sm font-medium">NIT</label>
-                <input id="nit" name="nit" value="{{ $filters['nit'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="nit" name="nit" value="{{ request('nit', session('proformas.nit')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="empresa" class="mb-1 block text-sm font-medium">Empresa</label>
-                <input id="empresa" name="empresa" value="{{ $filters['empresa'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="empresa" name="empresa" value="{{ request('empresa', session('proformas.empresa')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="emisora" class="mb-1 block text-sm font-medium">Emisora</label>
-                <input id="emisora" name="emisora" value="{{ $filters['emisora'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="emisora" name="emisora" value="{{ request('emisora', session('proformas.emisora')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="mes" class="mb-1 block text-sm font-medium">Mes</label>
                 <select id="mes" name="mes" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
                     @foreach($meses as $mesNumero => $mesNombre)
-                        <option value="{{ $mesNumero }}" @selected((string) ($filters['mes'] ?? '') === (string) $mesNumero || (string) ($filters['mes'] ?? '') === $mesNombre)>
+                        <option value="{{ $mesNumero }}" @selected((string) request('mes', session('proformas.mes')) === (string) $mesNumero || (string) request('mes', session('proformas.mes')) === $mesNombre)>
                             {{ ucfirst($mesNombre) }}
                         </option>
                     @endforeach
@@ -63,20 +63,20 @@
             </div>
             <div>
                 <label for="anio" class="mb-1 block text-sm font-medium">Año</label>
-                <input id="anio" name="anio" type="number" min="1900" max="9999" value="{{ $filters['anio'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="anio" name="anio" type="number" min="1900" max="9999" value="{{ request('anio', session('proformas.anio')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="estado" class="mb-1 block text-sm font-medium">Estado</label>
                 <select id="estado" name="estado" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
                     @foreach($estados as $estadoCodigo => $estadoLabel)
-                        <option value="{{ $estadoCodigo }}" @selected((string) ($filters['estado'] ?? '') === (string) $estadoCodigo)>{{ $estadoLabel }}</option>
+                        <option value="{{ $estadoCodigo }}" @selected((string) request('estado', session('proformas.estado')) === (string) $estadoCodigo)>{{ $estadoLabel }}</option>
                     @endforeach
                 </select>
             </div>
             <div class="flex items-end gap-2">
                 <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Filtrar</button>
-                <a href="{{ route('proformas.index') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Limpiar</a>
+                <a href="{{ route('proformas.clear-filters') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Limpiar</a>
             </div>
         </form>
     </div>
