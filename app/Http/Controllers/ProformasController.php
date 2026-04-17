@@ -25,6 +25,10 @@ class ProformasController extends Controller
 
     public function index(Request $request): View
     {
+        if ($request->get('from') === 'detalle') {
+            session()->forget('proformas.estado');
+        }
+
         $filterKeys = ['nro_prof', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado'];
         $hasRequestFilters = collect($filterKeys)->contains(fn (string $key) => $request->exists($key));
 
