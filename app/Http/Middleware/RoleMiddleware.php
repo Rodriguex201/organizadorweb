@@ -13,7 +13,9 @@ class RoleMiddleware
      */
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
-        if ($roles === [] || !tieneRol($roles)) {
+        $rolUsuario = session('rol_nombre');
+
+        if ($roles !== [] && !in_array($rolUsuario, $roles)) {
             abort(403, 'No tienes permisos para acceder a esta sección.');
         }
 

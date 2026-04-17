@@ -427,82 +427,80 @@ class ClientesController extends Controller
     }
 
 
-    private function crearEstructuraDirectoriosCliente(array $payload, array $mapping, mixed $clienteId): void
-    {
-        try {
-            $config = ConfiguracionDirectorio::query()->first();
-            $rutaBase = trim((string) ($config?->ruta_clientes ?? ''));
+private function crearEstructuraDirectoriosCliente(array $payload, array $mapping, mixed $clienteId): void
+{
+    
+    try {
+        $config = ConfiguracionDirectorio::query()->first();
+        $rutaBase = trim((string) ($config?->ruta_clientes ?? ''));
 
-            if ($rutaBase === '') {
-                Log::warning('No hay ruta base configurada para directorios de clientes.', [
-                    'cliente_id' => $clienteId,
-                ]);
 
-                return;
-            }
 
-            if (!file_exists($rutaBase)) {
-                Log::error('Ruta base no existe', [
-                    'cliente_id' => $clienteId,
-                    'ruta_base' => $rutaBase,
-                ]);
-
-                return;
-            }
-
-            $codigo = (string) ($payload[$mapping['codigo'] ?? ''] ?? '');
-            $empresa = (string) ($payload[$mapping['empresa'] ?? ''] ?? '');
-            $nombreEmpresa = $this->normalizeFolderName($codigo . '__' . $empresa);
-
-            if ($nombreEmpresa === '__') {
-                Log::warning('No se pudo generar nombre de carpeta para cliente.', [
-                    'cliente_id' => $clienteId,
-                    'ruta_base' => $rutaBase,
-                ]);
-
-                return;
-            }
-
-            $rutaFinal = $this->joinWindowsPath($rutaBase, $nombreEmpresa);
-
-            dd([
-                'ruta_base' => $rutaBase,
-                'existe' => file_exists($rutaBase),
-                'permiso_escritura' => is_writable($rutaBase),
-            ]);
-
-            File::makeDirectory($rutaFinal, 0777, true, true);
-
-            foreach ($this->subcarpetasCliente() as $subcarpeta) {
-                $rutaSubcarpeta = $this->joinWindowsPath($rutaFinal, $subcarpeta);
-                File::makeDirectory($rutaSubcarpeta, 0777, true, true);
-            }
-
-            Log::info('Carpeta creada', [
+        if ($rutaBase === '') {
+            Log::warning('No hay ruta base configurada para directorios de clientes.', [
                 'cliente_id' => $clienteId,
-                'ruta_base' => $rutaBase,
-                'ruta_final' => $rutaFinal,
             ]);
-        } catch (\Throwable $exception) {
-            Log::error('Error al crear carpeta de cliente.', [
-                'cliente_id' => $clienteId,
-                'ruta_base' => $rutaBase ?? null,
-                'error' => $exception->getMessage(),
-            ]);
+            return;
         }
-    }
 
-    private function normalizeFolderName(string $value): string
-    {
-        $value = trim($value);
-        $value = $this->removeAccents($value);
-        $value = $this->toUppercase($value);
-        $value = preg_replace('/[\\\/:*?"<>|]/u', ' ', $value) ?? $value;
-        $value = str_replace(['.', ',', ';'], ' ', $value);
-        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        if (!file_exists($rutaBase)) {
+            Log::error('Ruta base no existe', [
+                'cliente_id' => $clienteId,
+                'ruta_base' => $rutaBase,
+            ]);
+            return;
+        }
 
-        return trim($value);
+        $codigo = (string) ($payload[$mapping['codigo'] ?? ''] ?? '');
+        $empresa = (string) ($payload[$mapping['empresa'] ?? ''] ?? '');
+        $nombreEmpresa = $this->normalizeFolderName($codigo . '__' . $empresa);
+
+        
+
+        if ($nombreEmpresa === '__') {
+            Log::warning('No se pudo generar nombre de carpeta para cliente.', [
+                'cliente_id' => $clienteId,
+                'ruta_base' => $rutaBase,
+            ]);
+            return;
+        }
+
+        $rutaFinal = $this->joinWindowsPath($rutaBase, $nombreEmpresa);
+
+        File::makeDirectory($rutaFinal, 0777, true, true);
+
+        foreach ($this->subcarpetasCliente() as $subcarpeta) {
+            $rutaSubcarpeta = $this->joinWindowsPath($rutaFinal, $subcarpeta);
+            File::makeDirectory($rutaSubcarpeta, 0777, true, true);
+        }
+
+        Log::info('Carpeta creada', [
+            'cliente_id' => $clienteId,
+            'ruta_base' => $rutaBase,
+            'ruta_final' => $rutaFinal,
+        ]);
+
+    } catch (\Throwable $exception) {
+    Log::error('Error al crear carpeta de cliente.', [
+        'cliente_id' => $clienteId,
+        'ruta_base' => $rutaBase ?? null,
+        'error' => $exception->getMessage(),
+    ]);
     }
+}
+
+private function normalizeFolderName(string $value): string
+{
+    $value = trim($value);
+    $value = $this->removeAccents($value);
+    $value = $this->toUppercase($value);
+
+    $value = preg_replace('/[\\\\\/:*?"<>|]/', ' ', $value) ?? $value;
+    $value = str_replace(['.', ',', ';'], ' ', $value);
+    $value = preg_replace('/\s+/', ' ', $value) ?? $value;
+
+    return trim($value);
+}
 
     private function removeAccents(string $value): string
     {
