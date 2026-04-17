@@ -88,4 +88,70 @@ class ProformasIndexFiltersTest extends TestCase
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);
     }
+
+    public function test_volver_al_listado_limpia_solo_filtro_estado_si_el_estado_ya_no_coincide(): void
+    {
+        $this->withoutMiddleware();
+
+        $service = Mockery::mock(ProformasService::class);
+        $pdfService = Mockery::mock(ProformaPdfService::class);
+        $emailService = Mockery::mock(ProformaEmailService::class);
+
+        $service->shouldReceive('findProformaById')
+            ->once()
+            ->with(123)
+            ->andReturn((object) [
+                'id' => 123,
+                'estado' => 4,
+            ]);
+
+        $this->app->instance(ProformasService::class, $service);
+        $this->app->instance(ProformaPdfService::class, $pdfService);
+        $this->app->instance(ProformaEmailService::class, $emailService);
+
+        $this->withSession([
+            'proformas.estado' => 3,
+            'proformas.mes' => 4,
+            'proformas.anio' => 2026,
+        ]);
+
+        $response = $this->get(route('proformas.back-to-index', ['id' => 123]));
+
+        $response->assertRedirect(route('proformas.index'));
+        $response->assertSessionHas('warning');
+        $response->assertSessionMissing('proformas.estado');
+        $response->assertSessionHas('proformas.mes', 4);
+        $response->assertSessionHas('proformas.anio', 2026);
+    }
+
+    public function test_volver_al_listado_conserva_filtro_estado_si_sigue_coincidiendo(): void
+    {
+        $this->withoutMiddleware();
+
+        $service = Mockery::mock(ProformasService::class);
+        $pdfService = Mockery::mock(ProformaPdfService::class);
+        $emailService = Mockery::mock(ProformaEmailService::class);
+
+        $service->shouldReceive('findProformaById')
+            ->once()
+            ->with(456)
+            ->andReturn((object) [
+                'id' => 456,
+                'estado' => 3,
+            ]);
+
+        $this->app->instance(ProformasService::class, $service);
+        $this->app->instance(ProformaPdfService::class, $pdfService);
+        $this->app->instance(ProformaEmailService::class, $emailService);
+
+        $this->withSession([
+            'proformas.estado' => 3,
+        ]);
+
+        $response = $this->get(route('proformas.back-to-index', ['id' => 456]));
+
+        $response->assertRedirect(route('proformas.index'));
+        $response->assertSessionMissing('warning');
+        $response->assertSessionHas('proformas.estado', 3);
+    }
 }
