@@ -12,6 +12,9 @@
 
     @php
         $canSendProforma = $proformasService->canSendProforma($proforma);
+        $estadoActual = (int) ($proforma->estado ?? 0);
+        $estadoLabel = $proformasService->estadoLabel($estadoActual);
+        $estadoBadgeStyle = $proformasService->estadoBadgeStyle($estadoActual);
         $ultimoEnvio = $proforma->fecha_envio
             ? \Illuminate\Support\Carbon::parse($proforma->fecha_envio)->format('Y-m-d H:i')
             : 'N/D';
@@ -63,7 +66,7 @@
                 <div>
                     <dt class="text-slate-500">Estado</dt>
                     <dd>
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}">{{ $proformasService->estadoLabel($proforma->estado) }}</span>
+                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $estadoBadgeStyle }}">{{ $estadoLabel }}</span>
                     </dd>
                 </div>
                 <div>
@@ -127,7 +130,7 @@
                     <span class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">Debe generar la proforma</span>
                 @endif
 
-                @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_ENVIADA))
+                @if($proformasService->canTransition($estadoActual, \App\Services\ProformasService::ESTADO_ENVIADA))
                     <form method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}">
                         @csrf
                         @method('PATCH')
@@ -137,7 +140,7 @@
                     </form>
                 @endif
 
-                @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_PAGADA))
+                @if($proformasService->canTransition($estadoActual, \App\Services\ProformasService::ESTADO_PAGADA))
                     <form method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}">
                         @csrf
                         @method('PATCH')
@@ -147,7 +150,7 @@
                     </form>
                 @endif
 
-                @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_FACTURADA))
+                @if($proformasService->canTransition($estadoActual, \App\Services\ProformasService::ESTADO_FACTURADA))
                     <form method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}">
                         @csrf
                         @method('PATCH')
