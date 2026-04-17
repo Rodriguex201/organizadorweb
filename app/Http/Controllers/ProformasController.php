@@ -235,6 +235,31 @@ class ProformasController extends Controller
         ]);
     }
 
+    public function backToIndex(int $id): RedirectResponse
+    {
+        $proforma = $this->proformasService->findProformaById($id);
+
+        if (!$proforma) {
+            throw new NotFoundHttpException('Proforma no encontrada.');
+        }
+
+        $estadoFiltrado = session('proformas.estado');
+        $estadoActual = (int) ($proforma->estado ?? 0);
+        $debeLimpiarFiltroEstado = $estadoFiltrado !== null
+            && (string) $estadoFiltrado !== ''
+            && (int) $estadoFiltrado !== $estadoActual;
+
+        if ($debeLimpiarFiltroEstado) {
+            session()->forget('proformas.estado');
+
+            return redirect()
+                ->route('proformas.index')
+                ->with('warning', 'La proforma cambió de estado y ya no coincide con el filtro actual.');
+        }
+
+        return redirect()->route('proformas.index');
+    }
+
     public function enviarCorreo(int $id): RedirectResponse
     {
         $proforma = $this->proformasService->findProformaById($id);

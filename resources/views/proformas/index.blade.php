@@ -32,6 +32,12 @@
         </div>
     @endif
 
+    @if(session('warning'))
+        <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {{ session('warning') }}
+        </div>
+    @endif
+
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
         <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-8">
             <div>
