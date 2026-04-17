@@ -23,12 +23,19 @@ class ProformasController extends Controller
     ) {
     }
 
-public function index(Request $request): View
+public function index(Request $request): View|RedirectResponse
 {
     // 🔥 SOLO limpiar, NO redirigir
-    if ($request->get('from') === 'detalle') {
-        session()->forget('proformas');
-    }
+if ($request->get('from') === 'detalle') {
+
+    $filtros = session('proformas.filtros_originales', []);
+
+    // 🔥 limpiar solo estado
+    unset($filtros['estado']);
+
+    // 🔥 redirigir con filtros originales
+    return redirect()->route('proformas.index', $filtros);
+}
 
     $filterKeys = ['nro_prof', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado'];
     $hasRequestFilters = collect($filterKeys)->contains(fn (string $key) => $request->filled($key));
@@ -57,6 +64,15 @@ public function index(Request $request): View
         $validated['mes'] ?? null,
         $validated['anio'] ?? null,
     );
+
+    // 🔥 AQUÍ VA
+    if (!$request->filled('mes')) {
+        $request->merge(['mes' => $periodo['mes']]);
+    }
+
+    if (!$request->filled('anio')) {
+        $request->merge(['anio' => $periodo['anio']]);
+    }
 
     $filters = [
         'nro_prof' => $validated['nro_prof'] ?? null,
@@ -225,20 +241,22 @@ public function index(Request $request): View
         ]);
     }
 
-    public function show(int $id): View
-    {
+public function show(int $id): View
+{
+    $proforma = $this->proformasService->findProformaById($id);
 
-        $proforma = $this->proformasService->findProformaById($id);
-
-        if (!$proforma) {
-            throw new NotFoundHttpException('Proforma no encontrada.');
-        }
-
-        return view('proformas.show', [
-            'proforma' => $proforma,
-            'proformasService' => $this->proformasService,
-        ]);
+    if (!$proforma) {
+        abort(404, 'Proforma no encontrada');
     }
+
+    // 🔥 AQUÍ VA
+    session(['proformas.filtros_originales' => request()->query()]);
+
+    return view('proformas.show', [
+        'proforma' => $proforma,
+        'proformasService' => $this->proformasService,
+    ]);
+}
 
     public function backToIndex(int $id): RedirectResponse
     {
