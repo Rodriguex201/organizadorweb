@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class ProformasService
@@ -112,6 +113,7 @@ class ProformasService
     public function registrarEnvioExitoso(int $proformaId): void
     {
         DB::table('sg_proform')->where('id', $proformaId)->update(['enviado' => 1, 'fecha_envio' => now(), 'estado' => self::ESTADO_ENVIADA, 'intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1')]);
+        $this->syncEstadoEnValoresExternos($proformaId, self::ESTADO_ENVIADA);
     }
 
     public function registrarIntentoFallido(int $proformaId): void
@@ -190,8 +192,66 @@ class ProformasService
         if ($estadoActual === $nuevoEstado) return ['ok' => false, 'message' => 'La proforma ya tiene ese estado.', 'from' => $estadoActual, 'to' => $nuevoEstado];
         if (!$this->canTransition($estadoActual, $nuevoEstado)) return ['ok' => false, 'message' => 'Transición de estado no permitida.', 'from' => $estadoActual, 'to' => $nuevoEstado];
 
-        DB::table('sg_proform')->where('id', $proformaId)->update(['estado' => $nuevoEstado]);
+        DB::transaction(function () use ($proformaId, $nuevoEstado) {
+            DB::table('sg_proform')->where('id', $proformaId)->update(['estado' => $nuevoEstado]);
+            $this->syncEstadoEnValoresExternos($proformaId, $nuevoEstado);
+        });
+
         return ['ok' => true, 'message' => sprintf('Estado actualizado de %s a %s.', $this->estadoLabel($estadoActual), $this->estadoLabel($nuevoEstado)), 'from' => $estadoActual, 'to' => $nuevoEstado];
+    }
+
+    private function syncEstadoEnValoresExternos(int $proformaId, int $nuevoEstado): int
+    {
+        $select = ['id', 'nit', 'mes', 'anio', 'emisora'];
+        $hasCobroReference = Schema::hasColumn('sg_proform', 'id_cobro');
+
+        if ($hasCobroReference) {
+            $select[] = 'id_cobro';
+        }
+
+        $proforma = DB::table('sg_proform')
+            ->select($select)
+            ->where('id', $proformaId)
+            ->first();
+
+        if (!$proforma) {
+            return 0;
+        }
+
+        if ($hasCobroReference && isset($proforma->id_cobro) && (int) $proforma->id_cobro > 0) {
+            return DB::table('valores_externos')
+                ->where('id_cobro', (int) $proforma->id_cobro)
+                ->update(['Proforma' => $nuevoEstado]);
+        }
+
+        $mesTexto = self::MESES[(int) ($proforma->mes ?? 0)] ?? null;
+
+        if ($mesTexto === null) {
+            return 0;
+        }
+
+        $idsCobro = DB::table('valores_externos as ve')
+            ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
+            ->where('cp.nit', trim((string) ($proforma->nit ?? '')))
+            ->whereRaw('LOWER(TRIM(ve.mes)) = ?', [mb_strtolower($mesTexto)])
+            ->whereRaw('ve.`año` = ?', [(int) ($proforma->anio ?? 0)])
+            ->whereRaw(
+                "CASE UPPER(TRIM(cp.regimen))
+                    WHEN 'PCS' THEN 'PCS'
+                    WHEN 'SMP' THEN 'SMP'
+                    ELSE 'SAS'
+                 END = ?",
+                [strtoupper(trim((string) ($proforma->emisora ?? 'SAS')))],
+            )
+            ->pluck('ve.id_cobro');
+
+        if ($idsCobro->isEmpty()) {
+            return 0;
+        }
+
+        return DB::table('valores_externos')
+            ->whereIn('id_cobro', $idsCobro->all())
+            ->update(['Proforma' => $nuevoEstado]);
     }
 
     public function canTransition(null|string|int $estadoActual, null|string|int $estadoDestino): bool
