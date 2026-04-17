@@ -23,70 +23,71 @@ class ProformasController extends Controller
     ) {
     }
 
-    public function index(Request $request): View
-    {
-        if ($request->get('from') === 'detalle') {
-            session()->forget('proformas.estado');
-        }
+public function index(Request $request): View
+{
+    // 🔥 SOLO limpiar, NO redirigir
+    if ($request->get('from') === 'detalle') {
+        session()->forget('proformas');
+    }
 
-        $filterKeys = ['nro_prof', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado'];
-        $hasRequestFilters = collect($filterKeys)->contains(fn (string $key) => $request->exists($key));
+    $filterKeys = ['nro_prof', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado'];
+    $hasRequestFilters = collect($filterKeys)->contains(fn (string $key) => $request->filled($key));
 
-        $rawFilters = [
-            'nro_prof' => $request->input('nro_prof', session('proformas.numero')),
-            'nit' => $request->input('nit', session('proformas.nit')),
-            'empresa' => $request->input('empresa', session('proformas.empresa')),
-            'emisora' => $request->input('emisora', session('proformas.emisora')),
-            'mes' => $request->input('mes', session('proformas.mes')),
-            'anio' => $request->input('anio', session('proformas.anio')),
-            'estado' => $request->input('estado', session('proformas.estado')),
-        ];
+    $rawFilters = [
+        'nro_prof' => $request->input('nro_prof', session('proformas.numero')),
+        'nit' => $request->input('nit', session('proformas.nit')),
+        'empresa' => $request->input('empresa', session('proformas.empresa')),
+        'emisora' => $request->input('emisora', session('proformas.emisora')),
+        'mes' => $request->input('mes', session('proformas.mes')),
+        'anio' => $request->input('anio', session('proformas.anio')),
+        'estado' => $request->input('estado', session('proformas.estado')),
+    ];
 
-        $validated = Validator::make($rawFilters, [
-            'nro_prof' => ['nullable', 'string', 'max:100'],
-            'nit' => ['nullable', 'string', 'max:60'],
-            'empresa' => ['nullable', 'string', 'max:200'],
-            'emisora' => ['nullable', 'string', 'max:20'],
-            'mes' => ['nullable', 'string', 'max:20'],
-            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
-            'estado' => ['nullable', 'integer', 'min:0'],
-        ])->validate();
+    $validated = Validator::make($rawFilters, [
+        'nro_prof' => ['nullable', 'string', 'max:100'],
+        'nit' => ['nullable', 'string', 'max:60'],
+        'empresa' => ['nullable', 'string', 'max:200'],
+        'emisora' => ['nullable', 'string', 'max:20'],
+        'mes' => ['nullable', 'string', 'max:20'],
+        'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+        'estado' => ['nullable', 'integer', 'min:0'],
+    ])->validate();
 
-        $periodo = $this->proformasService->normalizePeriodoFilters(
-            $validated['mes'] ?? null,
-            $validated['anio'] ?? null,
-        );
+    $periodo = $this->proformasService->normalizePeriodoFilters(
+        $validated['mes'] ?? null,
+        $validated['anio'] ?? null,
+    );
 
-        $filters = [
-            'nro_prof' => $validated['nro_prof'] ?? null,
-            'nit' => $validated['nit'] ?? null,
-            'empresa' => $validated['empresa'] ?? null,
-            'emisora' => $validated['emisora'] ?? null,
-            'mes' => $periodo['mes'],
-            'anio' => $periodo['anio'],
-            'estado' => $validated['estado'] ?? null,
-        ];
+    $filters = [
+        'nro_prof' => $validated['nro_prof'] ?? null,
+        'nit' => $validated['nit'] ?? null,
+        'empresa' => $validated['empresa'] ?? null,
+        'emisora' => $validated['emisora'] ?? null,
+        'mes' => $periodo['mes'],
+        'anio' => $periodo['anio'],
+        'estado' => $validated['estado'] ?? null,
+    ];
 
-        if ($hasRequestFilters) {
-            session([
-                'proformas.numero' => $filters['nro_prof'],
-                'proformas.nit' => $filters['nit'],
-                'proformas.empresa' => $filters['empresa'],
-                'proformas.emisora' => $filters['emisora'],
-                'proformas.mes' => $filters['mes'],
-                'proformas.anio' => $filters['anio'],
-                'proformas.estado' => $filters['estado'],
-            ]);
-        }
-
-        return view('proformas.index', [
-            'proformas' => $this->proformasService->paginateProformas($filters),
-            'filters' => $filters,
-            'estados' => ProformasService::ESTADOS,
-            'meses' => ProformasService::MESES,
-            'proformasService' => $this->proformasService,
+    if ($hasRequestFilters) {
+        session([
+            'proformas.numero' => $filters['nro_prof'],
+            'proformas.nit' => $filters['nit'],
+            'proformas.empresa' => $filters['empresa'],
+            'proformas.emisora' => $filters['emisora'],
+            'proformas.mes' => $filters['mes'],
+            'proformas.anio' => $filters['anio'],
+            'proformas.estado' => $filters['estado'],
         ]);
     }
+
+    return view('proformas.index', [
+        'proformas' => $this->proformasService->paginateProformas($filters),
+        'filters' => $filters,
+        'estados' => ProformasService::ESTADOS,
+        'meses' => ProformasService::MESES,
+        'proformasService' => $this->proformasService,
+    ]);
+}
 
     public function clearFilters(): RedirectResponse
     {
