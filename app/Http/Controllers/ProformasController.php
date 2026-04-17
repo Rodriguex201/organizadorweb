@@ -8,6 +8,7 @@ use App\Services\ProformasService;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -24,7 +25,20 @@ class ProformasController extends Controller
 
     public function index(Request $request): View
     {
-        $validated = $request->validate([
+        $filterKeys = ['nro_prof', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado'];
+        $hasRequestFilters = collect($filterKeys)->contains(fn (string $key) => $request->exists($key));
+
+        $rawFilters = [
+            'nro_prof' => $request->input('nro_prof', session('proformas.numero')),
+            'nit' => $request->input('nit', session('proformas.nit')),
+            'empresa' => $request->input('empresa', session('proformas.empresa')),
+            'emisora' => $request->input('emisora', session('proformas.emisora')),
+            'mes' => $request->input('mes', session('proformas.mes')),
+            'anio' => $request->input('anio', session('proformas.anio')),
+            'estado' => $request->input('estado', session('proformas.estado')),
+        ];
+
+        $validated = Validator::make($rawFilters, [
             'nro_prof' => ['nullable', 'string', 'max:100'],
             'nit' => ['nullable', 'string', 'max:60'],
             'empresa' => ['nullable', 'string', 'max:200'],
@@ -32,11 +46,11 @@ class ProformasController extends Controller
             'mes' => ['nullable', 'string', 'max:20'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'estado' => ['nullable', 'integer', 'min:0'],
-        ]);
+        ])->validate();
 
         $periodo = $this->proformasService->normalizePeriodoFilters(
-            $request->exists('mes') ? ($validated['mes'] ?? null) : null,
-            $request->exists('anio') ? ($validated['anio'] ?? null) : null,
+            $validated['mes'] ?? null,
+            $validated['anio'] ?? null,
         );
 
         $filters = [
@@ -49,6 +63,18 @@ class ProformasController extends Controller
             'estado' => $validated['estado'] ?? null,
         ];
 
+        if ($hasRequestFilters) {
+            session([
+                'proformas.numero' => $filters['nro_prof'],
+                'proformas.nit' => $filters['nit'],
+                'proformas.empresa' => $filters['empresa'],
+                'proformas.emisora' => $filters['emisora'],
+                'proformas.mes' => $filters['mes'],
+                'proformas.anio' => $filters['anio'],
+                'proformas.estado' => $filters['estado'],
+            ]);
+        }
+
         return view('proformas.index', [
             'proformas' => $this->proformasService->paginateProformas($filters),
             'filters' => $filters,
@@ -56,6 +82,13 @@ class ProformasController extends Controller
             'meses' => ProformasService::MESES,
             'proformasService' => $this->proformasService,
         ]);
+    }
+
+    public function clearFilters(): RedirectResponse
+    {
+        session()->forget('proformas');
+
+        return redirect()->route('proformas.index');
     }
 
     public function confirmarEnvioMasivo(Request $request, int $grupo): View
