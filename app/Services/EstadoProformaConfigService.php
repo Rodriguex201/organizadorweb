@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\DB;
 
 class EstadoProformaConfigService
 {
+    private static ?array $cachedMap = null;
+    private static ?Collection $cachedAll = null;
+    private static bool $defaultsChecked = false;
+
     public const DEFAULTS = [
         2 => ['estado_nombre' => 'Generada', 'color_fondo' => '#DBEAFE', 'color_texto' => '#1D4ED8'],
         3 => ['estado_nombre' => 'Enviada', 'color_fondo' => '#E0E7FF', 'color_texto' => '#3730A3'],
@@ -31,21 +35,33 @@ class EstadoProformaConfigService
                 ],
             );
         }
+
+        $this->flushCache();
     }
 
     public function all(): Collection
     {
-        $this->syncDefaults();
+        if (self::$cachedAll instanceof Collection) {
+            return self::$cachedAll;
+        }
 
-        return DB::table('configuracion_estados_proforma')
+        $this->ensureDefaultsIfNeeded();
+
+        self::$cachedAll = DB::table('configuracion_estados_proforma')
             ->whereIn('estado_codigo', array_keys(self::DEFAULTS))
             ->orderBy('estado_codigo')
             ->get();
+
+        return self::$cachedAll;
     }
 
     public function getMap(): array
     {
-        return $this->all()
+        if (self::$cachedMap !== null) {
+            return self::$cachedMap;
+        }
+
+        self::$cachedMap = $this->all()
             ->keyBy(fn ($row) => (int) $row->estado_codigo)
             ->map(fn ($row) => [
                 'estado_nombre' => (string) $row->estado_nombre,
@@ -54,6 +70,8 @@ class EstadoProformaConfigService
                 'activo' => (int) $row->activo === 1,
             ])
             ->all();
+
+        return self::$cachedMap;
     }
 
     public function updateColors(int $estadoCodigo, string $colorFondo, string $colorTexto): void
@@ -75,5 +93,31 @@ class EstadoProformaConfigService
                     'created_at' => now(),
                 ],
             );
+
+        $this->flushCache();
+    }
+
+    private function ensureDefaultsIfNeeded(): void
+    {
+        if (self::$defaultsChecked) {
+            return;
+        }
+
+        $count = DB::table('configuracion_estados_proforma')
+            ->whereIn('estado_codigo', array_keys(self::DEFAULTS))
+            ->count();
+
+        if ((int) $count === 0) {
+            $this->syncDefaults();
+        }
+
+        self::$defaultsChecked = true;
+    }
+
+    private function flushCache(): void
+    {
+        self::$cachedMap = null;
+        self::$cachedAll = null;
+        self::$defaultsChecked = false;
     }
 }

@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Storage;
 
 class ProformasService
 {
+    private ?bool $hasIdCobroInProformas = null;
+
     public const ESTADO_GENERADA = 2;
     public const ESTADO_ENVIADA = 3;
     public const ESTADO_PAGADA = 4;
@@ -113,7 +115,7 @@ class ProformasService
     public function registrarEnvioExitoso(int $proformaId): void
     {
         DB::table('sg_proform')->where('id', $proformaId)->update(['enviado' => 1, 'fecha_envio' => now(), 'estado' => self::ESTADO_ENVIADA, 'intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1')]);
-        $this->syncEstadoEnValoresExternos($proformaId, self::ESTADO_ENVIADA);
+        $this->syncEstadoEnValoresExternos(self::ESTADO_ENVIADA, $this->findProformaForEstadoUpdate($proformaId));
     }
 
     public function registrarIntentoFallido(int $proformaId): void
@@ -185,38 +187,28 @@ class ProformasService
 
     public function updateEstado(int $proformaId, int $nuevoEstado): array
     {
-        $proforma = DB::table('sg_proform')->select(['id', 'estado'])->where('id', $proformaId)->first();
+        $proforma = $this->findProformaForEstadoUpdate($proformaId);
         if (!$proforma) return ['ok' => false, 'message' => 'La proforma no existe.', 'from' => 0, 'to' => $nuevoEstado];
         $estadoActual = (int) ($proforma->estado ?? 0);
         if (!isset(self::ESTADOS[$nuevoEstado])) return ['ok' => false, 'message' => 'Estado destino inválido.', 'from' => $estadoActual, 'to' => $nuevoEstado];
         if ($estadoActual === $nuevoEstado) return ['ok' => false, 'message' => 'La proforma ya tiene ese estado.', 'from' => $estadoActual, 'to' => $nuevoEstado];
         if (!$this->canTransition($estadoActual, $nuevoEstado)) return ['ok' => false, 'message' => 'Transición de estado no permitida.', 'from' => $estadoActual, 'to' => $nuevoEstado];
 
-        DB::transaction(function () use ($proformaId, $nuevoEstado) {
+        DB::transaction(function () use ($proformaId, $nuevoEstado, $proforma) {
             DB::table('sg_proform')->where('id', $proformaId)->update(['estado' => $nuevoEstado]);
-            $this->syncEstadoEnValoresExternos($proformaId, $nuevoEstado);
+            $this->syncEstadoEnValoresExternos($nuevoEstado, $proforma);
         });
 
         return ['ok' => true, 'message' => sprintf('Estado actualizado de %s a %s.', $this->estadoLabel($estadoActual), $this->estadoLabel($nuevoEstado)), 'from' => $estadoActual, 'to' => $nuevoEstado];
     }
 
-    private function syncEstadoEnValoresExternos(int $proformaId, int $nuevoEstado): int
+    private function syncEstadoEnValoresExternos(int $nuevoEstado, ?object $proforma = null): int
     {
-        $select = ['id', 'nit', 'mes', 'anio', 'emisora'];
-        $hasCobroReference = Schema::hasColumn('sg_proform', 'id_cobro');
-
-        if ($hasCobroReference) {
-            $select[] = 'id_cobro';
-        }
-
-        $proforma = DB::table('sg_proform')
-            ->select($select)
-            ->where('id', $proformaId)
-            ->first();
-
         if (!$proforma) {
             return 0;
         }
+
+        $hasCobroReference = $this->hasIdCobroColumn();
 
         if ($hasCobroReference && isset($proforma->id_cobro) && (int) $proforma->id_cobro > 0) {
             return DB::table('valores_externos')
@@ -252,6 +244,29 @@ class ProformasService
         return DB::table('valores_externos')
             ->whereIn('id_cobro', $idsCobro->all())
             ->update(['Proforma' => $nuevoEstado]);
+    }
+
+    private function findProformaForEstadoUpdate(int $proformaId): ?object
+    {
+        $select = ['id', 'estado', 'nit', 'mes', 'anio', 'emisora'];
+
+        if ($this->hasIdCobroColumn()) {
+            $select[] = 'id_cobro';
+        }
+
+        return DB::table('sg_proform')
+            ->select($select)
+            ->where('id', $proformaId)
+            ->first();
+    }
+
+    private function hasIdCobroColumn(): bool
+    {
+        if ($this->hasIdCobroInProformas === null) {
+            $this->hasIdCobroInProformas = Schema::hasColumn('sg_proform', 'id_cobro');
+        }
+
+        return $this->hasIdCobroInProformas;
     }
 
     public function canTransition(null|string|int $estadoActual, null|string|int $estadoDestino): bool
