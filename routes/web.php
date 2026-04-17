@@ -38,7 +38,6 @@ Route::middleware('auth.custom')->group(function (): void {
 
     Route::get('/proformas', [ProformasController::class, 'index'])->name('proformas.index');
     Route::get('/proformas/limpiar-filtros', [ProformasController::class, 'clearFilters'])->name('proformas.clear-filters');
-    Route::get('/proformas/{id}/volver', [ProformasController::class, 'backToIndex'])->name('proformas.back-to-index');
 
     Route::get('/proformas/dashboard', [ProformasController::class, 'dashboard'])->name('proformas.dashboard');
 
