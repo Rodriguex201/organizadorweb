@@ -104,11 +104,18 @@
                 <tbody class="divide-y divide-slate-100">
                 @forelse($proformas as $proforma)
                     @php
+                        $estadoCodigo = (int) ($proforma->estado ?? 0);
                         $estado = $proformasService->estadoLabel($proforma->estado);
                         $envioEstado = $proformasService->envioLabel($proforma->enviado ?? 0);
                         $envioClasses = $proformasService->envioBadgeClass($proforma->enviado ?? 0);
                     @endphp
-                    <tr class="hover:bg-slate-50">
+                    <tr
+                        class="hover:bg-slate-50"
+                        data-proforma-row
+                        data-proforma-id="{{ $proforma->id }}"
+                        data-estado="{{ $estadoCodigo }}"
+                        data-update-url="{{ route('proformas.estado.update', $proforma->id) }}"
+                    >
                         <td class="px-3 py-2">
                             <p class="font-medium text-slate-800">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</p>
                             <p class="text-xs text-slate-500">ID {{ $proforma->id }}</p>
@@ -120,15 +127,31 @@
                         <td class="px-3 py-2 text-slate-700">{{ $proformasService->monthLabel($proforma->mes) }} {{ $proforma->anio ?: 'N/D' }}</td>
                         <td class="px-3 py-2 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
                         <td class="px-3 py-2">
-                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}">{{ $estado }}</span>
+                            <span
+                                class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                                data-estado-badge
+                                data-label-generada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_GENERADA) }}"
+                                data-label-pagada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_PAGADA) }}"
+                                data-label-facturada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_FACTURADA) }}"
+                                data-style-generada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_GENERADA) }}"
+                                data-style-pagada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_PAGADA) }}"
+                                data-style-facturada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_FACTURADA) }}"
+                                style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}"
+                            >{{ $estado }}</span>
                         </td>
                         <td class="px-3 py-2">
                             <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $envioClasses }}">{{ $envioEstado }}</span>
                         </td>
                         <td class="px-3 py-2 text-right">
-
-                            <a href="{{ route('proformas.show', array_merge(['id' => $proforma->id], request()->query())) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a>
-
+                            <div class="inline-flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center rounded bg-slate-100 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                                    data-proforma-actions
+                                    aria-label="Abrir acciones rápidas"
+                                >⋮</button>
+                                <a href="{{ route('proformas.show', array_merge(['id' => $proforma->id], request()->query())) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a>
+                            </div>
                         </td>
                     </tr>
                 @empty
@@ -145,4 +168,180 @@
         </div>
     </div>
 </div>
+
+<div
+    id="proforma-context-menu"
+    class="pointer-events-none fixed z-50 min-w-48 origin-top-left scale-95 rounded-md border border-slate-200 bg-white p-1 opacity-0 shadow-lg transition duration-150"
+>
+    <ul id="proforma-context-menu-items" class="space-y-1"></ul>
+</div>
 @endsection
+
+@push('scripts')
+<script>
+    (() => {
+        const ESTADO_GENERADA = {{ \App\Services\ProformasService::ESTADO_GENERADA }};
+        const ESTADO_PAGADA = {{ \App\Services\ProformasService::ESTADO_PAGADA }};
+        const ESTADO_FACTURADA = {{ \App\Services\ProformasService::ESTADO_FACTURADA }};
+        const csrfToken = @json(csrf_token());
+        const activeEstadoFilter = @json(request('estado', session('proformas.estado')));
+
+        const tableRows = Array.from(document.querySelectorAll('[data-proforma-row]'));
+        const menu = document.getElementById('proforma-context-menu');
+        const menuItems = document.getElementById('proforma-context-menu-items');
+
+        if (!menu || !menuItems || tableRows.length === 0) {
+            return;
+        }
+
+        let currentRow = null;
+
+        const hideMenu = () => {
+            menu.classList.add('pointer-events-none', 'opacity-0', 'scale-95');
+            menu.classList.remove('opacity-100', 'scale-100');
+            currentRow = null;
+        };
+
+        const showMenu = (x, y, row) => {
+            const acciones = getActionsForState(Number(row.dataset.estado || 0));
+            if (acciones.length === 0) {
+                hideMenu();
+                return;
+            }
+
+            menuItems.innerHTML = acciones.map((accion) => (
+                `<li>
+                    <button type="button" class="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" data-target-state="${accion.estado}">
+                        ${accion.label}
+                    </button>
+                </li>`
+            )).join('');
+
+            currentRow = row;
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+            menu.classList.remove('pointer-events-none', 'opacity-0', 'scale-95');
+            menu.classList.add('opacity-100', 'scale-100');
+        };
+
+        const getActionsForState = (estadoActual) => {
+            if (estadoActual === ESTADO_GENERADA) {
+                return [{ estado: ESTADO_PAGADA, label: 'Marcar pagada' }];
+            }
+
+            if (estadoActual === ESTADO_PAGADA) {
+                return [{ estado: ESTADO_FACTURADA, label: 'Marcar facturada' }];
+            }
+
+            return [];
+        };
+
+        const updateRowState = (row, nuevoEstado) => {
+            row.dataset.estado = String(nuevoEstado);
+            const badge = row.querySelector('[data-estado-badge]');
+            if (!badge) {
+                return;
+            }
+
+            const map = {
+                [ESTADO_GENERADA]: {
+                    label: badge.dataset.labelGenerada,
+                    style: badge.dataset.styleGenerada,
+                },
+                [ESTADO_PAGADA]: {
+                    label: badge.dataset.labelPagada,
+                    style: badge.dataset.stylePagada,
+                },
+                [ESTADO_FACTURADA]: {
+                    label: badge.dataset.labelFacturada,
+                    style: badge.dataset.styleFacturada,
+                },
+            };
+
+            const estadoInfo = map[nuevoEstado];
+            if (!estadoInfo) {
+                return;
+            }
+
+            badge.textContent = estadoInfo.label;
+            badge.setAttribute('style', estadoInfo.style);
+
+            const hasEstadoFilter = activeEstadoFilter !== null && activeEstadoFilter !== '';
+            if (!hasEstadoFilter) {
+                return;
+            }
+
+            if (String(activeEstadoFilter) !== String(nuevoEstado)) {
+                row.remove();
+            }
+        };
+
+        const runAction = async (row, estadoDestino) => {
+            const url = row.dataset.updateUrl;
+            if (!url) {
+                return;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        estado: estadoDestino,
+                        redirect_to: 'index',
+                    }),
+                });
+
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || 'No se pudo actualizar el estado.');
+                }
+
+                updateRowState(row, Number(payload.to || estadoDestino));
+            } catch (error) {
+                console.error(error);
+                window.alert(error.message || 'No se pudo actualizar el estado.');
+            }
+        };
+
+        tableRows.forEach((row) => {
+            row.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                showMenu(event.clientX, event.clientY, row);
+            });
+
+            const button = row.querySelector('[data-proforma-actions]');
+            button?.addEventListener('click', (event) => {
+                event.preventDefault();
+                const rect = button.getBoundingClientRect();
+                showMenu(rect.left, rect.bottom + 6, row);
+            });
+        });
+
+        menu.addEventListener('click', async (event) => {
+            const targetButton = event.target.closest('button[data-target-state]');
+            if (!targetButton || !currentRow) {
+                return;
+            }
+
+            const estadoDestino = Number(targetButton.dataset.targetState);
+            hideMenu();
+            await runAction(currentRow, estadoDestino);
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!menu.contains(event.target)) {
+                hideMenu();
+            }
+        });
+
+        window.addEventListener('scroll', hideMenu, true);
+        window.addEventListener('resize', hideMenu);
+    })();
+</script>
+@endpush
