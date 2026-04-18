@@ -115,7 +115,9 @@
                         data-proforma-id="{{ $proforma->id }}"
                         data-estado="{{ $estadoCodigo }}"
                         data-update-url="{{ route('proformas.estado.update', $proforma->id) }}"
+
                         data-pdf-url="{{ route('proformas.pdf.show', $proforma->id) }}"
+
                     >
                         <td class="px-3 py-2">
                             <p class="font-medium text-slate-800">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</p>
@@ -196,6 +198,7 @@
         }
 
         let currentRow = null;
+
         let feedbackTimeout = null;
 
         const showFeedback = (message, type = 'success') => {
@@ -228,6 +231,7 @@
             }, 2500);
         };
 
+
         const hideMenu = () => {
             menu.classList.add('pointer-events-none', 'opacity-0', 'scale-95');
             menu.classList.remove('opacity-100', 'scale-100');
@@ -235,11 +239,14 @@
         };
 
         const showMenu = (x, y, row) => {
+
             const acciones = getActionsForState(Number(row.dataset.estado || 0), row.dataset.pdfUrl || '');
+
             if (acciones.length === 0) {
                 hideMenu();
                 return;
             }
+
 
             menuItems.innerHTML = acciones.map((accion) => {
                 if (accion.type === 'link') {
@@ -257,12 +264,14 @@
                 </li>`;
             }).join('');
 
+
             currentRow = row;
             menu.style.left = `${x}px`;
             menu.style.top = `${y}px`;
             menu.classList.remove('pointer-events-none', 'opacity-0', 'scale-95');
             menu.classList.add('opacity-100', 'scale-100');
         };
+
 
         const getActionsForState = (estadoActual, pdfUrl) => {
             const acciones = [];
@@ -279,6 +288,7 @@
             }
 
             return acciones;
+
         };
 
         const updateRowState = (row, nuevoEstado) => {
@@ -348,10 +358,12 @@
                 }
 
                 updateRowState(row, Number(payload.to || estadoDestino));
+
                 showFeedback(payload.message || 'Estado actualizado correctamente.', 'success');
             } catch (error) {
                 console.error(error);
                 showFeedback(error.message || 'No se pudo actualizar el estado.', 'error');
+
             }
         };
 
@@ -376,9 +388,11 @@
             }
 
             const estadoDestino = Number(targetButton.dataset.targetState);
+
             const row = currentRow;
             hideMenu();
             await runAction(row, estadoDestino);
+
         });
 
         document.addEventListener('click', (event) => {
