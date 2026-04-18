@@ -196,6 +196,39 @@
 
         let currentRow = null;
 
+        let feedbackTimeout = null;
+
+        const showFeedback = (message, type = 'success') => {
+            let container = document.getElementById('proforma-feedback');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'proforma-feedback';
+                container.className = 'fixed right-4 top-4 z-50 rounded-md border px-4 py-2 text-sm shadow transition';
+                document.body.appendChild(container);
+            }
+
+            container.textContent = message;
+            container.classList.remove('border-emerald-200', 'bg-emerald-50', 'text-emerald-700', 'border-rose-200', 'bg-rose-50', 'text-rose-700');
+            container.classList.add(
+                ...(type === 'success'
+                    ? ['border-emerald-200', 'bg-emerald-50', 'text-emerald-700']
+                    : ['border-rose-200', 'bg-rose-50', 'text-rose-700']),
+            );
+
+            container.classList.remove('opacity-0');
+            container.classList.add('opacity-100');
+
+            if (feedbackTimeout) {
+                window.clearTimeout(feedbackTimeout);
+            }
+
+            feedbackTimeout = window.setTimeout(() => {
+                container.classList.remove('opacity-100');
+                container.classList.add('opacity-0');
+            }, 2500);
+        };
+
+
         const hideMenu = () => {
             menu.classList.add('pointer-events-none', 'opacity-0', 'scale-95');
             menu.classList.remove('opacity-100', 'scale-100');
@@ -303,9 +336,12 @@
                 }
 
                 updateRowState(row, Number(payload.to || estadoDestino));
+
+                showFeedback(payload.message || 'Estado actualizado correctamente.', 'success');
             } catch (error) {
                 console.error(error);
-                window.alert(error.message || 'No se pudo actualizar el estado.');
+                showFeedback(error.message || 'No se pudo actualizar el estado.', 'error');
+
             }
         };
 
@@ -330,8 +366,11 @@
             }
 
             const estadoDestino = Number(targetButton.dataset.targetState);
+
+            const row = currentRow;
             hideMenu();
-            await runAction(currentRow, estadoDestino);
+            await runAction(row, estadoDestino);
+
         });
 
         document.addEventListener('click', (event) => {
