@@ -7,6 +7,7 @@ use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
 
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
@@ -309,7 +310,7 @@ public function show(int $id): View
         }
     }
 
-    public function updateEstado(Request $request, int $id): RedirectResponse
+    public function updateEstado(Request $request, int $id): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'estado' => ['required', 'integer'],
@@ -317,6 +318,10 @@ public function show(int $id): View
         ]);
 
         $resultado = $this->proformasService->updateEstado($id, (int) $validated['estado']);
+
+        if ($request->expectsJson()) {
+            return response()->json($resultado, $resultado['ok'] ? 200 : 422);
+        }
 
         $routeName = ($validated['redirect_to'] ?? 'index') === 'show' ? 'proformas.show' : 'proformas.index';
         $routeParams = $routeName === 'proformas.show' ? ['id' => $id] : [];
