@@ -195,6 +195,7 @@
         }
 
         let currentRow = null;
+
         let feedbackTimeout = null;
 
         const showFeedback = (message, type = 'success') => {
@@ -226,6 +227,7 @@
                 container.classList.add('opacity-0');
             }, 2500);
         };
+
 
         const hideMenu = () => {
             menu.classList.add('pointer-events-none', 'opacity-0', 'scale-95');
@@ -334,10 +336,12 @@
                 }
 
                 updateRowState(row, Number(payload.to || estadoDestino));
+
                 showFeedback(payload.message || 'Estado actualizado correctamente.', 'success');
             } catch (error) {
                 console.error(error);
                 showFeedback(error.message || 'No se pudo actualizar el estado.', 'error');
+
             }
         };
 
@@ -362,9 +366,11 @@
             }
 
             const estadoDestino = Number(targetButton.dataset.targetState);
+
             const row = currentRow;
             hideMenu();
             await runAction(row, estadoDestino);
+
         });
 
         document.addEventListener('click', (event) => {
