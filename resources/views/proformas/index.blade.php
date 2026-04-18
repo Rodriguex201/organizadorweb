@@ -115,6 +115,9 @@
                         data-proforma-id="{{ $proforma->id }}"
                         data-estado="{{ $estadoCodigo }}"
                         data-update-url="{{ route('proformas.estado.update', $proforma->id) }}"
+
+                        data-pdf-url="{{ route('proformas.pdf.show', $proforma->id) }}"
+
                     >
                         <td class="px-3 py-2">
                             <p class="font-medium text-slate-800">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</p>
@@ -236,19 +239,31 @@
         };
 
         const showMenu = (x, y, row) => {
-            const acciones = getActionsForState(Number(row.dataset.estado || 0));
+
+            const acciones = getActionsForState(Number(row.dataset.estado || 0), row.dataset.pdfUrl || '');
+
             if (acciones.length === 0) {
                 hideMenu();
                 return;
             }
 
-            menuItems.innerHTML = acciones.map((accion) => (
-                `<li>
+
+            menuItems.innerHTML = acciones.map((accion) => {
+                if (accion.type === 'link') {
+                    return `<li>
+                        <a href="${accion.url}" target="_blank" rel="noopener noreferrer" class="block w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+                            ${accion.label}
+                        </a>
+                    </li>`;
+                }
+
+                return `<li>
                     <button type="button" class="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" data-target-state="${accion.estado}">
                         ${accion.label}
                     </button>
-                </li>`
-            )).join('');
+                </li>`;
+            }).join('');
+
 
             currentRow = row;
             menu.style.left = `${x}px`;
@@ -257,16 +272,23 @@
             menu.classList.add('opacity-100', 'scale-100');
         };
 
-        const getActionsForState = (estadoActual) => {
+
+        const getActionsForState = (estadoActual, pdfUrl) => {
+            const acciones = [];
+            if (pdfUrl) {
+                acciones.push({ type: 'link', label: 'Ver PDF', url: pdfUrl });
+            }
+
             if (estadoActual === ESTADO_GENERADA) {
-                return [{ estado: ESTADO_PAGADA, label: 'Marcar pagada' }];
+                acciones.push({ type: 'estado', estado: ESTADO_PAGADA, label: 'Marcar pagada' });
             }
 
             if (estadoActual === ESTADO_PAGADA) {
-                return [{ estado: ESTADO_FACTURADA, label: 'Marcar facturada' }];
+                acciones.push({ type: 'estado', estado: ESTADO_FACTURADA, label: 'Marcar facturada' });
             }
 
-            return [];
+            return acciones;
+
         };
 
         const updateRowState = (row, nuevoEstado) => {
