@@ -170,6 +170,12 @@
                     <a href="{{ route('proformas.pdf.show', $proformaPersistidaId) }}" target="_blank" class="inline-flex w-full items-center justify-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
                         Ver PDF de proforma guardada
                     </a>
+                    <form method="POST" action="{{ route('proformas.enviar', $proformaPersistidaId) }}">
+                        @csrf
+                        <button type="submit" class="inline-flex w-full items-center justify-center rounded bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">
+                            Enviar proforma por correo
+                        </button>
+                    </form>
                 @endif
             </div>
         </section>
