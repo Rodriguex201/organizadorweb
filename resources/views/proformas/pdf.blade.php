@@ -22,12 +22,20 @@
         .total-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #374151; }
         .total-value { font-size: 18px; font-weight: bold; color: #111827; margin-top: 4px; }
         .footer-note { margin-top: 14px; font-size: 10px; color: #4b5563; }
+        .payment-note { margin-top: 10px; font-size: 10px; color: #374151; line-height: 1.4; }
     </style>
 </head>
 <body>
 @php
     $valorTotal = (float) ($cabecera->vtotal ?? 0);
     $clientePdf = $cliente_pdf ?? ['direccion' => 'N/D', 'telefono' => 'N/D', 'correo' => 'N/D'];
+    $emisoraPdf = strtoupper(trim((string) ($cabecera->emisora ?? 'SAS')));
+    $mensajesPagoPorEmisora = [
+        'SAS' => 'Favor consignar o transferir a nombre de: RM SOFT Casa de Software SAS NIT. 900770401-8 Bancolombia Cta. Ahorros # 85131975584. Envíe soporte a: cartera.rmsoft1@gmail.com con los datos del cliente y su valor abonado. Confirmado el pago, a vuelta. Impreso por el Software CAO 6.0 (www.rmsoft.com.co).',
+        'PCS' => 'Favor consignar o transferir a nombre de: Maria Edilma Carranza Leon, Nit. 1004994836-0. Bancolombia Cta. Ahorros 851-0000-4419. Envíe soporte a: cartera.rmsoft1@gmail.com con los datos del cliente, facturas y su valor abonado. Impreso por el Software CAO 6.0 (www.rmsoft.com.co).',
+        'SMP' => 'Favor consignar o transferir a nombre de: Raúl Osvaldo Ramos M., Nit. 75036432-7. Bancolombia Cta. Ahorros 851-0000-2888. Envíe soporte a: cartera.rmsoft1@gmail.com con los datos del cliente, facturas y su valor abonado.',
+    ];
+    $mensajePago = $mensajesPagoPorEmisora[$emisoraPdf] ?? $mensajesPagoPorEmisora['SAS'];
 @endphp
 
 <table class="header">
@@ -104,6 +112,9 @@
     </tbody>
 </table>
 
+<div class="payment-note">
+    {{ $mensajePago }}
+</div>
 
 <div class="section-title">Total en letras</div>
 <div class="subtle">{{ $cabecera->total_letras ?? 'Pendiente de configuración.' }}</div>
