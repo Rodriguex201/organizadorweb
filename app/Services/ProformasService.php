@@ -193,7 +193,18 @@ class ProformasService
         if (!$this->canTransition($estadoActual, $nuevoEstado)) return ['ok' => false, 'message' => 'Transición de estado no permitida.', 'from' => $estadoActual, 'to' => $nuevoEstado];
 
         DB::transaction(function () use ($proformaId, $nuevoEstado) {
-            DB::table('sg_proform')->where('id', $proformaId)->update(['estado' => $nuevoEstado]);
+            $updatePayload = ['estado' => $nuevoEstado];
+            $fechaActual = now()->toDateString();
+
+            if ($nuevoEstado === self::ESTADO_PAGADA) {
+                $updatePayload['fpag'] = $fechaActual;
+            }
+
+            if ($nuevoEstado === self::ESTADO_FACTURADA) {
+                $updatePayload['ffac'] = $fechaActual;
+            }
+
+            DB::table('sg_proform')->where('id', $proformaId)->update($updatePayload);
             $this->syncEstadoEnValoresExternos($proformaId, $nuevoEstado);
         });
 

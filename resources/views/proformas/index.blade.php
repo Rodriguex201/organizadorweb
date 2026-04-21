@@ -153,7 +153,7 @@
                                     data-proforma-actions
                                     aria-label="Abrir acciones rápidas"
                                 >⋮</button>
-                                <a href="{{ route('proformas.show', array_merge(['id' => $proforma->id], request()->query())) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a>
+                                {{-- <a href="{{ route('proformas.show', array_merge(['id' => $proforma->id], request()->query())) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver detalle</a> --}}
                             </div>
                         </td>
                     </tr>
