@@ -211,10 +211,12 @@ class CobrosService
             ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
             ->select([
                 've.id_cobro',
+                'cp.idclientes_potenciales as cliente_id',
                 'cp.fecha_arriendo',
                 'cp.codigo',
                 'cp.nombre',
                 'cp.regimen',
+                'cp.nota_cobro',
                 DB::raw('ve.`valor_total` as valor_total'),
             ]);
 

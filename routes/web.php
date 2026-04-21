@@ -30,6 +30,8 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/cobros', [CobrosController::class, 'index'])->name('cobros.index');
 
     Route::get('/cobros/{id}', [CobrosController::class, 'show'])->name('cobros.show');
+    Route::patch('/cobros/clientes/{id}/nota', [CobrosController::class, 'updateNotaCobro'])->name('cobros.nota.update');
+    Route::delete('/cobros/clientes/{id}/nota', [CobrosController::class, 'clearNotaCobro'])->name('cobros.nota.clear');
     Route::get('/cobros/{id}/revisar', [CobrosController::class, 'revisar'])->name('cobros.revisar');
     Route::post('/cobros/{id}/revisar', [CobrosController::class, 'guardarRevision'])->name('cobros.revisar.guardar');
 
