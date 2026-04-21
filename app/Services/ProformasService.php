@@ -40,8 +40,17 @@ class ProformasService
 
     public function paginateProformas(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = DB::table('sg_proform as p')->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio']);
+        $query = DB::table('sg_proform as p')
+            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])
+            ->selectSub(function ($subquery) {
+                $subquery
+                    ->from('clientes_potenciales as cp')
+                    ->select('cp.codigo')
+                    ->whereRaw('BINARY cp.nit = BINARY p.nit')
+                    ->limit(1);
+            }, 'codigo');
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
+        $codigo = trim((string) ($filters['codigo'] ?? ''));
         $nit = trim((string) ($filters['nit'] ?? ''));
         $empresa = trim((string) ($filters['empresa'] ?? ''));
         $emisora = trim((string) ($filters['emisora'] ?? ''));
@@ -51,6 +60,15 @@ class ProformasService
 
         return $query
             ->when($nroProf !== '', fn ($q) => $q->where('p.nro_prof', 'like', "%{$nroProf}%"))
+            ->when($codigo !== '', function ($q) use ($codigo) {
+                $q->whereExists(function ($subquery) use ($codigo) {
+                    $subquery
+                        ->select(DB::raw(1))
+                        ->from('clientes_potenciales as cp')
+                        ->whereRaw('BINARY cp.nit = BINARY p.nit')
+                        ->where('cp.codigo', 'like', "%{$codigo}%");
+                });
+            })
             ->when($nit !== '', fn ($q) => $q->where('p.nit', 'like', "%{$nit}%"))
             ->when($empresa !== '', fn ($q) => $q->where('p.emp', 'like', "%{$empresa}%"))
             ->when($emisora !== '', fn ($q) => $q->where('p.emisora', $emisora))
