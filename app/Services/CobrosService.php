@@ -211,10 +211,12 @@ class CobrosService
             ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
             ->select([
                 've.id_cobro',
+                'cp.idclientes_potenciales as cliente_id',
                 'cp.fecha_arriendo',
                 'cp.codigo',
                 'cp.nombre',
                 'cp.regimen',
+                'cp.nota_cobro',
                 DB::raw('ve.`valor_total` as valor_total'),
             ]);
 
@@ -249,6 +251,20 @@ class CobrosService
 
                     if ($grupoFecha === 27) {
                         $q->whereRaw("{$diaArriendo} BETWEEN 22 AND 31");
+                    }
+                },
+            )
+            ->when(
+                $this->normalizarFiltroNota($filters['filtro_nota'] ?? null),
+                function ($q, string $filtroNota) {
+                    if ($filtroNota === 'con') {
+                        $q->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) <> ''");
+
+                        return;
+                    }
+
+                    if ($filtroNota === 'sin') {
+                        $q->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) = ''");
                     }
                 },
             );
@@ -376,6 +392,17 @@ class CobrosService
         }
 
         return (int) $valor;
+    }
+
+    private function normalizarFiltroNota(null|string $filtroNota): ?string
+    {
+        if ($filtroNota === null) {
+            return null;
+        }
+
+        $valor = mb_strtolower(trim($filtroNota));
+
+        return in_array($valor, ['con', 'sin'], true) ? $valor : null;
     }
 
 }

@@ -7,8 +7,10 @@ use App\Services\RevisarProformaCalculator;
 use App\Services\ProformaPdfService;
 use App\Services\ProformaPreviewService;
 use App\Services\ProformaStoreService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -35,6 +37,7 @@ class CobrosController extends Controller
             'buscar' => ['nullable', 'string', 'max:100'],
             'orden_fecha' => ['nullable', 'in:asc,desc'],
             'grupo_fecha' => ['nullable', 'in:7,27'],
+            'filtro_nota' => ['nullable', 'in:con,sin'],
             'debug' => ['nullable'],
         ]);
 
@@ -53,6 +56,7 @@ class CobrosController extends Controller
             'buscar' => $validated['buscar'] ?? null,
             'orden_fecha' => $validated['orden_fecha'] ?? null,
             'grupo_fecha' => $validated['grupo_fecha'] ?? null,
+            'filtro_nota' => $validated['filtro_nota'] ?? null,
         ];
 
 
@@ -161,6 +165,48 @@ class CobrosController extends Controller
         return redirect()
             ->route('cobros.revisar', $id)
             ->with('status', 'Revisión guardada correctamente.');
+    }
+
+    public function updateNotaCobro(Request $request, int $id): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'nota_cobro' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $clienteActualizado = DB::table('clientes_potenciales')
+            ->where('idclientes_potenciales', $id)
+            ->update([
+                'nota_cobro' => $validated['nota_cobro'] ?? null,
+            ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $clienteActualizado > 0,
+                'nota_cobro' => $validated['nota_cobro'] ?? null,
+                'message' => 'Nota de cobro guardada correctamente.',
+            ]);
+        }
+
+        return back()->with('status', 'Nota de cobro guardada correctamente.');
+    }
+
+    public function clearNotaCobro(Request $request, int $id): RedirectResponse|JsonResponse
+    {
+        $clienteActualizado = DB::table('clientes_potenciales')
+            ->where('idclientes_potenciales', $id)
+            ->update([
+                'nota_cobro' => null,
+            ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => $clienteActualizado > 0,
+                'nota_cobro' => null,
+                'message' => 'Nota de cobro eliminada correctamente.',
+            ]);
+        }
+
+        return back()->with('status', 'Nota de cobro eliminada correctamente.');
     }
 
     private function mapCobroToRevisionData(object $cobro): array
