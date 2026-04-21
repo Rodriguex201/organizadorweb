@@ -40,8 +40,11 @@ class ProformasService
 
     public function paginateProformas(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = DB::table('sg_proform as p')->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio']);
+        $query = DB::table('sg_proform as p')
+            ->leftJoin('clientes_potenciales as cp', 'cp.nit', '=', 'p.nit')
+            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio', 'cp.codigo as codigo']);
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
+        $codigo = trim((string) ($filters['codigo'] ?? ''));
         $nit = trim((string) ($filters['nit'] ?? ''));
         $empresa = trim((string) ($filters['empresa'] ?? ''));
         $emisora = trim((string) ($filters['emisora'] ?? ''));
@@ -51,6 +54,7 @@ class ProformasService
 
         return $query
             ->when($nroProf !== '', fn ($q) => $q->where('p.nro_prof', 'like', "%{$nroProf}%"))
+            ->when($codigo !== '', fn ($q) => $q->where('cp.codigo', 'like', "%{$codigo}%"))
             ->when($nit !== '', fn ($q) => $q->where('p.nit', 'like', "%{$nit}%"))
             ->when($empresa !== '', fn ($q) => $q->where('p.emp', 'like', "%{$empresa}%"))
             ->when($emisora !== '', fn ($q) => $q->where('p.emisora', $emisora))

@@ -38,11 +38,12 @@ if ($request->get('from') === 'detalle') {
     return redirect()->route('proformas.index', $filtros);
 }
 
-    $filterKeys = ['nro_prof', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado'];
+    $filterKeys = ['nro_prof', 'codigo', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado'];
     $hasRequestFilters = collect($filterKeys)->contains(fn (string $key) => $request->filled($key));
 
     $rawFilters = [
         'nro_prof' => $request->input('nro_prof', session('proformas.numero')),
+        'codigo' => $request->input('codigo', session('proformas.codigo')),
         'nit' => $request->input('nit', session('proformas.nit')),
         'empresa' => $request->input('empresa', session('proformas.empresa')),
         'emisora' => $request->input('emisora', session('proformas.emisora')),
@@ -53,6 +54,7 @@ if ($request->get('from') === 'detalle') {
 
     $validated = Validator::make($rawFilters, [
         'nro_prof' => ['nullable', 'string', 'max:100'],
+        'codigo' => ['nullable', 'string', 'max:50'],
         'nit' => ['nullable', 'string', 'max:60'],
         'empresa' => ['nullable', 'string', 'max:200'],
         'emisora' => ['nullable', 'string', 'max:20'],
@@ -77,6 +79,7 @@ if ($request->get('from') === 'detalle') {
 
     $filters = [
         'nro_prof' => $validated['nro_prof'] ?? null,
+        'codigo' => $validated['codigo'] ?? null,
         'nit' => $validated['nit'] ?? null,
         'empresa' => $validated['empresa'] ?? null,
         'emisora' => $validated['emisora'] ?? null,
@@ -88,6 +91,7 @@ if ($request->get('from') === 'detalle') {
     if ($hasRequestFilters) {
         session([
             'proformas.numero' => $filters['nro_prof'],
+            'proformas.codigo' => $filters['codigo'],
             'proformas.nit' => $filters['nit'],
             'proformas.empresa' => $filters['empresa'],
             'proformas.emisora' => $filters['emisora'],

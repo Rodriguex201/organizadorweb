@@ -39,10 +39,14 @@
     @endif
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
-        <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-8">
+        <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-9">
             <div>
                 <label for="nro_prof" class="mb-1 block text-sm font-medium">Número</label>
                 <input id="nro_prof" name="nro_prof" value="{{ request('nro_prof', session('proformas.numero')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label for="codigo" class="mb-1 block text-sm font-medium">Código</label>
+                <input id="codigo" name="codigo" value="{{ request('codigo', session('proformas.codigo')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="nit" class="mb-1 block text-sm font-medium">NIT</label>
@@ -93,6 +97,7 @@
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-600">
                 <tr>
                     <th class="px-3 py-2">Número</th>
+                    <th class="px-3 py-2">Código</th>
                     <th class="px-3 py-2">Empresa</th>
                     <th class="px-3 py-2">Periodo</th>
                     <th class="px-3 py-2 text-right">Valor total</th>
@@ -123,6 +128,7 @@
                             <p class="font-medium text-slate-800">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</p>
                             <p class="text-xs text-slate-500">ID {{ $proforma->id }}</p>
                         </td>
+                        <td class="px-3 py-2 text-slate-700">{{ $proforma->codigo ?: 'N/D' }}</td>
                         <td class="px-3 py-2">
                             <p class="font-medium text-slate-800">{{ $proforma->emp ?: 'N/D' }}</p>
                             <p class="text-xs text-slate-500">NIT: {{ $proforma->nit ?: 'N/D' }}</p>
@@ -160,7 +166,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
+                        <td colspan="8" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>
