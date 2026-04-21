@@ -126,6 +126,7 @@
                         <td class="px-3 py-2">
                             <p class="font-medium text-slate-800">{{ $proforma->emp ?: 'N/D' }}</p>
                             <p class="text-xs text-slate-500">NIT: {{ $proforma->nit ?: 'N/D' }}</p>
+                            <p class="text-xs text-slate-500">Emisora: {{ strtoupper((string) ($proforma->emisora ?? 'N/D')) }}</p>
                         </td>
                         <td class="px-3 py-2 text-slate-700">{{ $proformasService->monthLabel($proforma->mes) }} {{ $proforma->anio ?: 'N/D' }}</td>
                         <td class="px-3 py-2 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
