@@ -103,10 +103,15 @@ class CobrosController extends Controller
             throw new NotFoundHttpException('Cobro no encontrado.');
         }
 
+        $valores = DB::table('valores_externos')
+            ->where('id_cobro', $id)
+            ->first();
+
         $formData = $this->revisarProformaCalculator->calculate($this->mapCobroToRevisionData($cobro));
 
         return view('cobros.revisar', [
             'cobro' => $cobro,
+            'valores' => $valores,
             'formData' => $formData,
         ]);
     }
@@ -145,8 +150,13 @@ class CobrosController extends Controller
         $accion = $validated['accion'] ?? 'guardar';
 
         if ($accion === 'recalcular') {
+            $valores = DB::table('valores_externos')
+                ->where('id_cobro', $id)
+                ->first();
+
             return view('cobros.revisar', [
                 'cobro' => $cobro,
+                'valores' => $valores,
                 'formData' => $formData,
             ])->with('status', 'Valores recalculados en pantalla. Aún no se guardan.')->with('status_type', 'warning');
         }
