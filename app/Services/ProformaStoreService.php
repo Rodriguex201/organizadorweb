@@ -70,13 +70,16 @@ class ProformaStoreService
                 ->first();
 
             if ($proformaExistente !== null) {
+                $lineas = $preview['detalle']['lineas'] ?? [];
+                $this->actualizarCabeceraProformaExistente((int) $proformaExistente->id, $cobro, $preview);
+                $this->reemplazarDetalleProforma((int) $proformaExistente->id, $lineas);
                 $this->marcarCobroComoProformaGenerada((int) $cobro->id_cobro);
 
                 return [
                     'created' => false,
                     'duplicated' => true,
                     'proforma_id' => $proformaExistente->id ?? null,
-                    'message' => 'La proforma ya existía para NIT, mes, año y emisora. No se duplicó la cabecera ni el detalle.',
+                    'message' => 'La proforma ya existía para NIT, mes, año y emisora. Se actualizó cabecera y detalle con los valores vigentes.',
                 ];
             }
 
@@ -112,33 +115,7 @@ class ProformaStoreService
 
             $proformaId = (int) DB::table('sg_proform')->insertGetId($cabecera);
 
-            $catalogoConceptos = $this->obtenerCatalogoConceptos();
-            $detalleRows = [];
-            foreach ($lineas as $index => $linea) {
-                $codigoLinea = (string) ($linea['codigo'] ?? '');
-
-                // Código de prueba deshabilitado temporalmente (sin código oficial aún en tabla conceptos).
-                if ($codigoLinea === '01') {
-                    continue;
-                }
-
-                $concepto = $this->resolverConceptoDesdeCatalogo(
-                    $codigoLinea,
-                    (string) ($linea['concepto'] ?? ''),
-                    $catalogoConceptos,
-                );
-
-                $detalleRows[] = [
-                    'proforma_id' => $proformaId,
-                    'ref_codigo' => $concepto['codigo'],
-                    'descripcion' => $concepto['nombre'],
-                    'cantidad' => (float) ($linea['cantidad'] ?? 0),
-                    'vr_unidad' => (float) ($linea['valor_unitario'] ?? 0),
-                    'vr_parcial' => (float) ($linea['valor_parcial'] ?? 0),
-                    'orden' => $index + 1,
-                    'moneda' => 'COP',
-                ];
-            }
+            $detalleRows = $this->construirDetalleRows($proformaId, $lineas);
 
             if ($detalleRows !== []) {
                 DB::table('sg_proford')->insert($detalleRows);
@@ -222,6 +199,79 @@ class ProformaStoreService
         $mesNumero = self::MESES_ES[mb_strtolower($valor)] ?? null;
 
         return $mesNumero;
+    }
+
+    private function actualizarCabeceraProformaExistente(int $proformaId, object $cobro, array $preview): void
+    {
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update([
+                'emp' => $this->resolveEmpresaCliente($cobro),
+                'vlr_mens' => (float) ($cobro->valor_mensualidad ?? 0),
+                'vlr_nom' => (float) ($cobro->vlrnomina ?? 0),
+                'vlr_fe' => (float) ($cobro->valor_facturas ?? 0),
+                'vlr_rec' => (float) ($cobro->valor_acuse ?? 0),
+                'vlr_sop' => (float) ($cobro->valor_documentos ?? 0),
+                'vext1' => (float) ($cobro->cliente_vlrextra ?? 0),
+                'vext2' => (float) ($cobro->cliente_vlrextra2 ?? 0),
+                'vtotal' => (float) ($preview['detalle']['total_preview'] ?? 0),
+                'cfe' => (float) ($cobro->numero_facturas ?? 0),
+                'csop' => (float) ($cobro->numero_documento_soporte ?? 0),
+                'crec' => (float) ($cobro->numero_acuse ?? 0),
+                'cnom' => (float) (($cobro->vlrnomina ?? 0) > 0 ? 1 : 0),
+            ]);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $lineas
+     */
+    private function reemplazarDetalleProforma(int $proformaId, array $lineas): void
+    {
+        DB::table('sg_proford')
+            ->where('proforma_id', $proformaId)
+            ->delete();
+
+        $detalleRows = $this->construirDetalleRows($proformaId, $lineas);
+        if ($detalleRows !== []) {
+            DB::table('sg_proford')->insert($detalleRows);
+        }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $lineas
+     * @return array<int, array<string, mixed>>
+     */
+    private function construirDetalleRows(int $proformaId, array $lineas): array
+    {
+        $catalogoConceptos = $this->obtenerCatalogoConceptos();
+        $detalleRows = [];
+        foreach ($lineas as $index => $linea) {
+            $codigoLinea = (string) ($linea['codigo'] ?? '');
+
+            // Código de prueba deshabilitado temporalmente (sin código oficial aún en tabla conceptos).
+            if ($codigoLinea === '01') {
+                continue;
+            }
+
+            $concepto = $this->resolverConceptoDesdeCatalogo(
+                $codigoLinea,
+                (string) ($linea['concepto'] ?? ''),
+                $catalogoConceptos,
+            );
+
+            $detalleRows[] = [
+                'proforma_id' => $proformaId,
+                'ref_codigo' => $concepto['codigo'],
+                'descripcion' => $concepto['nombre'],
+                'cantidad' => (float) ($linea['cantidad'] ?? 0),
+                'vr_unidad' => (float) ($linea['valor_unitario'] ?? 0),
+                'vr_parcial' => (float) ($linea['valor_parcial'] ?? 0),
+                'orden' => $index + 1,
+                'moneda' => 'COP',
+            ];
+        }
+
+        return $detalleRows;
     }
 
 
