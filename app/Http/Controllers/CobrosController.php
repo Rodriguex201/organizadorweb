@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -150,7 +151,48 @@ class CobrosController extends Controller
             ])->with('status', 'Valores recalculados en pantalla. Aún no se guardan.')->with('status_type', 'warning');
         }
 
-        $this->cobrosService->updateCobroRevision($id, $formData);
+        $columnMap = [
+            'numero_equipos' => 'numero_equipos',
+            'valor_principal' => 'valor_principal',
+            'valor_terminal' => 'valor_terminal',
+            'empleados' => 'empleados',
+            'valor_nomina' => 'vlrnomina',
+            'numero_moviles' => 'numero_moviles',
+            'valor_movil' => 'valor_movil',
+            'facturas' => 'numero_facturas',
+            'nota_debito' => 'numero_nota_debito',
+            'nota_credito' => 'numero_nota_credito',
+            'soporte' => 'numero_documento_soporte',
+            'nota_ajuste' => 'numero_nota_ajuste',
+            'acuse' => 'numero_acuse',
+            'otro_valor_extra' => 'valor_extra',
+            'valor_terminal_recepcion' => 'valor_extra2',
+            'precio_factura' => 'precio_factura',
+            'precio_soporte' => 'precio_soporte',
+            'precio_acuse' => 'precio_acuse',
+            'total_facturas' => 'total_facturas',
+            'valor_facturas' => 'valor_facturas',
+            'total_documentos' => 'total_documentos',
+            'valor_documentos' => 'valor_documentos',
+            'valor_acuse' => 'valor_acuse',
+            'total_mensualidad' => 'valor_mensualidad',
+            'valor_total_proforma' => 'valor_total',
+        ];
+
+        $payload = [];
+        foreach ($columnMap as $key => $column) {
+            if (!array_key_exists($key, $formData) || !Schema::hasColumn('valores_externos', $column)) {
+                continue;
+            }
+
+            $payload[$column] = (float) $formData[$key];
+        }
+
+        if ($payload !== []) {
+            DB::table('valores_externos')
+                ->where('id_cobro', $id)
+                ->update($payload);
+        }
 
         if ($accion === 'generar') {
             $cobroActualizado = $this->cobrosService->findCobroById($id);
@@ -163,8 +205,9 @@ class CobrosController extends Controller
         }
 
         return redirect()
-            ->route('cobros.revisar', $id)
-            ->with('status', 'Revisión guardada correctamente.');
+            ->route('cobros.show', $id)
+            ->with('status', 'Revisión guardada correctamente.')
+            ->with('status_type', 'success');
     }
 
     public function updateNotaCobro(Request $request, int $id): RedirectResponse|JsonResponse
