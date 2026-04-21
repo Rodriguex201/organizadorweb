@@ -30,11 +30,40 @@
     $valorTotal = (float) ($cabecera->vtotal ?? 0);
     $clientePdf = $cliente_pdf ?? ['direccion' => 'N/D', 'telefono' => 'N/D', 'correo' => 'N/D'];
     $emisoraPdf = strtoupper(trim((string) ($cabecera->emisora ?? 'SAS')));
-    $mensajesPagoPorEmisora = [
-        'SAS' => 'Favor consignar o transferir a nombre de: RM SOFT Casa de Software SAS NIT. 900770401-8 Bancolombia Cta. Ahorros # 85131975584. Envíe soporte a: cartera.rmsoft1@gmail.com con los datos del cliente y su valor abonado. Confirmado el pago, a vuelta. Impreso por el Software CAO 6.0 (www.rmsoft.com.co).',
-        'PCS' => 'Favor consignar o transferir a nombre de: Maria Edilma Carranza Leon, Nit. 1004994836-0. Bancolombia Cta. Ahorros 851-0000-4419. Envíe soporte a: cartera.rmsoft1@gmail.com con los datos del cliente, facturas y su valor abonado. Impreso por el Software CAO 6.0 (www.rmsoft.com.co).',
-        'SMP' => 'Favor consignar o transferir a nombre de: Raúl Osvaldo Ramos M., Nit. 75036432-7. Bancolombia Cta. Ahorros 851-0000-2888. Envíe soporte a: cartera.rmsoft1@gmail.com con los datos del cliente, facturas y su valor abonado.',
-    ];
+$mensajesPagoPorEmisora = [
+    'SAS' => '
+        Favor consignar o transferir a nombre de: 
+        <strong>RM SOFT Casa de Software SAS</strong><br>
+        NIT: <strong>900770401-8</strong><br>
+        Banco: <strong>Bancolombia</strong><br>
+        Cuenta Ahorros: <strong># 85131975584</strong><br>
+        Envíe soporte a: <strong>cartera.rmsoft1@gmail.com</strong><br>
+        con los datos del cliente y su valor abonado.<br>
+        Confirmado el pago, a vuelta.<br>
+        Impreso por el Software CAO 6.0 (www.rmsoft.com.co).
+    ',
+
+    'PCS' => '
+        Favor consignar o transferir a nombre de: 
+        <strong>Maria Edilma Carranza Leon</strong><br>
+        NIT: <strong>1004994836-0</strong><br>
+        Banco: <strong>Bancolombia</strong><br>
+        Cuenta Ahorros: <strong>851-0000-4419</strong><br>
+        Envíe soporte a: <strong>cartera.rmsoft1@gmail.com</strong><br>
+        con los datos del cliente, facturas y su valor abonado.<br>
+        Impreso por el Software CAO 6.0 (www.rmsoft.com.co).
+    ',
+
+    'SMP' => '
+        Favor consignar o transferir a nombre de: 
+        <strong>Raúl Osvaldo Ramos M.</strong><br>
+        NIT: <strong>75036432-7</strong><br>
+        Banco: <strong>Bancolombia</strong><br>
+        Cuenta Ahorros: <strong>851-0000-2888</strong><br>
+        Envíe soporte a: <strong>cartera.rmsoft1@gmail.com</strong><br>
+        con los datos del cliente, facturas y su valor abonado.
+    ',
+];
     $mensajePago = $mensajesPagoPorEmisora[$emisoraPdf] ?? $mensajesPagoPorEmisora['SAS'];
 @endphp
 
@@ -113,7 +142,7 @@
 </table>
 
 <div class="payment-note">
-    {{ $mensajePago }}
+   {!! $mensajePago !!}
 </div>
 
 <div class="section-title">Total en letras</div>
