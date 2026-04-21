@@ -37,6 +37,7 @@ class CobrosController extends Controller
             'buscar' => ['nullable', 'string', 'max:100'],
             'orden_fecha' => ['nullable', 'in:asc,desc'],
             'grupo_fecha' => ['nullable', 'in:7,27'],
+            'filtro_nota' => ['nullable', 'in:con,sin'],
             'debug' => ['nullable'],
         ]);
 
@@ -55,6 +56,7 @@ class CobrosController extends Controller
             'buscar' => $validated['buscar'] ?? null,
             'orden_fecha' => $validated['orden_fecha'] ?? null,
             'grupo_fecha' => $validated['grupo_fecha'] ?? null,
+            'filtro_nota' => $validated['filtro_nota'] ?? null,
         ];
 
 

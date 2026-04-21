@@ -253,6 +253,20 @@ class CobrosService
                         $q->whereRaw("{$diaArriendo} BETWEEN 22 AND 31");
                     }
                 },
+            )
+            ->when(
+                $this->normalizarFiltroNota($filters['filtro_nota'] ?? null),
+                function ($q, string $filtroNota) {
+                    if ($filtroNota === 'con') {
+                        $q->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) <> ''");
+
+                        return;
+                    }
+
+                    if ($filtroNota === 'sin') {
+                        $q->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) = ''");
+                    }
+                },
             );
 
     }
@@ -378,6 +392,17 @@ class CobrosService
         }
 
         return (int) $valor;
+    }
+
+    private function normalizarFiltroNota(null|string $filtroNota): ?string
+    {
+        if ($filtroNota === null) {
+            return null;
+        }
+
+        $valor = mb_strtolower(trim($filtroNota));
+
+        return in_array($valor, ['con', 'sin'], true) ? $valor : null;
     }
 
 }
