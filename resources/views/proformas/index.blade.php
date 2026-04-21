@@ -39,7 +39,7 @@
     @endif
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
-        <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-9">
+        <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-10">
             <div>
                 <label for="nro_prof" class="mb-1 block text-sm font-medium">Número</label>
                 <input id="nro_prof" name="nro_prof" value="{{ request('nro_prof', session('proformas.numero')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
