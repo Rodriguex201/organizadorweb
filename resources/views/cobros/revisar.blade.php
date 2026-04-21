@@ -51,6 +51,40 @@
         <section class="bg-white rounded-lg shadow p-5 space-y-5">
             <h2 class="text-lg font-semibold">b) Valores de la proforma</h2>
 
+
+            @php
+                $columnMap = [
+                    'numero_equipos' => 'numero_equipos',
+                    'valor_principal' => 'valor_principal',
+                    'valor_terminal' => 'valor_terminal',
+                    'empleados' => 'empleados',
+                    'valor_nomina' => 'vlrnomina',
+                    'numero_moviles' => 'numero_moviles',
+                    'valor_movil' => 'valor_movil',
+                    'facturas' => 'numero_facturas',
+                    'nota_debito' => 'numero_nota_debito',
+                    'nota_credito' => 'numero_nota_credito',
+                    'soporte' => 'numero_documento_soporte',
+                    'nota_ajuste' => 'numero_nota_ajuste',
+                    'acuse' => 'numero_acuse',
+                    'otro_valor_extra' => 'valor_extra',
+                    'valor_terminal_recepcion' => 'valor_extra2',
+                    'precio_factura' => 'precio_factura',
+                    'precio_soporte' => 'precio_soporte',
+                    'precio_acuse' => 'precio_acuse',
+                ];
+
+                $calculatedColumnMap = [
+                    'total_facturas' => 'total_facturas',
+                    'valor_facturas' => 'valor_facturas',
+                    'total_documentos' => 'total_documentos',
+                    'valor_documentos' => 'valor_documentos',
+                    'valor_acuse' => 'valor_acuse',
+                    'total_mensualidad' => 'valor_mensualidad',
+                    'valor_total_proforma' => 'valor_total',
+                ];
+            @endphp
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 @foreach([
                     'numero_equipos' => 'Número equipos',
@@ -74,7 +108,7 @@
                 ] as $key => $label)
                     <label class="block">
                         <span class="text-slate-500">{{ $label }}</span>
-                        <input type="number" step="0.01" min="0" name="{{ $key }}" value="{{ old($key, $formData[$key] ?? 0) }}"
+                        <input type="number" step="0.01" min="0" name="{{ $key }}" value="{{ old($key, $key === 'precio_factura' ? ($cobro->cliente_vlrfactura ?? ($formData[$key] ?? 0)) : ($valores?->{$columnMap[$key]} ?? ($formData[$key] ?? 0))) }}"
                                class="mt-1 w-full rounded border-slate-300 focus:border-indigo-500 focus:ring-indigo-500">
                     </label>
                 @endforeach
@@ -94,7 +128,7 @@
                     ] as $key => $label)
                         <label class="block">
                             <span class="text-slate-500">{{ $label }}</span>
-                            <input type="number" step="0.01" value="{{ $formData[$key] ?? 0 }}" readonly
+                            <input type="number" step="0.01" value="{{ $valores?->{$calculatedColumnMap[$key]} ?? ($formData[$key] ?? 0) }}" readonly
                                    class="mt-1 w-full rounded border-slate-200 bg-slate-100 text-slate-700">
                         </label>
                     @endforeach

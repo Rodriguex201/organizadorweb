@@ -103,10 +103,15 @@ class CobrosController extends Controller
             throw new NotFoundHttpException('Cobro no encontrado.');
         }
 
+        $valores = DB::table('valores_externos')
+            ->where('id_cobro', $id)
+            ->first();
+
         $formData = $this->revisarProformaCalculator->calculate($this->mapCobroToRevisionData($cobro));
 
         return view('cobros.revisar', [
             'cobro' => $cobro,
+            'valores' => $valores,
             'formData' => $formData,
         ]);
     }
@@ -145,8 +150,13 @@ class CobrosController extends Controller
         $accion = $validated['accion'] ?? 'guardar';
 
         if ($accion === 'recalcular') {
+            $valores = DB::table('valores_externos')
+                ->where('id_cobro', $id)
+                ->first();
+
             return view('cobros.revisar', [
                 'cobro' => $cobro,
+                'valores' => $valores,
                 'formData' => $formData,
             ])->with('status', 'Valores recalculados en pantalla. Aún no se guardan.')->with('status_type', 'warning');
         }
@@ -167,7 +177,6 @@ class CobrosController extends Controller
             'acuse' => 'numero_acuse',
             'otro_valor_extra' => 'valor_extra',
             'valor_terminal_recepcion' => 'valor_extra2',
-            'precio_factura' => 'precio_factura',
             'precio_soporte' => 'precio_soporte',
             'precio_acuse' => 'precio_acuse',
             'total_facturas' => 'total_facturas',
@@ -192,6 +201,14 @@ class CobrosController extends Controller
             DB::table('valores_externos')
                 ->where('id_cobro', $id)
                 ->update($payload);
+        }
+
+        if ($cobro->cliente_id !== null && Schema::hasColumn('clientes_potenciales', 'vlrfactura')) {
+            DB::table('clientes_potenciales')
+                ->where('idclientes_potenciales', (int) $cobro->cliente_id)
+                ->update([
+                    'vlrfactura' => (float) ($validated['precio_factura'] ?? 0),
+                ]);
         }
 
         if ($accion === 'generar') {
