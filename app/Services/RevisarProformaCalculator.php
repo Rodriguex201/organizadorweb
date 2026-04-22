@@ -9,7 +9,7 @@ class RevisarProformaCalculator
         $data = $this->normalize($input);
 
         $data['total_facturas'] = $data['facturas'] + $data['nota_debito'] + $data['nota_credito'];
-        $data['valor_facturas'] = $data['total_facturas'] * $data['precio_factura'];
+        $data['valor_facturas'] = $data['facturas'] * $data['precio_factura'];
 
         $data['total_documentos'] = $data['soporte'] + $data['nota_ajuste'];
         $data['valor_documentos'] = $data['total_documentos'] * $data['precio_soporte'];
