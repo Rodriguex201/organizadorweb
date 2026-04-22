@@ -140,11 +140,11 @@ class CobrosController extends Controller
             'acuse' => ['nullable', 'numeric', 'min:0'],
             'otro_valor_extra' => ['nullable', 'numeric', 'min:0'],
             'valor_terminal_recepcion' => ['nullable', 'numeric', 'min:0'],
-            'precio_factura' => ['nullable', 'numeric', 'min:0'],
             'precio_soporte' => ['nullable', 'numeric', 'min:0'],
             'precio_acuse' => ['nullable', 'numeric', 'min:0'],
             'accion' => ['nullable', 'in:recalcular,guardar,generar'],
         ]);
+
 
         $precioFacturaCliente = array_key_exists('precio_factura', $validated)
             ? (float) ($validated['precio_factura'] ?? 0)
@@ -159,6 +159,7 @@ class CobrosController extends Controller
                     'vlrfactura' => $precioFacturaCliente,
                 ]);
         }
+
 
         $validated['precio_factura'] = $precioFacturaCliente;
         $formData = $this->revisarProformaCalculator->calculate($validated);
