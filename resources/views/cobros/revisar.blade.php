@@ -101,12 +101,20 @@
                     'acuse' => 'Acuse',
                     'otro_valor_extra' => 'Otro valor extra',
                     'valor_terminal_recepcion' => 'Valor terminal recepción',
+
+                    'precio_factura' => 'Precio factura (configuración cliente)',
+
                     'precio_soporte' => 'Precio soporte',
                     'precio_acuse' => 'Precio acuse',
                 ] as $key => $label)
+                    @php
+                        $defaultValue = $key === 'precio_factura'
+                            ? ($formData[$key] ?? 0)
+                            : ($valores?->{$columnMap[$key]} ?? ($formData[$key] ?? 0));
+                    @endphp
                     <label class="block">
                         <span class="text-slate-500">{{ $label }}</span>
-                        <input type="number" step="0.01" min="0" name="{{ $key }}" value="{{ old($key, $valores?->{$columnMap[$key]} ?? ($formData[$key] ?? 0)) }}"
+                        <input type="number" step="0.01" min="0" name="{{ $key }}" value="{{ old($key, $defaultValue) }}"
                                class="mt-1 w-full rounded border-slate-300 focus:border-indigo-500 focus:ring-indigo-500">
                     </label>
                 @endforeach
