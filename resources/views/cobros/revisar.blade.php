@@ -101,7 +101,9 @@
                     'acuse' => 'Acuse',
                     'otro_valor_extra' => 'Otro valor extra',
                     'valor_terminal_recepcion' => 'Valor terminal recepción',
+
                     'precio_factura' => 'Precio factura (configuración cliente)',
+
                     'precio_soporte' => 'Precio soporte',
                     'precio_acuse' => 'Precio acuse',
                 ] as $key => $label)
@@ -116,6 +118,19 @@
                                class="mt-1 w-full rounded border-slate-300 focus:border-indigo-500 focus:ring-indigo-500">
                     </label>
                 @endforeach
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <label class="block">
+                    <span class="text-slate-500">Precio factura (configuración cliente)</span>
+                    <input
+                        type="number"
+                        step="0.01"
+                        value="{{ (float) ($cobro->cliente_vlrfactura ?? 0) }}"
+                        readonly
+                        class="mt-1 w-full rounded border-slate-200 bg-slate-100 text-slate-700"
+                    >
+                </label>
             </div>
 
             <div class="border-t pt-4">
