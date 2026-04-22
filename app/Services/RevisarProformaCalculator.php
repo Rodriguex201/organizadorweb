@@ -12,21 +12,21 @@ class RevisarProformaCalculator
         $data['valor_facturas'] = $data['facturas'] * $data['precio_factura'];
 
         $data['total_documentos'] = $data['soporte'] + $data['nota_ajuste'];
-        $data['valor_documentos'] = $data['total_documentos'] * $data['precio_soporte'];
+        $data['valor_documentos'] = $data['soporte'] * $data['precio_soporte'];
 
         $data['valor_acuse'] = $data['acuse'] * $data['precio_acuse'];
 
         $data['total_mensualidad'] = ($data['numero_equipos'] * $data['valor_principal'])
             + ($data['numero_moviles'] * $data['valor_movil'])
             + ($data['empleados'] * $data['valor_nomina'])
-            + $data['valor_terminal']
-            + $data['valor_terminal_recepcion'];
+            + $data['valor_terminal'];
 
         $data['valor_total_proforma'] = $data['total_mensualidad']
             + $data['valor_facturas']
             + $data['valor_documentos']
             + $data['valor_acuse']
-            + $data['otro_valor_extra'];
+            + $data['otro_valor_extra']
+            + $data['valor_terminal_recepcion'];
 
         return $data;
     }

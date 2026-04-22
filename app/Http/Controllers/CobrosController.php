@@ -146,23 +146,14 @@ class CobrosController extends Controller
         ]);
 
 
-        $precioFacturaCliente = (float) DB::table('clientes_potenciales')
+        $preciosCliente = DB::table('clientes_potenciales')
             ->where('idclientes_potenciales', $cobro->idclientes_potenciales ?? 0)
-            ->value('vlrfactura');
+            ->select(['vlrfactura', 'vlrsoporte', 'vlrecepcion'])
+            ->first();
 
-
-        if ($request->filled('precio_factura') && ($cobro->idclientes_potenciales ?? null) !== null) {
-            $precioFacturaCliente = (float) ($validated['precio_factura'] ?? 0);
-
-            DB::table('clientes_potenciales')
-                ->where('idclientes_potenciales', $cobro->idclientes_potenciales)
-                ->update([
-                    'vlrfactura' => $precioFacturaCliente,
-                ]);
-        }
-
-
-        $validated['precio_factura'] = $precioFacturaCliente;
+        $validated['precio_factura'] = (float) ($preciosCliente->vlrfactura ?? 0);
+        $validated['precio_soporte'] = (float) ($preciosCliente->vlrsoporte ?? 0);
+        $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
         $formData = $this->revisarProformaCalculator->calculate($validated);
         $accion = $validated['accion'] ?? 'guardar';
 
