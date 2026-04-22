@@ -146,19 +146,9 @@ class CobrosController extends Controller
         ]);
 
 
-        $precioFacturaCliente = array_key_exists('precio_factura', $validated)
-            ? (float) ($validated['precio_factura'] ?? 0)
-            : (float) DB::table('clientes_potenciales')
-                ->where('idclientes_potenciales', $cobro->idclientes_potenciales ?? 0)
-                ->value('vlrfactura');
-
-        if (array_key_exists('precio_factura', $validated) && ($cobro->idclientes_potenciales ?? null) !== null) {
-            DB::table('clientes_potenciales')
-                ->where('idclientes_potenciales', $cobro->idclientes_potenciales)
-                ->update([
-                    'vlrfactura' => $precioFacturaCliente,
-                ]);
-        }
+        $precioFacturaCliente = (float) DB::table('clientes_potenciales')
+            ->where('idclientes_potenciales', $cobro->idclientes_potenciales ?? 0)
+            ->value('vlrfactura');
 
 
         $validated['precio_factura'] = $precioFacturaCliente;
