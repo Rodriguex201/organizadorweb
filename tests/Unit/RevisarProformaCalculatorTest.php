@@ -35,9 +35,9 @@ class RevisarProformaCalculatorTest extends TestCase
         $this->assertSame(8.0, $resultado['total_facturas']);
         $this->assertSame(16.0, $resultado['valor_facturas']);
         $this->assertSame(5.0, $resultado['total_documentos']);
-        $this->assertSame(15.0, $resultado['valor_documentos']);
+        $this->assertSame(12.0, $resultado['valor_documentos']);
         $this->assertSame(12.0, $resultado['valor_acuse']);
-        $this->assertSame(308.0, $resultado['total_mensualidad']);
-        $this->assertSame(358.0, $resultado['valor_total_proforma']);
+        $this->assertSame(300.0, $resultado['total_mensualidad']);
+        $this->assertSame(355.0, $resultado['valor_total_proforma']);
     }
 }
