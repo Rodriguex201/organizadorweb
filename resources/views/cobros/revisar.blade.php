@@ -35,6 +35,8 @@
     <form method="POST" action="{{ route('cobros.revisar.guardar', $cobro->id_cobro) }}" class="space-y-6">
         @csrf
 
+        <input type="hidden" name="id_cliente" value="{{ $cobro->id_cliente }}">
+
         <section class="bg-white rounded-lg shadow p-5">
             <h2 class="text-lg font-semibold mb-4">a) Datos del cliente</h2>
             <dl class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
@@ -120,18 +122,6 @@
                 @endforeach
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <label class="block">
-                    <span class="text-slate-500">Precio factura (configuración cliente)</span>
-                    <input
-                        type="number"
-                        step="0.01"
-                        value="{{ (float) ($cobro->cliente_vlrfactura ?? 0) }}"
-                        readonly
-                        class="mt-1 w-full rounded border-slate-200 bg-slate-100 text-slate-700"
-                    >
-                </label>
-            </div>
 
             <div class="border-t pt-4">
                 <h3 class="font-semibold mb-3">Campos calculados (solo lectura)</h3>

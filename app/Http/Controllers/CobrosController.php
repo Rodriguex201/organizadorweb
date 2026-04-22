@@ -124,36 +124,49 @@ class CobrosController extends Controller
             throw new NotFoundHttpException('Cobro no encontrado.');
         }
 
-        $validated = $request->validate([
-            'numero_equipos' => ['nullable', 'numeric', 'min:0'],
-            'valor_principal' => ['nullable', 'numeric', 'min:0'],
-            'valor_terminal' => ['nullable', 'numeric', 'min:0'],
-            'empleados' => ['nullable', 'numeric', 'min:0'],
-            'valor_nomina' => ['nullable', 'numeric', 'min:0'],
-            'numero_moviles' => ['nullable', 'numeric', 'min:0'],
-            'valor_movil' => ['nullable', 'numeric', 'min:0'],
-            'facturas' => ['nullable', 'numeric', 'min:0'],
-            'nota_debito' => ['nullable', 'numeric', 'min:0'],
-            'nota_credito' => ['nullable', 'numeric', 'min:0'],
-            'soporte' => ['nullable', 'numeric', 'min:0'],
-            'nota_ajuste' => ['nullable', 'numeric', 'min:0'],
-            'acuse' => ['nullable', 'numeric', 'min:0'],
-            'otro_valor_extra' => ['nullable', 'numeric', 'min:0'],
-            'valor_terminal_recepcion' => ['nullable', 'numeric', 'min:0'],
-            'precio_soporte' => ['nullable', 'numeric', 'min:0'],
-            'precio_acuse' => ['nullable', 'numeric', 'min:0'],
-            'accion' => ['nullable', 'in:recalcular,guardar,generar'],
+$validated = $request->validate([
+    'numero_equipos' => ['nullable', 'numeric', 'min:0'],
+    'valor_principal' => ['nullable', 'numeric', 'min:0'],
+    'valor_terminal' => ['nullable', 'numeric', 'min:0'],
+    'empleados' => ['nullable', 'numeric', 'min:0'],
+    'valor_nomina' => ['nullable', 'numeric', 'min:0'],
+    'numero_moviles' => ['nullable', 'numeric', 'min:0'],
+    'valor_movil' => ['nullable', 'numeric', 'min:0'],
+    'facturas' => ['nullable', 'numeric', 'min:0'],
+    'nota_debito' => ['nullable', 'numeric', 'min:0'],
+    'nota_credito' => ['nullable', 'numeric', 'min:0'],
+    'soporte' => ['nullable', 'numeric', 'min:0'],
+    'nota_ajuste' => ['nullable', 'numeric', 'min:0'],
+    'acuse' => ['nullable', 'numeric', 'min:0'],
+    'otro_valor_extra' => ['nullable', 'numeric', 'min:0'],
+    'valor_terminal_recepcion' => ['nullable', 'numeric', 'min:0'],
+    'precio_factura' => ['nullable', 'numeric', 'min:0'],
+    'precio_soporte' => ['nullable', 'numeric', 'min:0'],
+    'precio_acuse' => ['nullable', 'numeric', 'min:0'],
+    'accion' => ['nullable', 'in:recalcular,guardar,generar'],
+]);
+
+$idCliente = $cobro->id_cliente ?? null;
+
+if ($request->filled('precio_factura') && $idCliente) {
+    DB::table('clientes_potenciales')
+        ->where('idclientes_potenciales', $idCliente)
+        ->update([
+            'vlrfactura' => (float) $request->input('precio_factura')
         ]);
+}
 
+$preciosCliente = DB::table('clientes_potenciales')
+    ->where('idclientes_potenciales', $idCliente ?? 0)
+    ->select(['vlrfactura', 'vlrsoporte', 'vlrecepcion'])
+    ->first();
 
-        $preciosCliente = DB::table('clientes_potenciales')
-            ->where('idclientes_potenciales', $cobro->idclientes_potenciales ?? 0)
-            ->select(['vlrfactura', 'vlrsoporte', 'vlrecepcion'])
-            ->first();
+$validated['precio_factura'] = $request->filled('precio_factura')
+    ? (float) $request->input('precio_factura')
+    : (float) ($preciosCliente->vlrfactura ?? 0);
 
-        $validated['precio_factura'] = (float) ($preciosCliente->vlrfactura ?? 0);
-        $validated['precio_soporte'] = (float) ($preciosCliente->vlrsoporte ?? 0);
-        $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
+$validated['precio_soporte'] = (float) ($preciosCliente->vlrsoporte ?? 0);
+$validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
         $formData = $this->revisarProformaCalculator->calculate($validated);
         $accion = $validated['accion'] ?? 'guardar';
 
