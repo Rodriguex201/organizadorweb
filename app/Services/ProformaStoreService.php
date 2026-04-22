@@ -51,9 +51,9 @@ class ProformaStoreService
         return $proforma ? (int) $proforma->id : null;
     }
 
-    public function storeFromCobro(object $cobro): array
+    public function storeFromCobro(object $cobro, array $extraConcepto = []): array
     {
-        return DB::transaction(function () use ($cobro) {
+        return DB::transaction(function () use ($cobro, $extraConcepto) {
             $preview = $this->proformaPreviewService->buildFromCobro($cobro);
 
             $nit = trim((string) ($cobro->cliente_nit ?? ''));
@@ -70,7 +70,10 @@ class ProformaStoreService
                 ->first();
 
             if ($proformaExistente !== null) {
-                $lineas = $preview['detalle']['lineas'] ?? [];
+                $lineas = $this->aplicarConceptoExtraPersonalizado(
+                    $preview['detalle']['lineas'] ?? [],
+                    $extraConcepto,
+                );
                 $this->actualizarCabeceraProformaExistente((int) $proformaExistente->id, $cobro, $preview);
                 $this->reemplazarDetalleProforma((int) $proformaExistente->id, $lineas);
                 $this->marcarCobroComoProformaGenerada((int) $cobro->id_cobro);
@@ -84,7 +87,10 @@ class ProformaStoreService
             }
 
             $nroProf = $this->resolverNumeroProforma($emisora, $anio);
-            $lineas = $preview['detalle']['lineas'] ?? [];
+            $lineas = $this->aplicarConceptoExtraPersonalizado(
+                $preview['detalle']['lineas'] ?? [],
+                $extraConcepto,
+            );
 
             $cabecera = [
                 'nit' => $nit,
@@ -261,8 +267,12 @@ class ProformaStoreService
 
             $detalleRows[] = [
                 'proforma_id' => $proformaId,
-                'ref_codigo' => $concepto['codigo'],
-                'descripcion' => $concepto['nombre'],
+                'ref_codigo' => trim((string) ($linea['codigo_mostrado'] ?? '')) !== ''
+                    ? trim((string) $linea['codigo_mostrado'])
+                    : $concepto['codigo'],
+                'descripcion' => trim((string) ($linea['descripcion_mostrada'] ?? '')) !== ''
+                    ? trim((string) $linea['descripcion_mostrada'])
+                    : $concepto['nombre'],
                 'cantidad' => (float) ($linea['cantidad'] ?? 0),
                 'vr_unidad' => (float) ($linea['valor_unitario'] ?? 0),
                 'vr_parcial' => (float) ($linea['valor_parcial'] ?? 0),
@@ -310,6 +320,34 @@ class ProformaStoreService
             'codigo' => $codigo,
             'nombre' => $descripcionFallback,
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $lineas
+     * @param array<string, mixed> $extraConcepto
+     * @return array<int, array<string, mixed>>
+     */
+    private function aplicarConceptoExtraPersonalizado(array $lineas, array $extraConcepto): array
+    {
+        $codigoExtra = trim((string) ($extraConcepto['codigo_concepto_extra'] ?? ''));
+        $descripcionExtra = trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? ''));
+
+        if ($codigoExtra === '' || $descripcionExtra === '') {
+            return $lineas;
+        }
+
+        foreach ($lineas as &$linea) {
+            if ((string) ($linea['codigo'] ?? '') !== 'EXTRA') {
+                continue;
+            }
+
+            $linea['codigo_mostrado'] = $codigoExtra;
+            $linea['descripcion_mostrada'] = $descripcionExtra;
+            break;
+        }
+        unset($linea);
+
+        return $lineas;
     }
 
 }
