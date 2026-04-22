@@ -146,6 +146,21 @@ class CobrosController extends Controller
             'accion' => ['nullable', 'in:recalcular,guardar,generar'],
         ]);
 
+        $precioFacturaCliente = array_key_exists('precio_factura', $validated)
+            ? (float) ($validated['precio_factura'] ?? 0)
+            : (float) DB::table('clientes_potenciales')
+                ->where('idclientes_potenciales', $cobro->idclientes_potenciales ?? 0)
+                ->value('vlrfactura');
+
+        if (array_key_exists('precio_factura', $validated) && ($cobro->idclientes_potenciales ?? null) !== null) {
+            DB::table('clientes_potenciales')
+                ->where('idclientes_potenciales', $cobro->idclientes_potenciales)
+                ->update([
+                    'vlrfactura' => $precioFacturaCliente,
+                ]);
+        }
+
+        $validated['precio_factura'] = $precioFacturaCliente;
         $formData = $this->revisarProformaCalculator->calculate($validated);
         $accion = $validated['accion'] ?? 'guardar';
 
@@ -177,7 +192,6 @@ class CobrosController extends Controller
             'acuse' => 'numero_acuse',
             'otro_valor_extra' => 'valor_extra',
             'valor_terminal_recepcion' => 'valor_extra2',
-            'precio_factura' => 'precio_factura',
             'precio_soporte' => 'precio_soporte',
             'precio_acuse' => 'precio_acuse',
             'total_facturas' => 'total_facturas',
@@ -283,7 +297,7 @@ class CobrosController extends Controller
             'acuse' => (float) ($cobro->numero_acuse ?? 0),
             'otro_valor_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra ?? null, $cobro->cliente_vlrextra ?? null),
             'valor_terminal_recepcion' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
-            'precio_factura' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_factura ?? null, $cobro->cliente_vlrfactura ?? null),
+            'precio_factura' => (float) ($cobro->cliente_vlrfactura ?? 0),
             'precio_soporte' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_soporte ?? null, $cobro->cliente_vlrsoporte ?? null),
             'precio_acuse' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_acuse ?? null, $cobro->cliente_vlrecepcion ?? null),
         ];
@@ -292,7 +306,6 @@ class CobrosController extends Controller
     private function existeRevisionGuardada(object $cobro): bool
     {
         $indicadores = [
-            $cobro->precio_factura ?? null,
             $cobro->precio_soporte ?? null,
             $cobro->precio_acuse ?? null,
             $cobro->total_facturas ?? null,
