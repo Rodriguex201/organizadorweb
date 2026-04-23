@@ -350,7 +350,9 @@ class ProformaStoreService
     {
         $valorExtra = (float) ($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? 0);
         $codigoExtra = trim((string) ($extraConcepto['codigo_concepto_extra'] ?? ''));
-        $descripcionExtra = trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? ''));
+
+        $descripcionExtra = strtoupper(trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? '')));
+
 
         if ($valorExtra <= 0) {
             return $lineas;
