@@ -165,7 +165,10 @@ class ProformaStoreService
     {
         DB::table('valores_externos')
             ->where('id_cobro', $idCobro)
-            ->update(['Proforma' => 2]);
+            ->update([
+                'Proforma' => 2,
+                'valor_extra' => 0,
+            ]);
     }
 
     private function resolveEmpresaCliente(object $cobro): ?string
