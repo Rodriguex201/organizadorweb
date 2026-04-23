@@ -144,6 +144,8 @@ $validated = $request->validate([
     'precio_soporte' => ['nullable', 'numeric', 'min:0'],
     'precio_acuse' => ['nullable', 'numeric', 'min:0'],
     'accion' => ['nullable', 'in:recalcular,guardar,generar'],
+    'codigo_concepto_extra' => ['nullable', 'string', 'max:100'],
+    'descripcion_concepto_extra' => ['nullable', 'string', 'max:500'],
 ]);
 
 $idCliente = $cobro->id_cliente ?? null;
@@ -169,6 +171,7 @@ $validated['precio_soporte'] = (float) ($preciosCliente->vlrsoporte ?? 0);
 $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
         $formData = $this->revisarProformaCalculator->calculate($validated);
         $accion = $validated['accion'] ?? 'guardar';
+        $valorExtra = (float) ($formData['otro_valor_extra'] ?? 0);
 
         if ($accion === 'recalcular') {
             $valores = DB::table('valores_externos')
@@ -225,8 +228,24 @@ $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
         }
 
         if ($accion === 'generar') {
+            if ($valorExtra > 0) {
+                $request->validate([
+                    'codigo_concepto_extra' => ['required', 'string', 'max:100'],
+                    'descripcion_concepto_extra' => ['required', 'string', 'max:500'],
+                ], [
+                    'codigo_concepto_extra.required' => 'El código del concepto extra es obligatorio cuando existe un cargo extra.',
+                    'descripcion_concepto_extra.required' => 'La descripción del concepto extra es obligatoria cuando existe un cargo extra.',
+                ]);
+            }
+
             $cobroActualizado = $this->cobrosService->findCobroById($id);
-            $resultado = $this->proformaStoreService->storeFromCobro($cobroActualizado ?: $cobro);
+            $resultado = $this->proformaStoreService->storeFromCobro(
+                $cobroActualizado ?: $cobro,
+                [
+                    'codigo_concepto_extra' => trim((string) $request->input('codigo_concepto_extra', '')),
+                    'descripcion_concepto_extra' => trim((string) $request->input('descripcion_concepto_extra', '')),
+                ],
+            );
 
             return redirect()
                 ->route('cobros.proforma.preview', $id)
