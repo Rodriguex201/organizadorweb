@@ -70,12 +70,14 @@ class ProformaStoreService
                 ->first();
 
             if ($proformaExistente !== null) {
+
                 $lineas = $this->garantizarLineaValorExtra(
                     $preview['detalle']['lineas'] ?? [],
                     $cobro,
                     $extraConcepto,
                 );
                 $totalPreview = $this->calcularTotalDesdeLineas($lineas);
+
                 $this->actualizarCabeceraProformaExistente((int) $proformaExistente->id, $cobro, $preview);
                 $this->actualizarTotalCabecera((int) $proformaExistente->id, $totalPreview);
                 $this->reemplazarDetalleProforma((int) $proformaExistente->id, $lineas);
@@ -90,12 +92,14 @@ class ProformaStoreService
             }
 
             $nroProf = $this->resolverNumeroProforma($emisora, $anio);
+
             $lineas = $this->garantizarLineaValorExtra(
                 $preview['detalle']['lineas'] ?? [],
                 $cobro,
                 $extraConcepto,
             );
             $totalPreview = $this->calcularTotalDesdeLineas($lineas);
+
 
             $cabecera = [
                 'nit' => $nit,
@@ -344,11 +348,14 @@ class ProformaStoreService
      * @param array<string, mixed> $extraConcepto
      * @return array<int, array<string, mixed>>
      */
+
     private function garantizarLineaValorExtra(array $lineas, object $cobro, array $extraConcepto): array
     {
         $valorExtra = (float) ($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? 0);
         $codigoExtra = trim((string) ($extraConcepto['codigo_concepto_extra'] ?? ''));
+
         $descripcionExtra = strtoupper(trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? '')));
+
 
         if ($valorExtra <= 0) {
             return $lineas;
@@ -356,17 +363,21 @@ class ProformaStoreService
 
         $indexLineaExtra = null;
         foreach ($lineas as $index => &$linea) {
+
             if ((string) ($linea['codigo'] ?? '') !== 'EXTRA') {
                 continue;
             }
+
 
             $indexLineaExtra = $index;
             $linea['cantidad'] = 1;
             $linea['valor_unitario'] = $valorExtra;
             $linea['valor_parcial'] = $valorExtra;
+
             break;
         }
         unset($linea);
+
 
         if ($indexLineaExtra === null) {
             $lineas[] = [
@@ -406,5 +417,6 @@ class ProformaStoreService
             0.0,
         );
     }
+
 
 }
