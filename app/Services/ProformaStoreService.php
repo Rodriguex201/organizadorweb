@@ -70,11 +70,16 @@ class ProformaStoreService
                 ->first();
 
             if ($proformaExistente !== null) {
-                $lineas = $this->aplicarConceptoExtraPersonalizado(
+
+                $lineas = $this->garantizarLineaValorExtra(
                     $preview['detalle']['lineas'] ?? [],
+                    $cobro,
                     $extraConcepto,
                 );
+                $totalPreview = $this->calcularTotalDesdeLineas($lineas);
+
                 $this->actualizarCabeceraProformaExistente((int) $proformaExistente->id, $cobro, $preview);
+                $this->actualizarTotalCabecera((int) $proformaExistente->id, $totalPreview);
                 $this->reemplazarDetalleProforma((int) $proformaExistente->id, $lineas);
                 $this->marcarCobroComoProformaGenerada((int) $cobro->id_cobro);
 
@@ -87,10 +92,14 @@ class ProformaStoreService
             }
 
             $nroProf = $this->resolverNumeroProforma($emisora, $anio);
-            $lineas = $this->aplicarConceptoExtraPersonalizado(
+
+            $lineas = $this->garantizarLineaValorExtra(
                 $preview['detalle']['lineas'] ?? [],
+                $cobro,
                 $extraConcepto,
             );
+            $totalPreview = $this->calcularTotalDesdeLineas($lineas);
+
 
             $cabecera = [
                 'nit' => $nit,
@@ -108,7 +117,7 @@ class ProformaStoreService
                 'vlr_sop' => (float) ($cobro->valor_documentos ?? 0),
                 'vext1' => (float) ($cobro->cliente_vlrextra ?? 0),
                 'vext2' => (float) ($cobro->cliente_vlrextra2 ?? 0),
-                'vtotal' => (float) ($preview['detalle']['total_preview'] ?? 0),
+                'vtotal' => $totalPreview,
                 'cfe' => (float) ($cobro->numero_facturas ?? 0),
                 'csop' => (float) ($cobro->numero_documento_soporte ?? 0),
                 'crec' => (float) ($cobro->numero_acuse ?? 0),
@@ -228,6 +237,15 @@ class ProformaStoreService
             ]);
     }
 
+    private function actualizarTotalCabecera(int $proformaId, float $totalPreview): void
+    {
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update([
+                'vtotal' => $totalPreview,
+            ]);
+    }
+
     /**
      * @param array<int, array<string, mixed>> $lineas
      */
@@ -327,27 +345,73 @@ class ProformaStoreService
      * @param array<string, mixed> $extraConcepto
      * @return array<int, array<string, mixed>>
      */
-    private function aplicarConceptoExtraPersonalizado(array $lineas, array $extraConcepto): array
+
+    private function garantizarLineaValorExtra(array $lineas, object $cobro, array $extraConcepto): array
     {
+        $valorExtra = (float) ($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? 0);
         $codigoExtra = trim((string) ($extraConcepto['codigo_concepto_extra'] ?? ''));
         $descripcionExtra = trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? ''));
 
-        if ($codigoExtra === '' || $descripcionExtra === '') {
+        if ($valorExtra <= 0) {
             return $lineas;
         }
 
-        foreach ($lineas as &$linea) {
+        $indexLineaExtra = null;
+        foreach ($lineas as $index => &$linea) {
+
             if ((string) ($linea['codigo'] ?? '') !== 'EXTRA') {
                 continue;
             }
 
-            $linea['codigo_mostrado'] = $codigoExtra;
-            $linea['descripcion_mostrada'] = $descripcionExtra;
+
+            $indexLineaExtra = $index;
+            $linea['cantidad'] = 1;
+            $linea['valor_unitario'] = $valorExtra;
+            $linea['valor_parcial'] = $valorExtra;
+
             break;
         }
         unset($linea);
 
+
+        if ($indexLineaExtra === null) {
+            $lineas[] = [
+                'codigo' => 'EXTRA',
+                'concepto' => 'Cargo extra manual',
+                'cantidad' => 1,
+                'valor_unitario' => $valorExtra,
+                'valor_parcial' => $valorExtra,
+            ];
+        }
+
+        $ultimaPosicion = array_key_last($lineas);
+        if ($ultimaPosicion !== null && (string) ($lineas[$ultimaPosicion]['codigo'] ?? '') === 'EXTRA' && $indexLineaExtra === null) {
+            $indexLineaExtra = $ultimaPosicion;
+        }
+
+        if ($indexLineaExtra !== null) {
+            if ($codigoExtra !== '') {
+                $lineas[$indexLineaExtra]['codigo_mostrado'] = $codigoExtra;
+            }
+            if ($descripcionExtra !== '') {
+                $lineas[$indexLineaExtra]['descripcion_mostrada'] = $descripcionExtra;
+            }
+        }
+
         return $lineas;
     }
+
+    /**
+     * @param array<int, array<string, mixed>> $lineas
+     */
+    private function calcularTotalDesdeLineas(array $lineas): float
+    {
+        return (float) array_reduce(
+            $lineas,
+            fn (float $acumulado, array $linea) => $acumulado + (float) ($linea['valor_parcial'] ?? 0),
+            0.0,
+        );
+    }
+
 
 }

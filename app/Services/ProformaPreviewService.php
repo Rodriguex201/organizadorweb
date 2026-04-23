@@ -119,11 +119,11 @@ class ProformaPreviewService
             );
         }
 
-        $valorExtra = $this->toFloat($cobro->cliente_vlrextra ?? null);
+        $valorExtra = $this->toFloat($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? null);
         if ($valorExtra > 0) {
             $lineas[] = new LineaProforma(
                 codigo: 'EXTRA',
-                concepto: 'CARGO EXTRA',
+                concepto: 'Cargo extra manual',
                 cantidad: 1,
                 valorUnitario: $valorExtra,
             );
@@ -172,7 +172,7 @@ class ProformaPreviewService
             + $this->toFloat($cobro->valor_facturas ?? null)
             + $this->toFloat($cobro->valor_documentos ?? null)
             + $this->toFloat($cobro->valor_acuse ?? null)
-            + $this->toFloat($cobro->cliente_vlrextra ?? null);
+            + $this->toFloat($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? null);
             // + $this->toFloat($cobro->cliente_vlrextra2 ?? null); // Pendiente código oficial.
     }
 
