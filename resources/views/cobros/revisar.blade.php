@@ -32,10 +32,12 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('cobros.revisar.guardar', $cobro->id_cobro) }}" class="space-y-6">
+    <form id="revisionProformaForm" method="POST" action="{{ route('cobros.revisar.guardar', $cobro->id_cobro) }}" class="space-y-6">
         @csrf
 
         <input type="hidden" name="id_cliente" value="{{ $cobro->id_cliente }}">
+        <input type="hidden" name="codigo_concepto_extra" id="codigoConceptoExtraHidden" value="{{ old('codigo_concepto_extra') }}">
+        <input type="hidden" name="descripcion_concepto_extra" id="descripcionConceptoExtraHidden" value="{{ old('descripcion_concepto_extra') }}">
 
         <section class="bg-white rounded-lg shadow p-5">
             <h2 class="text-lg font-semibold mb-4">a) Datos del cliente</h2>
@@ -151,7 +153,7 @@
                 <button type="submit" name="accion" value="guardar" class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
                     Guardar revisión
                 </button>
-                <button type="submit" name="accion" value="generar" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                <button type="submit" name="accion" value="generar" id="btnGenerarProforma" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
                     Generar proforma
                 </button>
                 <span class="inline-flex items-center rounded bg-amber-100 px-3 py-2 text-xs text-amber-700">Envío por correo: pendiente para siguiente fase.</span>
@@ -159,4 +161,109 @@
         </section>
     </form>
 </div>
+
+<div id="conceptoExtraModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 px-4" aria-hidden="true">
+    <div class="w-full max-w-lg rounded-lg bg-white shadow-xl">
+        <div class="border-b px-5 py-4">
+            <h3 class="text-lg font-semibold text-slate-900">Información adicional para valor extra</h3>
+            <p class="mt-1 text-sm text-slate-600">Debes ingresar el código y la descripción del concepto antes de generar la proforma.</p>
+        </div>
+        <div class="space-y-4 px-5 py-4">
+            <label class="block text-sm">
+                <span class="text-slate-600">Código concepto</span>
+                <input id="codigoConceptoExtraInput" type="text" class="mt-1 w-full rounded border-slate-300 focus:border-indigo-500 focus:ring-indigo-500" maxlength="100">
+            </label>
+            <label class="block text-sm">
+                <span class="text-slate-600">Descripción concepto</span>
+                <textarea id="descripcionConceptoExtraInput" rows="4" class="mt-1 w-full rounded border-slate-300 focus:border-indigo-500 focus:ring-indigo-500" maxlength="500"></textarea>
+            </label>
+        </div>
+        <div class="flex justify-end gap-3 border-t px-5 py-4">
+            <button type="button" id="cancelarConceptoExtraModal" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
+                Cancelar
+            </button>
+            <button type="button" id="confirmarConceptoExtraModal" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                Confirmar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('revisionProformaForm');
+    const modal = document.getElementById('conceptoExtraModal');
+    const codigoInput = document.getElementById('codigoConceptoExtraInput');
+    const descripcionInput = document.getElementById('descripcionConceptoExtraInput');
+    const codigoHidden = document.getElementById('codigoConceptoExtraHidden');
+    const descripcionHidden = document.getElementById('descripcionConceptoExtraHidden');
+    const confirmarBtn = document.getElementById('confirmarConceptoExtraModal');
+    const cancelarBtn = document.getElementById('cancelarConceptoExtraModal');
+
+    let permitirEnvioGenerar = false;
+
+    if (!form || !modal || !codigoInput || !descripcionInput || !codigoHidden || !descripcionHidden || !confirmarBtn || !cancelarBtn) {
+        return;
+    }
+
+    const abrirModal = function () {
+        codigoInput.value = codigoHidden.value || '';
+        descripcionInput.value = descripcionHidden.value || '';
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        modal.setAttribute('aria-hidden', 'false');
+        codigoInput.focus();
+    };
+
+    const cerrarModal = function () {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.setAttribute('aria-hidden', 'true');
+    };
+
+    form.addEventListener('submit', function (event) {
+        const accion = event.submitter?.value;
+
+        if (accion !== 'generar' || permitirEnvioGenerar) {
+            return;
+        }
+
+        const valorExtraInput = form.querySelector('input[name="otro_valor_extra"]');
+        const valorExtra = parseFloat(valorExtraInput ? valorExtraInput.value : '0') || 0;
+
+        if (valorExtra <= 0) {
+            return;
+        }
+
+        event.preventDefault();
+        abrirModal();
+    });
+
+    confirmarBtn.addEventListener('click', function () {
+        const codigo = codigoInput.value.trim();
+        const descripcion = descripcionInput.value.trim();
+
+        if (!codigo || !descripcion) {
+            alert('Debes ingresar código y descripción del concepto para continuar.');
+            return;
+        }
+
+        codigoHidden.value = codigo;
+        descripcionHidden.value = descripcion;
+        permitirEnvioGenerar = true;
+        cerrarModal();
+        form.requestSubmit(document.getElementById('btnGenerarProforma'));
+    });
+
+    cancelarBtn.addEventListener('click', function () {
+        cerrarModal();
+    });
+
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+            cerrarModal();
+        }
+    });
+});
+</script>
 @endsection
