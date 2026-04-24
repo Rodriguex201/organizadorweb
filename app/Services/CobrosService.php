@@ -221,14 +221,11 @@ class CobrosService
             ]);
 
         $mesNormalizado = $this->normalizarMes($filters['mes'] ?? null);
+        $proforma = $this->normalizarProforma($filters['proforma'] ?? null);
 
-        return $query
+        $query
             ->when($mesNormalizado, fn ($q, $mes) => $q->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes]))
             ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->whereRaw('ve.`año` = ?', [(int) $anio]))
-            ->when(
-                $this->normalizarProforma($filters['proforma'] ?? null),
-                fn ($q, $proforma) => $q->whereRaw('ve.`Proforma` = ?', [$proforma]),
-            )
             ->when(
                 $this->normalizarBuscar($filters['buscar'] ?? null),
                 fn ($q, $buscar) => $q->where(function ($subQuery) use ($buscar) {
@@ -269,6 +266,11 @@ class CobrosService
                 },
             );
 
+        if (!is_null($proforma)) {
+            $query->whereRaw('ve.`Proforma` = ?', [$proforma]);
+        }
+
+        return $query;
     }
 
     private function ordenMesSql(): string
