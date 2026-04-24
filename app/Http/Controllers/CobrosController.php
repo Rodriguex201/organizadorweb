@@ -53,7 +53,9 @@ class CobrosController extends Controller
         $filters = [
             'mes' => $periodo['mes'],
             'anio' => $periodo['anio'],
-            'proforma' => $validated['proforma'] ?? null,
+            'proforma' => $request->filled('proforma')
+            ? ($validated['proforma'] ?? null)
+            : null,
             'buscar' => $validated['buscar'] ?? null,
             'orden_fecha' => $validated['orden_fecha'] ?? null,
             'grupo_fecha' => $validated['grupo_fecha'] ?? null,
@@ -61,10 +63,8 @@ class CobrosController extends Controller
         ];
 
 
-        if ($request->boolean('debug')) {
-            dd($this->cobrosService->debugSnapshot($filters));
-        }
-
+        // 👇 AQUÍ
+        dd($filters);
 
         $cobros = $this->cobrosService->paginateCobros($filters);
 
