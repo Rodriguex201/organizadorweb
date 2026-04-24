@@ -27,55 +27,41 @@ class CobrosController extends Controller
     ) {
     }
 
-    public function index(Request $request): View
-    {
+public function index(Request $request): View
+{
+    $validated = $request->validate([
+        'mes' => ['nullable', 'string', 'max:20'],
+        'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+        'ano' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+        'proforma' => ['nullable', 'string', 'max:100'],
+        'buscar' => ['nullable', 'string', 'max:100'],
+        'orden_fecha' => ['nullable', 'in:asc,desc'],
+        'grupo_fecha' => ['nullable', 'in:7,27'],
+        'filtro_nota' => ['nullable', 'in:con,sin'],
+        'debug' => ['nullable'],
+    ]);
 
-        $validated = $request->validate([
-            'mes' => ['nullable', 'string', 'max:20'],
-            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
-            'ano' => ['nullable', 'integer', 'min:1900', 'max:9999'],
-            'proforma' => ['nullable', 'string', 'max:100'],
-            'buscar' => ['nullable', 'string', 'max:100'],
-            'orden_fecha' => ['nullable', 'in:asc,desc'],
-            'grupo_fecha' => ['nullable', 'in:7,27'],
-            'filtro_nota' => ['nullable', 'in:con,sin'],
-            'debug' => ['nullable'],
-        ]);
-
-
-        $mes = $request->exists('mes') ? ($validated['mes'] ?? null) : null;
-        $anio = $request->exists('anio')
-            ? ($validated['anio'] ?? null)
-            : ($request->exists('ano') ? ($validated['ano'] ?? null) : null);
-
-        $periodo = $this->cobrosService->normalizePeriodoFilters($mes, $anio);
-
-        $filters = [
-            'mes' => $periodo['mes'],
-            'anio' => $periodo['anio'],
-            'proforma' => $request->filled('proforma')
-            ? ($validated['proforma'] ?? null)
-            : null,
-            'buscar' => $validated['buscar'] ?? null,
-            'orden_fecha' => $validated['orden_fecha'] ?? null,
-            'grupo_fecha' => $validated['grupo_fecha'] ?? null,
-            'filtro_nota' => $validated['filtro_nota'] ?? null,
-        ];
+    // 🔥 SOLO ESTE FILTER
+$filters = [
+    'mes' => isset($validated['mes']) ? strtolower(trim($validated['mes'])) : null,
+    'anio' => isset($validated['anio']) ? (int)$validated['anio'] : null,
+    'proforma' => $request->filled('proforma') ? $validated['proforma'] : null,
+    'buscar' => $validated['buscar'] ?? null,
+    'orden_fecha' => $validated['orden_fecha'] ?? null,
+    'grupo_fecha' => $validated['grupo_fecha'] ?? null,
+    'filtro_nota' => $validated['filtro_nota'] ?? null,
+];
 
 
-        // 👇 AQUÍ
-        dd($filters);
 
-        $cobros = $this->cobrosService->paginateCobros($filters);
+    $cobros = $this->cobrosService->paginateCobros($filters);
 
-        return view('cobros.index', [
-            'cobros' => $cobros,
-            'filters' => $filters,
-
-            'meses' => CobrosService::MESES,
-
-        ]);
-    }
+    return view('cobros.index', [
+        'cobros' => $cobros,
+        'filters' => $filters,
+        'meses' => $this->cobrosService::MESES,
+    ]);
+}
 
     public function show(int $id): View
     {

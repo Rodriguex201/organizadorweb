@@ -40,17 +40,17 @@ class CobrosService
 
             $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
 
-            return $query
-                ->when(
-                    $ordenFecha,
-                    fn ($q, $direccion) => $q->orderBy('cp.fecha_arriendo', $direccion),
-                    fn ($q) => $q
-                        ->orderByDesc('ve.año')
-                        ->orderByRaw($this->ordenMesSql() . ' DESC')
-                        ->orderByDesc('ve.id_cobro'),
-                )
-                ->paginate($perPage)
-                ->withQueryString();
+return $query
+    ->when(
+        $ordenFecha,
+        fn ($q, $direccion) => $q->orderBy('cp.fecha_arriendo', $direccion),
+        fn ($q) => $q
+            ->orderByRaw('ve.`año` DESC')
+            ->orderByRaw($this->ordenMesSql() . ' DESC')
+            ->orderByDesc('ve.id_cobro'),
+    )
+    ->paginate($perPage)
+    ->withQueryString();
         } catch (QueryException) {
             return new Paginator(
                 items: [],
@@ -205,73 +205,73 @@ class CobrosService
         ];
     }
 
-    private function buildCobrosQuery(array $filters)
-    {
-        $query = DB::table('valores_externos as ve')
-            ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
-            ->select([
-                've.id_cobro',
-                'cp.idclientes_potenciales as cliente_id',
-                'cp.fecha_arriendo',
-                'cp.codigo',
-                'cp.nombre',
-                'cp.regimen',
-                'cp.nota_cobro',
-                DB::raw('ve.`valor_total` as valor_total'),
-            ]);
+private function buildCobrosQuery(array $filters)
+{
+    $filters = array_map(function ($value) {
+        return $value === '' ? null : $value;
+    }, $filters);
 
-        $mesNormalizado = $this->normalizarMes($filters['mes'] ?? null);
-        $proforma = $this->normalizarProforma($filters['proforma'] ?? null);
+    $query = DB::table('valores_externos as ve')
+        ->leftJoin(
+            'clientes_potenciales as cp',
+            've.id_cliente',
+            '=',
+            'cp.idclientes_potenciales'
+        )
+        ->select([
+            've.id_cobro',
+            've.id_cliente',
+            've.valor_total',
 
-        $query
-            ->when($mesNormalizado, fn ($q, $mes) => $q->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes]))
-            ->when($filters['anio'] ?? null, fn ($q, $anio) => $q->whereRaw('ve.`año` = ?', [(int) $anio]))
-            ->when(
-                $this->normalizarBuscar($filters['buscar'] ?? null),
-                fn ($q, $buscar) => $q->where(function ($subQuery) use ($buscar) {
-                    $subQuery
-                        ->where('cp.nombre', 'like', "%{$buscar}%")
-                        ->orWhere('cp.codigo', 'like', "%{$buscar}%")
-                        ->orWhere('cp.empresa', 'like', "%{$buscar}%");
-                }),
-            )
-            ->when(
-                $this->normalizarGrupoFecha($filters['grupo_fecha'] ?? null),
-                function ($q, int $grupoFecha) {
-                    $diaArriendo = "CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED)";
+            'cp.idclientes_potenciales as cliente_id',
+            'cp.fecha_arriendo',
+            'cp.codigo',
+            'cp.nombre',
+            'cp.regimen',
+            'cp.nota_cobro',
+        ]);
 
-                    if ($grupoFecha === 7) {
-                        $q->whereRaw("{$diaArriendo} BETWEEN 1 AND 12");
-
-                        return;
-                    }
-
-                    if ($grupoFecha === 27) {
-                        $q->whereRaw("{$diaArriendo} BETWEEN 22 AND 31");
-                    }
-                },
-            )
-            ->when(
-                $this->normalizarFiltroNota($filters['filtro_nota'] ?? null),
-                function ($q, string $filtroNota) {
-                    if ($filtroNota === 'con') {
-                        $q->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) <> ''");
-
-                        return;
-                    }
-
-                    if ($filtroNota === 'sin') {
-                        $q->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) = ''");
-                    }
-                },
-            );
-
-        if (!is_null($proforma)) {
-            $query->whereRaw('ve.`Proforma` = ?', [$proforma]);
-        }
-
-        return $query;
+    // 🔥 FILTRO MES
+    if (!empty($filters['mes'])) {
+        $query->whereRaw('LOWER(TRIM(ve.mes)) = ?', [strtolower(trim($filters['mes']))]);
     }
+
+    // 🔥 FILTRO AÑO
+if (!empty($filters['anio'])) {
+    $query->where('ve.año', (string)$filters['anio']);
+}
+
+    // 🔥 FILTRO PROFORMA
+    if (!is_null($filters['proforma'])) {
+        $query->where('ve.Proforma', $filters['proforma']);
+    }
+
+    // 🔥 BUSCAR
+    if (!empty($filters['buscar'])) {
+        $buscar = '%' . strtolower($filters['buscar']) . '%';
+
+        $query->where(function ($q) use ($buscar) {
+            $q->whereRaw('LOWER(cp.nombre) LIKE ?', [$buscar])
+              ->orWhereRaw('LOWER(cp.codigo) LIKE ?', [$buscar]);
+        });
+    }
+
+    // 🔥 GRUPO FECHA
+    if (!empty($filters['grupo_fecha'])) {
+        $query->where('cp.fecha_arriendo', $filters['grupo_fecha']);
+    }
+
+    // 🔥 FILTRO NOTA
+    if (!empty($filters['filtro_nota'])) {
+        if ($filters['filtro_nota'] === 'con') {
+            $query->whereNotNull('cp.nota_cobro');
+        } elseif ($filters['filtro_nota'] === 'sin') {
+            $query->whereNull('cp.nota_cobro');
+        }
+    }
+
+    return $query;
+}
 
     private function ordenMesSql(): string
     {
