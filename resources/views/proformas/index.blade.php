@@ -262,6 +262,7 @@
 <script>
     (() => {
         const ESTADO_GENERADA = {{ \App\Services\ProformasService::ESTADO_GENERADA }};
+        const ESTADO_ENVIADA = {{ \App\Services\ProformasService::ESTADO_ENVIADA }};
         const ESTADO_PAGADA = {{ \App\Services\ProformasService::ESTADO_PAGADA }};
         const ESTADO_FACTURADA = {{ \App\Services\ProformasService::ESTADO_FACTURADA }};
         const csrfToken = @json(csrf_token());
@@ -357,7 +358,7 @@
                 acciones.push({ type: 'link', label: 'Ver PDF', url: pdfUrl });
             }
 
-            if (estadoActual === ESTADO_GENERADA) {
+            if (estadoActual === ESTADO_GENERADA || estadoActual === ESTADO_ENVIADA) {
                 acciones.push({ type: 'estado', estado: ESTADO_PAGADA, label: 'Marcar pagada' });
             }
 
