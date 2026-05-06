@@ -136,11 +136,18 @@
 </script>
 
 <script>
-    window.addEventListener("pageshow", function (event) {
-        if (event.persisted) {
-            window.location.reload();
+document.addEventListener("DOMContentLoaded", function () {
+    // 🔥 Detecta si vienes desde otra vista (no desde submit)
+    const nav = performance.getEntriesByType("navigation")[0];
+
+    if (nav?.type === "navigate") {
+        const form = document.querySelector("form");
+
+        if (form) {
+            form.reset(); // 🔥 limpia inputs
         }
-    });
+    }
+});
 </script>
 
 @stack('scripts')

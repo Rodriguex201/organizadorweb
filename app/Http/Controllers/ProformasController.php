@@ -297,9 +297,11 @@ public function show(int $id): View
         }
 
 
-        if (!$this->proformasService->canSendProforma($proforma)) {
-            return redirect()->back()->with('status', 'Primero debe generar la proforma antes de enviarla')->with('status_type', 'error');
-        }
+            if (!$this->proformasService->canSendProforma($proforma)) {
+                return redirect()->back()
+                    ->with('status', 'Primero debe generar la proforma antes de enviarla')
+                    ->with('status_type', 'error');
+            }
 
         try {
             $this->proformaEmailService->sendProforma($proforma);

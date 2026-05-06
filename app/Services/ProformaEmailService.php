@@ -12,6 +12,7 @@ class ProformaEmailService
     public function sendProforma(object $proforma): void
     {
         $clienteEmail = $this->resolveClienteEmail($proforma);
+
         if ($clienteEmail === null) {
             throw new RuntimeException('El cliente no tiene un correo registrado en clientes_potenciales.email.');
         }
@@ -56,22 +57,40 @@ class ProformaEmailService
         }
     }
 
-    private function resolveClienteEmail(object $proforma): ?string
-    {
-        $nit = trim((string) ($proforma->nit ?? ''));
-        if ($nit === '') {
-            return null;
+private function resolveClienteEmail(object $proforma): ?string
+{
+    // 🔥 primero intentar por id_cliente
+    if (!empty($proforma->id_cliente)) {
+
+        $email = DB::table('clientes_potenciales')
+            ->where('idclientes_potenciales', $proforma->id_cliente)
+            ->value('email');
+
+        $email = trim((string) $email);
+
+        if ($email !== '') {
+            return $email;
         }
-
-        $cliente = DB::table('clientes_potenciales')
-            ->select(['email'])
-            ->where('nit', $nit)
-            ->first();
-
-        $email = trim((string) ($cliente->email ?? ''));
-
-        return $email !== '' ? $email : null;
     }
+
+    // 🔥 fallback por NIT
+    $nit = trim((string) ($proforma->nit ?? ''));
+
+    if ($nit !== '') {
+
+        $email = DB::table('clientes_potenciales')
+            ->where('nit', $nit)
+            ->value('email');
+
+        $email = trim((string) $email);
+
+        if ($email !== '') {
+            return $email;
+        }
+    }
+
+    return null;
+}
 
     /**
      * @return array{filename:string,contents:string}

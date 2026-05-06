@@ -54,7 +54,7 @@
             </div>
             <div>
                 <label for="empresa" class="mb-1 block text-sm font-medium">Empresa</label>
-                <input id="empresa" name="empresa" value="{{ request('empresa', session('proformas.empresa')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="empresa" name="empresa" value="{{ request('empresa') }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="emisora" class="mb-1 block text-sm font-medium">Emisora</label>
