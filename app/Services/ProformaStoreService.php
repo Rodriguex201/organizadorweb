@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ProformaStoreService
 {
@@ -128,6 +129,10 @@ class ProformaStoreService
                 'hpdf' => null,
             ];
 
+            if (Schema::hasColumn('sg_proform', 'id_cobro')) {
+                $cabecera['id_cobro'] = (int) ($cobro->id_cobro ?? 0) ?: null;
+            }
+
             $proformaId = (int) DB::table('sg_proform')->insertGetId($cabecera);
 
             $detalleRows = $this->construirDetalleRows($proformaId, $lineas);
@@ -221,23 +226,29 @@ class ProformaStoreService
 
     private function actualizarCabeceraProformaExistente(int $proformaId, object $cobro, array $preview): void
     {
+        $payload = [
+            'emp' => $this->resolveEmpresaCliente($cobro),
+            'vlr_mens' => (float) ($cobro->valor_mensualidad ?? 0),
+            'vlr_nom' => (float) ($cobro->vlrnomina ?? 0),
+            'vlr_fe' => (float) ($cobro->valor_facturas ?? 0),
+            'vlr_rec' => (float) ($cobro->valor_acuse ?? 0),
+            'vlr_sop' => (float) ($cobro->valor_documentos ?? 0),
+            'vext1' => (float) ($cobro->cliente_vlrextra ?? 0),
+            'vext2' => (float) ($cobro->cliente_vlrextra2 ?? 0),
+            'vtotal' => (float) ($preview['detalle']['total_preview'] ?? 0),
+            'cfe' => (float) ($cobro->numero_facturas ?? 0),
+            'csop' => (float) ($cobro->numero_documento_soporte ?? 0),
+            'crec' => (float) ($cobro->numero_acuse ?? 0),
+            'cnom' => (float) (($cobro->vlrnomina ?? 0) > 0 ? 1 : 0),
+        ];
+
+        if (Schema::hasColumn('sg_proform', 'id_cobro')) {
+            $payload['id_cobro'] = (int) ($cobro->id_cobro ?? 0) ?: null;
+        }
+
         DB::table('sg_proform')
             ->where('id', $proformaId)
-            ->update([
-                'emp' => $this->resolveEmpresaCliente($cobro),
-                'vlr_mens' => (float) ($cobro->valor_mensualidad ?? 0),
-                'vlr_nom' => (float) ($cobro->vlrnomina ?? 0),
-                'vlr_fe' => (float) ($cobro->valor_facturas ?? 0),
-                'vlr_rec' => (float) ($cobro->valor_acuse ?? 0),
-                'vlr_sop' => (float) ($cobro->valor_documentos ?? 0),
-                'vext1' => (float) ($cobro->cliente_vlrextra ?? 0),
-                'vext2' => (float) ($cobro->cliente_vlrextra2 ?? 0),
-                'vtotal' => (float) ($preview['detalle']['total_preview'] ?? 0),
-                'cfe' => (float) ($cobro->numero_facturas ?? 0),
-                'csop' => (float) ($cobro->numero_documento_soporte ?? 0),
-                'crec' => (float) ($cobro->numero_acuse ?? 0),
-                'cnom' => (float) (($cobro->vlrnomina ?? 0) > 0 ? 1 : 0),
-            ]);
+            ->update($payload);
     }
 
     private function actualizarTotalCabecera(int $proformaId, float $totalPreview): void

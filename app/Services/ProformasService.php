@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -41,15 +42,35 @@ class ProformasService
     public function paginateProformas(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $query = DB::table('sg_proform as p')
+            ->select([
+                'p.id',
+                'p.nro_prof',
+                'p.emp',
+                'p.nit',
+                'p.emisora',
+                'p.mes',
+                'p.anio',
+                'p.vtotal',
+                'p.estado',
+                'p.rpdf',
+                'p.npdf',
+                'p.hpdf',
+                'p.enviado',
+                'p.fecha_envio',
+                'p.intentos_envio',
+            ])
+            ->selectSub($this->buildClienteCodigoSubquery(), 'codigo')
+            ->selectSub($this->buildClienteIdSubquery(), 'id_cliente')
+            ->selectSub($this->buildClientePotencialIdSubquery(), 'cliente_potencial_id');
 
-            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])
-            ->selectSub(function ($subquery) {
-                $subquery
-                    ->from('clientes_potenciales as cp')
-                    ->select('cp.codigo')
-                    ->whereRaw('BINARY cp.nit = BINARY p.nit')
-                    ->limit(1);
-            }, 'codigo');
+        if ($this->shouldLogCodigoJoinDebug()) {
+            $query
+                ->selectSub($this->buildClienteDebugSubquery('ve.id_cobro'), 'codigo_debug_id_cobro')
+                ->selectSub($this->buildClienteDebugSubquery('ve.id_cliente'), 'codigo_debug_id_cliente')
+                ->selectSub($this->buildClienteDebugSubquery('cp.idclientes_potenciales'), 'codigo_debug_cliente_id')
+                ->selectSub($this->buildClienteDebugSubquery('cp.codigo'), 'codigo_debug_cliente_codigo')
+                ->selectSub($this->buildClienteDebugSubquery('cp.nit'), 'codigo_debug_cliente_nit');
+        }
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
         $codigo = trim((string) ($filters['codigo'] ?? ''));
@@ -60,17 +81,15 @@ class ProformasService
         $anio = $this->normalizarEntero($filters['anio'] ?? null);
         $mes = $this->normalizarMes($filters['mes'] ?? null);
 
-        return $query
+        $paginator = $query
             ->when($nroProf !== '', fn ($q) => $q->where('p.nro_prof', 'like', "%{$nroProf}%"))
 
             ->when($codigo !== '', function ($q) use ($codigo) {
-                $q->whereExists(function ($subquery) use ($codigo) {
-                    $subquery
+                $q->whereExists(
+                    $this->buildClienteRelacionSubquery()
                         ->select(DB::raw(1))
-                        ->from('clientes_potenciales as cp')
-                        ->whereRaw('BINARY cp.nit = BINARY p.nit')
-                        ->where('cp.codigo', 'like', "%{$codigo}%");
-                });
+                        ->where('cp.codigo', 'like', "%{$codigo}%")
+                );
             })
 
             ->when($nit !== '', fn ($q) => $q->where('p.nit', 'like', "%{$nit}%"))
@@ -81,6 +100,10 @@ class ProformasService
             ->when($mes !== null, fn ($q) => $q->where('p.mes', $mes))
             ->orderByDesc('p.anio')->orderByDesc('p.mes')->orderByDesc('p.id')
             ->paginate($perPage)->withQueryString();
+
+        $this->logCodigoJoinDebug($paginator);
+
+        return $paginator;
     }
 
     public function getDashboardData(int $mes, int $anio): array
@@ -123,7 +146,13 @@ class ProformasService
 
     public function findProformaById(int $id): ?object
     {
-        return DB::table('sg_proform as p')->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])->where('p.id', $id)->first();
+        return DB::table('sg_proform as p')
+            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])
+            ->selectSub($this->buildClienteCodigoSubquery(), 'codigo')
+            ->selectSub($this->buildClienteIdSubquery(), 'id_cliente')
+            ->selectSub($this->buildClientePotencialIdSubquery(), 'cliente_potencial_id')
+            ->where('p.id', $id)
+            ->first();
     }
 
     public function canSendProforma(null|object $proforma): bool
@@ -411,5 +440,140 @@ class ProformasService
         }
 
         return null;
+    }
+
+    private function buildClienteCodigoSubquery()
+    {
+        return $this->buildClienteRelacionSubquery()
+            ->select('cp.codigo')
+            ->whereRaw("TRIM(COALESCE(cp.codigo, '')) <> ''")
+            ->limit(1);
+    }
+
+    private function buildClienteIdSubquery()
+    {
+        return $this->buildClienteRelacionSubquery()
+            ->selectRaw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)')
+            ->limit(1);
+    }
+
+    private function buildClientePotencialIdSubquery()
+    {
+        return $this->buildClienteRelacionSubquery()
+            ->select('cp.idclientes_potenciales')
+            ->limit(1);
+    }
+
+    private function buildClienteDebugSubquery(string $column)
+    {
+        return $this->buildClienteRelacionSubquery()
+            ->selectRaw($column)
+            ->limit(1);
+    }
+
+    private function buildClienteRelacionSubquery()
+    {
+        return DB::table('valores_externos as ve')
+            ->leftJoin('clientes_potenciales as cp', function ($join) {
+                $join->on('cp.idclientes_potenciales', '=', DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)'));
+            })
+            ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
+            ->where(function ($query) {
+                if (Schema::hasColumn('sg_proform', 'id_cobro')) {
+                    $query
+                        ->where(function ($exact) {
+                            $exact
+                                ->whereRaw('p.id_cobro IS NOT NULL')
+                                ->whereRaw('p.id_cobro > 0')
+                                ->whereRaw('ve.id_cobro = p.id_cobro');
+                        })
+                        ->orWhere(function ($fallback) {
+                            $fallback
+                                ->where(function ($missingCobro) {
+                                    $missingCobro
+                                        ->whereRaw('p.id_cobro IS NULL')
+                                        ->orWhereRaw('p.id_cobro = 0');
+                                })
+                                ->whereRaw('BINARY TRIM(cp.nit) = BINARY TRIM(p.nit)')
+                                ->whereRaw('BINARY LOWER(TRIM(ve.mes)) = BINARY '.$this->proformaMesTextoSql('p.mes'))
+                                ->whereRaw('ve.`año` = p.anio')
+                                ->whereRaw("BINARY CASE UPPER(TRIM(COALESCE(cp.regimen, '')))
+                                    WHEN 'PCS' THEN 'PCS'
+                                    WHEN 'SMP' THEN 'SMP'
+                                    ELSE 'SAS'
+                                 END = BINARY UPPER(TRIM(COALESCE(p.emisora, 'SAS')))");
+                        });
+
+                    return;
+                }
+
+                $query
+                    ->whereRaw('BINARY TRIM(cp.nit) = BINARY TRIM(p.nit)')
+                    ->whereRaw('BINARY LOWER(TRIM(ve.mes)) = BINARY '.$this->proformaMesTextoSql('p.mes'))
+                    ->whereRaw('ve.`año` = p.anio')
+                    ->whereRaw("BINARY CASE UPPER(TRIM(COALESCE(cp.regimen, '')))
+                        WHEN 'PCS' THEN 'PCS'
+                        WHEN 'SMP' THEN 'SMP'
+                        ELSE 'SAS'
+                     END = BINARY UPPER(TRIM(COALESCE(p.emisora, 'SAS')))");
+            })
+            ->orderByDesc('ve.id_cobro');
+    }
+
+    private function proformaMesTextoSql(string $mesColumn): string
+    {
+        return "CASE {$mesColumn}
+            WHEN 1 THEN 'enero'
+            WHEN 2 THEN 'febrero'
+            WHEN 3 THEN 'marzo'
+            WHEN 4 THEN 'abril'
+            WHEN 5 THEN 'mayo'
+            WHEN 6 THEN 'junio'
+            WHEN 7 THEN 'julio'
+            WHEN 8 THEN 'agosto'
+            WHEN 9 THEN 'septiembre'
+            WHEN 10 THEN 'octubre'
+            WHEN 11 THEN 'noviembre'
+            WHEN 12 THEN 'diciembre'
+            ELSE ''
+        END";
+    }
+
+    private function shouldLogCodigoJoinDebug(): bool
+    {
+        return (bool) config('app.debug');
+    }
+
+    private function logCodigoJoinDebug(LengthAwarePaginator $paginator): void
+    {
+        if (!$this->shouldLogCodigoJoinDebug()) {
+            return;
+        }
+
+        $rows = collect($paginator->items())
+            ->filter(fn (object $proforma) => trim((string) ($proforma->codigo ?? '')) === '')
+            ->map(fn (object $proforma) => [
+                'proforma_id' => (int) ($proforma->id ?? 0),
+                'nro_prof' => (string) ($proforma->nro_prof ?? ''),
+                'nit' => (string) ($proforma->nit ?? ''),
+                'mes' => (int) ($proforma->mes ?? 0),
+                'anio' => (int) ($proforma->anio ?? 0),
+                'emisora' => (string) ($proforma->emisora ?? ''),
+                've_id_cobro' => $proforma->codigo_debug_id_cobro ?? null,
+                've_id_cliente' => $proforma->codigo_debug_id_cliente ?? null,
+                'cp_id' => $proforma->codigo_debug_cliente_id ?? null,
+                'cp_codigo' => $proforma->codigo_debug_cliente_codigo ?? null,
+                'cp_nit' => $proforma->codigo_debug_cliente_nit ?? null,
+            ])
+            ->values();
+
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        Log::warning('Proformas listado: filas sin codigo tras join valores_externos -> clientes_potenciales.', [
+            'count' => $rows->count(),
+            'rows' => $rows->all(),
+        ]);
     }
 }
