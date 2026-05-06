@@ -145,9 +145,11 @@ class ProformasService
             ->update(['intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1')]);
     }
 
-    public function buildBatchEnvioResumen(int $grupoFecha): array
+    public function buildBatchEnvioResumen(int $grupoFecha, array $periodo = []): array
     {
-        $proformas = $this->queryProformasByGrupoFecha($grupoFecha)->get();
+        $mes = $this->normalizarMes($periodo['mes'] ?? null);
+        $anio = $this->normalizarEntero($periodo['anio'] ?? null);
+        $proformas = $this->queryProformasByGrupoFecha($grupoFecha, $mes, $anio)->get();
 
         $omitidasPorMotivo = [
             'sin_correo' => 0,
@@ -191,6 +193,16 @@ class ProformasService
     public function findBatchCandidatesByIds(int $grupoFecha, array $ids): Collection
     {
         return $this->queryProformasByGrupoFecha($grupoFecha)
+            ->whereIn('p.id', $ids)
+            ->get();
+    }
+
+    public function findBatchCandidatesByIdsForPeriodo(int $grupoFecha, array $ids, array $periodo = []): Collection
+    {
+        $mes = $this->normalizarMes($periodo['mes'] ?? null);
+        $anio = $this->normalizarEntero($periodo['anio'] ?? null);
+
+        return $this->queryProformasByGrupoFecha($grupoFecha, $mes, $anio)
             ->whereIn('p.id', $ids)
             ->get();
     }
@@ -340,12 +352,19 @@ class ProformasService
         return $mesInt !== false ? (int) $mesInt : null;
     }
 
-    private function queryProformasByGrupoFecha(int $grupoFecha)
+    public function invalidReasonForBatch(object $proforma): ?string
+    {
+        return $this->resolveInvalidReasonForBatch($proforma);
+    }
+
+    private function queryProformasByGrupoFecha(int $grupoFecha, ?int $mes = null, ?int $anio = null)
     {
         $diaArriendo = "CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED)";
 
         return DB::table('sg_proform as p')
-            ->leftJoin('clientes_potenciales as cp', 'cp.nit', '=', 'p.nit')
+            ->leftJoin('clientes_potenciales as cp', function ($join) {
+                $join->whereRaw('BINARY cp.nit = BINARY p.nit');
+            })
             ->select([
                 'p.id',
                 'p.nro_prof',
@@ -358,15 +377,9 @@ class ProformasService
                 'cp.email as cliente_email',
                 'cp.fecha_arriendo as cliente_fecha_arriendo',
             ])
-            ->where(function ($query) use ($grupoFecha, $diaArriendo) {
-                if ($grupoFecha === 7) {
-                    $query->whereRaw("{$diaArriendo} BETWEEN 1 AND 12");
-
-                    return;
-                }
-
-                $query->whereRaw("{$diaArriendo} BETWEEN 22 AND 31");
-            });
+            ->when($mes !== null, fn ($query) => $query->where('p.mes', $mes))
+            ->when($anio !== null, fn ($query) => $query->where('p.anio', $anio))
+            ->whereRaw("{$diaArriendo} = ?", [$grupoFecha]);
     }
 
     private function resolveInvalidReasonForBatch(object $proforma): ?string

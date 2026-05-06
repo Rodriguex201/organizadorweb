@@ -210,6 +210,7 @@ private function buildCobrosQuery(array $filters)
     $filters = array_map(function ($value) {
         return $value === '' ? null : $value;
     }, $filters);
+    $grupoFecha = $this->normalizarGrupoFecha($filters['grupo_fecha'] ?? null);
 
     $query = DB::table('valores_externos as ve')
         ->leftJoin(
@@ -257,8 +258,8 @@ if (!empty($filters['anio'])) {
     }
 
     // 🔥 GRUPO FECHA
-    if (!empty($filters['grupo_fecha'])) {
-        $query->where('cp.fecha_arriendo', $filters['grupo_fecha']);
+    if ($grupoFecha !== null) {
+        $query->whereRaw("CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED) = ?", [$grupoFecha]);
     }
 
     // 🔥 FILTRO NOTA

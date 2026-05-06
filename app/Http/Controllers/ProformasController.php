@@ -118,7 +118,7 @@ if ($request->get('from') === 'detalle') {
         return redirect()->route('proformas.index');
     }
 
-    public function confirmarEnvioMasivo(Request $request, int $grupo): View
+    public function confirmarEnvioMasivo(Request $request, int $grupo): View|JsonResponse
     {
         if (!in_array($grupo, [7, 27], true)) {
             abort(404);
@@ -129,14 +129,40 @@ if ($request->get('from') === 'detalle') {
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
         ]);
 
-        $resumen = $this->proformasService->buildBatchEnvioResumen($grupo);
+        $periodo = $this->proformasService->normalizePeriodoFilters(
+            $validated['mes'] ?? null,
+            $validated['anio'] ?? null,
+        );
+
+        $resumen = $this->proformasService->buildBatchEnvioResumen($grupo, $periodo);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'grupo' => $grupo,
+                'periodo' => $periodo,
+                'resumen' => [
+                    'total_encontradas' => $resumen['total_encontradas'],
+                    'validas_count' => $resumen['validas_count'],
+                    'omitidas_count' => $resumen['omitidas_count'],
+                    'omitidas_por_motivo' => $resumen['omitidas_por_motivo'],
+                    'validas' => $resumen['validas']->map(fn (object $proforma) => [
+                        'id' => (int) $proforma->id,
+                        'nro_prof' => (string) ($proforma->nro_prof ?? ''),
+                        'empresa' => (string) ($proforma->emp ?? ''),
+                        'nit' => (string) ($proforma->nit ?? ''),
+                        'email' => (string) ($proforma->cliente_email ?? ''),
+                        'fecha_arriendo' => (string) ($proforma->cliente_fecha_arriendo ?? ''),
+                    ])->values(),
+                ],
+            ]);
+        }
 
         return view('proformas.confirmar-envio-masivo', [
             'grupo' => $grupo,
             'resumen' => $resumen,
             'filtrosPeriodo' => [
-                'mes' => $validated['mes'] ?? null,
-                'anio' => $validated['anio'] ?? null,
+                'mes' => $periodo['mes'],
+                'anio' => $periodo['anio'],
             ],
         ]);
     }
@@ -154,13 +180,24 @@ if ($request->get('from') === 'detalle') {
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
         ]);
 
+        $periodo = $this->proformasService->normalizePeriodoFilters(
+            $validated['mes'] ?? null,
+            $validated['anio'] ?? null,
+        );
+
         $ids = array_values(array_unique(array_map('intval', $validated['proformas'] ?? [])));
-        $candidatas = $this->proformasService->findBatchCandidatesByIds($grupo, $ids);
+        $candidatas = $this->proformasService->findBatchCandidatesByIdsForPeriodo($grupo, $ids, $periodo);
 
         $enviadas = 0;
         $fallidas = [];
+        $omitidas = 0;
 
         foreach ($candidatas as $proforma) {
+            if ($this->proformasService->invalidReasonForBatch($proforma) !== null) {
+                $omitidas++;
+                continue;
+            }
+
             try {
                 $this->proformaEmailService->sendProforma($proforma);
                 $this->proformasService->registrarEnvioExitoso((int) $proforma->id);
@@ -176,7 +213,7 @@ if ($request->get('from') === 'detalle') {
             }
         }
 
-        $omitidas = max(0, count($ids) - $enviadas - count($fallidas));
+        $omitidas += max(0, count($ids) - $candidatas->count());
 
         $statusType = count($fallidas) > 0 ? 'error' : 'success';
         $message = "Envío masivo grupo {$grupo} finalizado. Enviadas: {$enviadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
@@ -190,8 +227,8 @@ if ($request->get('from') === 'detalle') {
 
         return redirect()
             ->route('proformas.index', [
-                'mes' => $validated['mes'] ?? null,
-                'anio' => $validated['anio'] ?? null,
+                'mes' => $periodo['mes'],
+                'anio' => $periodo['anio'],
             ])
             ->with('status', $message)
             ->with('status_type', $statusType);

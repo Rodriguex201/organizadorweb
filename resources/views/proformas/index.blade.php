@@ -11,10 +11,10 @@
         </div>
 
         <div class="flex flex-wrap gap-2">
-            <a href="{{ route('proformas.envio-masivo.confirmar', ['grupo' => 7, 'mes' => $filters['mes'] ?? null, 'anio' => $filters['anio'] ?? null]) }}" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-200">
+            <a href="{{ route('proformas.envio-masivo.confirmar', ['grupo' => 7, 'mes' => $filters['mes'] ?? null, 'anio' => $filters['anio'] ?? null]) }}" data-envio-grupo="7" data-confirmar-url="{{ route('proformas.envio-masivo.confirmar', ['grupo' => 7]) }}" data-enviar-url="{{ route('proformas.envio-masivo.enviar', ['grupo' => 7]) }}" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-200">
                 Enviar grupo 7
             </a>
-            <a href="{{ route('proformas.envio-masivo.confirmar', ['grupo' => 27, 'mes' => $filters['mes'] ?? null, 'anio' => $filters['anio'] ?? null]) }}" class="inline-flex items-center rounded bg-sky-100 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200">
+            <a href="{{ route('proformas.envio-masivo.confirmar', ['grupo' => 27, 'mes' => $filters['mes'] ?? null, 'anio' => $filters['anio'] ?? null]) }}" data-envio-grupo="27" data-confirmar-url="{{ route('proformas.envio-masivo.confirmar', ['grupo' => 27]) }}" data-enviar-url="{{ route('proformas.envio-masivo.enviar', ['grupo' => 27]) }}" class="inline-flex items-center rounded bg-sky-100 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200">
                 Enviar grupo 27
             </a>
             <a href="{{ route('proformas.dashboard') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
@@ -39,7 +39,7 @@
     @endif
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
-        <form method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-10">
+        <form id="proformas-filter-form" method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-10">
             <div>
                 <label for="nro_prof" class="mb-1 block text-sm font-medium">Número</label>
                 <input id="nro_prof" name="nro_prof" value="{{ request('nro_prof', session('proformas.numero')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -184,6 +184,77 @@
     class="pointer-events-none fixed z-50 min-w-48 origin-top-left scale-95 rounded-md border border-slate-200 bg-white p-1 opacity-0 shadow-lg transition duration-150"
 >
     <ul id="proforma-context-menu-items" class="space-y-1"></ul>
+</div>
+
+<div id="envio-masivo-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
+    <div class="w-full max-w-5xl rounded-lg bg-white shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <div>
+                <h2 id="envio-masivo-titulo" class="text-base font-semibold text-slate-900">Envio masivo</h2>
+                <p id="envio-masivo-subtitulo" class="text-sm text-slate-500"></p>
+            </div>
+            <button id="envio-masivo-cerrar-superior" type="button" class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Cerrar modal">X</button>
+        </div>
+
+        <form id="envio-masivo-form" method="POST" class="space-y-4 px-4 py-4">
+            @csrf
+            <input type="hidden" name="mes" id="envio-masivo-mes" value="">
+            <input type="hidden" name="anio" id="envio-masivo-anio" value="">
+
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <div class="rounded bg-slate-50 px-3 py-2">
+                    <p class="text-xs uppercase text-slate-500">Total encontradas</p>
+                    <p id="envio-masivo-total" class="mt-1 text-lg font-semibold text-slate-900">0</p>
+                </div>
+                <div class="rounded bg-slate-50 px-3 py-2">
+                    <p class="text-xs uppercase text-slate-500">Validas</p>
+                    <p id="envio-masivo-validas" class="mt-1 text-lg font-semibold text-emerald-600">0</p>
+                </div>
+                <div class="rounded bg-slate-50 px-3 py-2">
+                    <p class="text-xs uppercase text-slate-500">Omitidas</p>
+                    <p id="envio-masivo-omitidas" class="mt-1 text-lg font-semibold text-amber-600">0</p>
+                </div>
+                <div class="rounded bg-slate-50 px-3 py-2">
+                    <p class="text-xs uppercase text-slate-500">Seleccionadas</p>
+                    <p id="envio-masivo-seleccionadas" class="mt-1 text-lg font-semibold text-cyan-700">0</p>
+                </div>
+            </div>
+
+            <div id="envio-masivo-feedback" class="hidden rounded border px-4 py-3 text-sm"></div>
+
+            <div class="flex items-center justify-between gap-3">
+                <p class="text-sm text-slate-600">Antes de enviar puedes marcar o desmarcar las empresas que correspondan.</p>
+                <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" id="envio-masivo-seleccionar-todas" checked class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    Seleccionar todas
+                </label>
+            </div>
+
+            <div class="max-h-96 overflow-y-auto rounded-lg border border-slate-200">
+                <table class="min-w-full text-sm">
+                    <thead class="sticky top-0 bg-slate-50 text-left text-xs uppercase text-slate-600">
+                    <tr>
+                        <th class="px-4 py-3">Enviar</th>
+                        <th class="px-4 py-3">Proforma</th>
+                        <th class="px-4 py-3">Empresa</th>
+                        <th class="px-4 py-3">Correo</th>
+                        <th class="px-4 py-3">Fecha arriendo</th>
+                    </tr>
+                    </thead>
+                    <tbody id="envio-masivo-listado" class="divide-y divide-slate-100">
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-slate-500">Cargando listado...</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
+                <button id="envio-masivo-cerrar" type="button" class="rounded bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Cancelar</button>
+                <button id="envio-masivo-submit" type="submit" class="rounded bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700">Enviar seleccionadas</button>
+            </div>
+        </form>
+    </div>
 </div>
 @endsection
 
@@ -410,6 +481,206 @@
 
         window.addEventListener('scroll', hideMenu, true);
         window.addEventListener('resize', hideMenu);
+    })();
+</script>
+<script>
+    (() => {
+        const triggerButtons = Array.from(document.querySelectorAll('[data-envio-grupo]'));
+        const modal = document.getElementById('envio-masivo-modal');
+        const modalForm = document.getElementById('envio-masivo-form');
+        const closeTopButton = document.getElementById('envio-masivo-cerrar-superior');
+        const closeButton = document.getElementById('envio-masivo-cerrar');
+        const title = document.getElementById('envio-masivo-titulo');
+        const subtitle = document.getElementById('envio-masivo-subtitulo');
+        const total = document.getElementById('envio-masivo-total');
+        const validas = document.getElementById('envio-masivo-validas');
+        const omitidas = document.getElementById('envio-masivo-omitidas');
+        const seleccionadas = document.getElementById('envio-masivo-seleccionadas');
+        const listado = document.getElementById('envio-masivo-listado');
+        const hiddenMes = document.getElementById('envio-masivo-mes');
+        const hiddenAnio = document.getElementById('envio-masivo-anio');
+        const selectAll = document.getElementById('envio-masivo-seleccionar-todas');
+        const feedback = document.getElementById('envio-masivo-feedback');
+        const submitButton = document.getElementById('envio-masivo-submit');
+        const mesInput = document.getElementById('mes');
+        const anioInput = document.getElementById('anio');
+
+        if (triggerButtons.length === 0 || !modal || !modalForm || !closeTopButton || !closeButton || !title || !subtitle || !total || !validas || !omitidas || !seleccionadas || !listado || !hiddenMes || !hiddenAnio || !selectAll || !feedback || !submitButton) {
+            return;
+        }
+
+        let currentGrupo = null;
+
+        const openModal = () => {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            currentGrupo = null;
+            feedback.classList.add('hidden');
+            feedback.textContent = '';
+            feedback.classList.remove('border-rose-200', 'bg-rose-50', 'text-rose-700', 'border-amber-200', 'bg-amber-50', 'text-amber-700');
+        };
+
+        const currentPeriodo = () => ({
+            mes: mesInput?.value || @json($filters['mes'] ?? null) || '',
+            anio: anioInput?.value || @json($filters['anio'] ?? null) || '',
+        });
+
+        const checkedBoxes = () => Array.from(listado.querySelectorAll('input[name="proformas[]"]:checked'));
+        const allBoxes = () => Array.from(listado.querySelectorAll('input[name="proformas[]"]'));
+
+        const syncSelectionCounter = () => {
+            const totalBoxes = allBoxes();
+            const selectedBoxes = checkedBoxes();
+            seleccionadas.textContent = String(selectedBoxes.length);
+            selectAll.checked = totalBoxes.length > 0 && selectedBoxes.length === totalBoxes.length;
+            selectAll.indeterminate = selectedBoxes.length > 0 && selectedBoxes.length < totalBoxes.length;
+            submitButton.disabled = selectedBoxes.length === 0;
+            submitButton.classList.toggle('opacity-60', selectedBoxes.length === 0);
+            submitButton.classList.toggle('cursor-not-allowed', selectedBoxes.length === 0);
+        };
+
+        const renderRows = (items) => {
+            if (items.length === 0) {
+                listado.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No hay proformas validas para enviar con ese grupo y periodo.</td></tr>';
+                syncSelectionCounter();
+                return;
+            }
+
+            listado.innerHTML = items.map((item) => `
+                <tr>
+                    <td class="px-4 py-3">
+                        <input type="checkbox" name="proformas[]" value="${item.id}" checked class="envio-proforma-checkbox rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    </td>
+                    <td class="px-4 py-3">
+                        <p class="font-medium text-slate-800">${item.nro_prof || '#' + item.id}</p>
+                        <p class="text-xs text-slate-500">ID ${item.id}</p>
+                    </td>
+                    <td class="px-4 py-3 text-slate-700">${item.empresa || 'N/D'}</td>
+                    <td class="px-4 py-3 text-slate-700">${item.email || 'Sin correo'}</td>
+                    <td class="px-4 py-3 text-slate-700">${item.fecha_arriendo || 'N/D'}</td>
+                </tr>
+            `).join('');
+
+            allBoxes().forEach((checkbox) => {
+                checkbox.addEventListener('change', syncSelectionCounter);
+            });
+
+            syncSelectionCounter();
+        };
+
+        const showFeedback = (message, type = 'warning') => {
+            feedback.textContent = message;
+            feedback.classList.remove('hidden', 'border-rose-200', 'bg-rose-50', 'text-rose-700', 'border-amber-200', 'bg-amber-50', 'text-amber-700');
+            feedback.classList.add(...(type === 'error'
+                ? ['border-rose-200', 'bg-rose-50', 'text-rose-700']
+                : ['border-amber-200', 'bg-amber-50', 'text-amber-700']));
+        };
+
+        const loadResumen = async (button) => {
+            const grupo = button.dataset.envioGrupo;
+            const confirmarUrl = button.dataset.confirmarUrl;
+            const enviarUrl = button.dataset.enviarUrl;
+            const periodo = currentPeriodo();
+            const searchParams = new URLSearchParams();
+
+            if (periodo.mes !== '') {
+                searchParams.set('mes', periodo.mes);
+            }
+
+            if (periodo.anio !== '') {
+                searchParams.set('anio', periodo.anio);
+            }
+
+            currentGrupo = grupo;
+            title.textContent = `Envio masivo grupo ${grupo}`;
+            subtitle.textContent = `Periodo ${periodo.mes || '-'} / ${periodo.anio || '-'}`;
+            total.textContent = '...';
+            validas.textContent = '...';
+            omitidas.textContent = '...';
+            seleccionadas.textContent = '0';
+            hiddenMes.value = periodo.mes;
+            hiddenAnio.value = periodo.anio;
+            modalForm.action = enviarUrl;
+            listado.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Cargando listado...</td></tr>';
+            selectAll.checked = true;
+            openModal();
+
+            try {
+                const response = await fetch(`${confirmarUrl}?${searchParams.toString()}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(payload.message || 'No se pudo cargar el resumen del envio masivo.');
+                }
+
+                const resumen = payload.resumen || {};
+                title.textContent = `Envio masivo grupo ${payload.grupo}`;
+                subtitle.textContent = `Periodo ${payload.periodo?.mes || '-'} / ${payload.periodo?.anio || '-'}`;
+                total.textContent = String(resumen.total_encontradas || 0);
+                validas.textContent = String(resumen.validas_count || 0);
+                omitidas.textContent = String(resumen.omitidas_count || 0);
+                hiddenMes.value = payload.periodo?.mes || '';
+                hiddenAnio.value = payload.periodo?.anio || '';
+
+                if ((resumen.omitidas_count || 0) > 0) {
+                    const omitidasPorMotivo = resumen.omitidas_por_motivo || {};
+                    showFeedback(`Omitidas: sin correo ${omitidasPorMotivo.sin_correo || 0}, sin PDF ${omitidasPorMotivo.sin_pdf || 0}, ya enviadas ${omitidasPorMotivo.ya_enviadas || 0}, no generadas ${omitidasPorMotivo.no_generadas || 0}.`);
+                } else {
+                    feedback.classList.add('hidden');
+                }
+
+                renderRows(resumen.validas || []);
+            } catch (error) {
+                listado.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-rose-600">No fue posible cargar el listado.</td></tr>';
+                showFeedback(error.message || 'No fue posible cargar el listado.', 'error');
+                syncSelectionCounter();
+            }
+        };
+
+        triggerButtons.forEach((button) => {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                loadResumen(button);
+            });
+        });
+
+        selectAll.addEventListener('change', function () {
+            allBoxes().forEach((checkbox) => {
+                checkbox.checked = selectAll.checked;
+            });
+
+            syncSelectionCounter();
+        });
+
+        [closeTopButton, closeButton].forEach((button) => {
+            button.addEventListener('click', closeModal);
+        });
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        modalForm.addEventListener('submit', (event) => {
+            if (checkedBoxes().length > 0) {
+                return;
+            }
+
+            event.preventDefault();
+            showFeedback('Selecciona al menos una proforma antes de enviar.', 'error');
+        });
     })();
 </script>
 @endpush
