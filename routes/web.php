@@ -28,6 +28,8 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::patch('/clientes/{id}/retirar', [ClientesController::class, 'retirar'])->name('clientes.retirar');
 
     Route::get('/cobros', [CobrosController::class, 'index'])->name('cobros.index');
+    Route::post('/cobros/proformas-masivo/{grupo}', [CobrosController::class, 'generarProformasMasivo'])->name('cobros.proformas-masivo');
+    Route::post('/cobros/proformas-masivo/{grupo}/enviar', [CobrosController::class, 'enviarProformasMasivo'])->name('cobros.proformas-masivo.enviar');
 
     Route::get('/cobros/{id}', [CobrosController::class, 'show'])->name('cobros.show');
     Route::patch('/cobros/clientes/{id}/nota', [CobrosController::class, 'updateNotaCobro'])->name('cobros.nota.update');

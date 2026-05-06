@@ -4,7 +4,7 @@ namespace App\Services;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
-
+use Illuminate\Support\Collection;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -205,6 +205,28 @@ return $query
         ];
     }
 
+    public function findCobrosForMassGeneration(array $filters, int $grupoFecha): Collection
+    {
+        $filters['grupo_fecha'] = (string) $grupoFecha;
+
+        $query = $this->buildCobrosQuery($filters);
+        $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
+
+        return $query
+            ->when(
+                $ordenFecha,
+                fn ($q, $direccion) => $q->orderBy('cp.fecha_arriendo', $direccion),
+                fn ($q) => $q
+                    ->orderByRaw('ve.`año` DESC')
+                    ->orderByRaw($this->ordenMesSql() . ' DESC')
+                    ->orderByDesc('ve.id_cobro'),
+            )
+            ->pluck('ve.id_cobro')
+            ->map(fn ($idCobro) => (int) $idCobro)
+            ->filter(fn (int $idCobro) => $idCobro > 0)
+            ->values();
+    }
+
 private function buildCobrosQuery(array $filters)
 {
     $filters = array_map(function ($value) {
@@ -268,6 +290,44 @@ if (!empty($filters['anio'])) {
             $query->whereNotNull('cp.nota_cobro');
         } elseif ($filters['filtro_nota'] === 'sin') {
             $query->whereNull('cp.nota_cobro');
+        }
+    }
+
+    if (!empty($filters['filtro_envio'])) {
+        if ($filters['filtro_envio'] === 'enviadas') {
+            $query->whereExists(function ($subquery) {
+                $subquery
+                    ->select(DB::raw(1))
+                    ->from('sg_proform as sp')
+                    ->whereRaw('BINARY sp.nit = BINARY cp.nit')
+                    ->whereRaw('sp.mes = '.$this->ordenMesSql())
+                    ->whereRaw('sp.anio = ve.`año`')
+                    ->whereRaw(
+                        "sp.emisora = CASE UPPER(TRIM(cp.regimen))
+                            WHEN 'PCS' THEN 'PCS'
+                            WHEN 'SMP' THEN 'SMP'
+                            ELSE 'SAS'
+                        END"
+                    )
+                    ->where('sp.enviado', 1);
+            });
+        } elseif ($filters['filtro_envio'] === 'no_enviadas') {
+            $query->whereNotExists(function ($subquery) {
+                $subquery
+                    ->select(DB::raw(1))
+                    ->from('sg_proform as sp')
+                    ->whereRaw('BINARY sp.nit = BINARY cp.nit')
+                    ->whereRaw('sp.mes = '.$this->ordenMesSql())
+                    ->whereRaw('sp.anio = ve.`año`')
+                    ->whereRaw(
+                        "sp.emisora = CASE UPPER(TRIM(cp.regimen))
+                            WHEN 'PCS' THEN 'PCS'
+                            WHEN 'SMP' THEN 'SMP'
+                            ELSE 'SAS'
+                        END"
+                    )
+                    ->where('sp.enviado', 1);
+            });
         }
     }
 
@@ -406,6 +466,17 @@ if (!empty($filters['anio'])) {
         $valor = mb_strtolower(trim($filtroNota));
 
         return in_array($valor, ['con', 'sin'], true) ? $valor : null;
+    }
+
+    private function normalizarFiltroEnvio(null|string $filtroEnvio): ?string
+    {
+        if ($filtroEnvio === null) {
+            return null;
+        }
+
+        $valor = mb_strtolower(trim($filtroEnvio));
+
+        return in_array($valor, ['enviadas', 'no_enviadas'], true) ? $valor : null;
     }
 
 }

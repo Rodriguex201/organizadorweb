@@ -326,7 +326,7 @@ public function show(int $id): View
         return redirect()->route('proformas.index');
     }
 
-    public function enviarCorreo(int $id): RedirectResponse
+    public function enviarCorreo(int $id): RedirectResponse|JsonResponse
     {
         $proforma = $this->proformasService->findProformaById($id);
 
@@ -344,11 +344,31 @@ public function show(int $id): View
         try {
             $this->proformaEmailService->sendProforma($proforma);
             $this->proformasService->registrarEnvioExitoso($id);
+            $proformaActualizada = $this->proformasService->findProformaById($id);
 
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Proforma enviada por correo correctamente.',
+                    'proforma' => [
+                        'id' => $id,
+                        'enviado' => (int) ($proformaActualizada->enviado ?? 1),
+                        'fecha_envio' => $proformaActualizada->fecha_envio ?? null,
+                        'intentos_envio' => (int) ($proformaActualizada->intentos_envio ?? 0),
+                    ],
+                ]);
+            }
 
             return redirect()->back()->with('status', 'Proforma enviada por correo correctamente.')->with('status_type', 'success');
         } catch (\Throwable $exception) {
             report($exception);
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'No se pudo enviar el correo: '.$exception->getMessage(),
+                ], 422);
+            }
 
             return redirect()->back()->with('status', 'No se pudo enviar el correo: '.$exception->getMessage())->with('status_type', 'error');
         }

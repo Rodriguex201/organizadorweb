@@ -5,9 +5,11 @@
 @section('content')
 <div class="mx-auto max-w-6xl px-4 py-10">
     @if(session('status'))
-        <div class="mb-4 rounded border px-4 py-3 text-sm {{ session('status_type') === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700' }}">
+        <div id="proforma-envio-feedback" class="mb-4 rounded border px-4 py-3 text-sm {{ session('status_type') === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700' }}">
             {{ session('status') }}
         </div>
+    @else
+        <div id="proforma-envio-feedback" class="mb-4 hidden rounded border px-4 py-3 text-sm"></div>
     @endif
 
     @php
@@ -23,11 +25,11 @@
     <div class="mb-4 flex items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">Detalle de proforma #{{ $proforma->nro_prof ?: $proforma->id }}</h1>
-            <p class="mt-1 text-sm text-slate-600">Vista consolidada de información operativa y técnica.</p>
+            <p class="mt-1 text-sm text-slate-600">Vista consolidada de informacion operativa y tecnica.</p>
         </div>
-<a href="{{ route('proformas.index', ['from' => 'detalle']) }}">
-    Volver al listado
-</a>
+        <a href="{{ route('proformas.index', ['from' => 'detalle']) }}">
+            Volver al listado
+        </a>
     </div>
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -35,7 +37,7 @@
             <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Resumen</h2>
             <dl class="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
                 <div>
-                    <dt class="text-slate-500">Número de proforma</dt>
+                    <dt class="text-slate-500">Numero de proforma</dt>
                     <dd class="font-medium text-slate-900">{{ $proforma->nro_prof ?: 'N/D' }}</dd>
                 </div>
                 <div>
@@ -55,7 +57,7 @@
                     <dd class="font-medium text-slate-900">{{ $proformasService->monthLabel($proforma->mes) }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Año</dt>
+                    <dt class="text-slate-500">Ano</dt>
                     <dd class="font-medium text-slate-900">{{ $proforma->anio ?: 'N/D' }}</dd>
                 </div>
                 <div>
@@ -69,35 +71,34 @@
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Estado de envío</dt>
+                    <dt class="text-slate-500">Estado de envio</dt>
                     <dd>
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $proformasService->envioBadgeClass($proforma->enviado ?? 0) }}">{{ $proformasService->envioLabel($proforma->enviado ?? 0) }}</span>
+                        <span id="proforma-envio-badge" class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $proformasService->envioBadgeClass($proforma->enviado ?? 0) }}" data-class-enviado="{{ $proformasService->envioBadgeClass(1) }}" data-class-no-enviado="{{ $proformasService->envioBadgeClass(0) }}">{{ $proformasService->envioLabel($proforma->enviado ?? 0) }}</span>
                     </dd>
                 </div>
             </dl>
         </section>
 
-
         <section class="rounded-lg bg-white p-5 shadow">
-            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Envío</h2>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Envio</h2>
             <dl class="mt-3 space-y-3 text-sm">
                 <div>
                     <dt class="text-slate-500">Enviado</dt>
-                    <dd class="font-medium text-slate-900">{{ ((int) ($proforma->enviado ?? 0)) === 1 ? 'Sí' : 'No' }}</dd>
+                    <dd id="proforma-enviado-texto" class="font-medium text-slate-900">{{ ((int) ($proforma->enviado ?? 0)) === 1 ? 'Si' : 'No' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Fecha último envío</dt>
-                    <dd class="font-medium text-slate-900">{{ $ultimoEnvio }}</dd>
+                    <dt class="text-slate-500">Fecha ultimo envio</dt>
+                    <dd id="proforma-fecha-envio-texto" class="font-medium text-slate-900">{{ $ultimoEnvio }}</dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Intentos de envío</dt>
-                    <dd class="font-medium text-slate-900">{{ (int) ($proforma->intentos_envio ?? 0) }}</dd>
+                    <dt class="text-slate-500">Intentos de envio</dt>
+                    <dd id="proforma-intentos-envio-texto" class="font-medium text-slate-900">{{ (int) ($proforma->intentos_envio ?? 0) }}</dd>
                 </div>
             </dl>
         </section>
 
         <section class="rounded-lg bg-white p-5 shadow lg:col-span-3">
-            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Técnica</h2>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Tecnica</h2>
             <dl class="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
                 <div>
                     <dt class="text-slate-500">ID interno</dt>
@@ -121,9 +122,9 @@
                 <a href="{{ route('proformas.pdf.download', $proforma->id) }}" class="inline-flex items-center rounded bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-200">Descargar PDF</a>
 
                 @if($canSendProforma)
-                    <form method="POST" action="{{ route('proformas.enviar', $proforma->id) }}">
+                    <form method="POST" action="{{ route('proformas.enviar', $proforma->id) }}" data-proforma-enviar-form>
                         @csrf
-                        <button type="submit" class="inline-flex items-center rounded bg-cyan-100 px-3 py-1.5 text-xs font-medium text-cyan-700 hover:bg-cyan-200">{{ ((int) ($proforma->enviado ?? 0)) === 1 ? 'Reenviar' : 'Enviar' }} por correo</button>
+                        <button type="submit" data-proforma-enviar-button class="inline-flex items-center rounded bg-cyan-100 px-3 py-1.5 text-xs font-medium text-cyan-700 hover:bg-cyan-200">{{ ((int) ($proforma->enviado ?? 0)) === 1 ? 'Reenviar' : 'Enviar' }} por correo</button>
                     </form>
                 @else
                     <span class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">Debe generar la proforma</span>
@@ -165,3 +166,92 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    (() => {
+        const form = document.querySelector('[data-proforma-enviar-form]');
+        const button = document.querySelector('[data-proforma-enviar-button]');
+        const feedback = document.getElementById('proforma-envio-feedback');
+        const envioTexto = document.getElementById('proforma-enviado-texto');
+        const fechaEnvioTexto = document.getElementById('proforma-fecha-envio-texto');
+        const intentosEnvioTexto = document.getElementById('proforma-intentos-envio-texto');
+        const envioBadge = document.getElementById('proforma-envio-badge');
+
+        if (!form || !button || !feedback || !envioTexto || !fechaEnvioTexto || !intentosEnvioTexto || !envioBadge) {
+            return;
+        }
+
+        const csrfToken = @json(csrf_token());
+        const initialButtonText = button.textContent;
+
+        const showFeedback = (message, type = 'success') => {
+            feedback.textContent = message;
+            feedback.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-700', 'border-rose-200', 'bg-rose-50', 'text-rose-700');
+            feedback.classList.add(...(type === 'success'
+                ? ['border-emerald-200', 'bg-emerald-50', 'text-emerald-700']
+                : ['border-rose-200', 'bg-rose-50', 'text-rose-700']));
+        };
+
+        const formatFecha = (value) => {
+            if (!value) {
+                return 'N/D';
+            }
+
+            const date = new Date(value);
+
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            const hh = String(date.getHours()).padStart(2, '0');
+            const mi = String(date.getMinutes()).padStart(2, '0');
+
+            return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+        };
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            button.disabled = true;
+            button.classList.add('opacity-60', 'cursor-not-allowed');
+            button.textContent = 'Enviando...';
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || 'No se pudo enviar el correo.');
+                }
+
+                envioTexto.textContent = 'Si';
+                fechaEnvioTexto.textContent = formatFecha(payload.proforma?.fecha_envio || null);
+                intentosEnvioTexto.textContent = String(payload.proforma?.intentos_envio ?? 0);
+                envioBadge.textContent = 'Enviada';
+                envioBadge.className = `inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${envioBadge.dataset.classEnviado}`;
+                button.textContent = 'Reenviar por correo';
+
+                showFeedback(payload.message || 'Proforma enviada por correo correctamente.', 'success');
+            } catch (error) {
+                button.textContent = initialButtonText;
+                showFeedback(error.message || 'No se pudo enviar el correo.', 'error');
+            } finally {
+                button.disabled = false;
+                button.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
+        });
+    })();
+</script>
+@endpush

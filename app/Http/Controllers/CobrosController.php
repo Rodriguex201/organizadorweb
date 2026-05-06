@@ -3,14 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Services\CobrosService;
+use App\Services\ProformaEmailService;
 use App\Services\RevisarProformaCalculator;
 use App\Services\ProformaPdfService;
 use App\Services\ProformaPreviewService;
+use App\Services\ProformasService;
 use App\Services\ProformaStoreService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -23,6 +26,8 @@ class CobrosController extends Controller
         private readonly ProformaPreviewService $proformaPreviewService,
         private readonly ProformaStoreService $proformaStoreService,
         private readonly ProformaPdfService $proformaPdfService,
+        private readonly ProformasService $proformasService,
+        private readonly ProformaEmailService $proformaEmailService,
         private readonly RevisarProformaCalculator $revisarProformaCalculator,
     ) {
     }
@@ -38,6 +43,7 @@ public function index(Request $request): View
         'orden_fecha' => ['nullable', 'in:asc,desc'],
         'grupo_fecha' => ['nullable', 'in:7,27'],
         'filtro_nota' => ['nullable', 'in:con,sin'],
+        'filtro_envio' => ['nullable', 'in:enviadas,no_enviadas'],
         'debug' => ['nullable'],
     ]);
 
@@ -50,6 +56,7 @@ $filters = [
     'orden_fecha' => $validated['orden_fecha'] ?? null,
     'grupo_fecha' => $validated['grupo_fecha'] ?? null,
     'filtro_nota' => $validated['filtro_nota'] ?? null,
+    'filtro_envio' => $validated['filtro_envio'] ?? null,
 ];
 
 
@@ -62,6 +69,214 @@ $filters = [
         'meses' => $this->cobrosService::MESES,
     ]);
 }
+
+    public function generarProformasMasivo(Request $request, int $grupo): RedirectResponse
+    {
+        if (!in_array($grupo, [7, 27], true)) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'mes' => ['nullable', 'string', 'max:20'],
+            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+            'ano' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+            'proforma' => ['nullable', 'string', 'max:100'],
+            'buscar' => ['nullable', 'string', 'max:100'],
+            'orden_fecha' => ['nullable', 'in:asc,desc'],
+            'grupo_fecha' => ['nullable', 'in:7,27'],
+            'filtro_nota' => ['nullable', 'in:con,sin'],
+            'filtro_envio' => ['nullable', 'in:enviadas,no_enviadas'],
+        ]);
+
+        $filters = [
+            'mes' => isset($validated['mes']) ? strtolower(trim($validated['mes'])) : null,
+            'anio' => isset($validated['anio']) ? (int) $validated['anio'] : null,
+            'proforma' => $request->filled('proforma') ? $validated['proforma'] : null,
+            'buscar' => $validated['buscar'] ?? null,
+            'orden_fecha' => $validated['orden_fecha'] ?? null,
+            'grupo_fecha' => $validated['grupo_fecha'] ?? null,
+            'filtro_nota' => $validated['filtro_nota'] ?? null,
+            'filtro_envio' => $validated['filtro_envio'] ?? null,
+        ];
+
+        $idsCobro = $this->cobrosService->findCobrosForMassGeneration($filters, $grupo);
+
+        $creadas = 0;
+        $actualizadas = 0;
+        $fallidas = [];
+        $omitidas = 0;
+        $proformasListas = [];
+
+        foreach ($idsCobro as $idCobro) {
+            $cobro = $this->cobrosService->findCobroById((int) $idCobro);
+
+            if (!$cobro) {
+                $omitidas++;
+                continue;
+            }
+
+            try {
+                $resultado = $this->proformaStoreService->storeFromCobro($cobro);
+                $proformaId = (int) ($resultado['proforma_id'] ?? 0);
+
+                if (($resultado['duplicated'] ?? false) === true) {
+                    $actualizadas++;
+                } else {
+                    $creadas++;
+                }
+
+                if ($proformaId > 0) {
+                    $this->asegurarPdfDeProforma($proformaId);
+
+                    $proformasListas[] = [
+                        'id' => $proformaId,
+                        'empresa' => trim((string) ($cobro->cliente_empresa ?? $cobro->cliente_nombre ?? 'Sin nombre')),
+                    ];
+                }
+            } catch (\Throwable $exception) {
+                Log::error('Error en generacion masiva de proformas desde cobros.', [
+                    'grupo' => $grupo,
+                    'id_cobro' => $idCobro,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                report($exception);
+
+                $fallidas[] = [
+                    'id_cobro' => $idCobro,
+                    'error' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        $statusType = count($fallidas) > 0 ? 'warning' : 'success';
+        $message = "Generacion masiva grupo {$grupo} finalizada. Creadas: {$creadas}. Actualizadas: {$actualizadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
+
+        if ($fallidas !== []) {
+            $message .= ' Errores: '.collect($fallidas)
+                ->take(3)
+                ->map(fn (array $fallida) => sprintf('cobro #%s (%s)', $fallida['id_cobro'], $fallida['error']))
+                ->implode(' | ');
+        }
+
+        if ($proformasListas !== []) {
+            session()->put('cobros.proformas_listas_para_envio', [
+                'grupo' => $grupo,
+                'filters' => $filters,
+                'proformas' => array_values($proformasListas),
+            ]);
+        } else {
+            session()->forget('cobros.proformas_listas_para_envio');
+        }
+
+        return redirect()
+            ->route('cobros.index', array_filter($filters, fn ($value) => $value !== null && $value !== ''))
+            ->with('status', $message)
+            ->with('status_type', $statusType);
+    }
+
+    public function enviarProformasMasivo(Request $request, int $grupo): RedirectResponse
+    {
+        if (!in_array($grupo, [7, 27], true)) {
+            abort(404);
+        }
+
+        $payload = session('cobros.proformas_listas_para_envio');
+
+        if (!is_array($payload) || (int) ($payload['grupo'] ?? 0) !== $grupo) {
+            return redirect()
+                ->route('cobros.index')
+                ->with('status', 'No hay un lote de proformas listo para enviar.')
+                ->with('status_type', 'warning');
+        }
+
+        $filters = is_array($payload['filters'] ?? null) ? $payload['filters'] : [];
+        $proformas = is_array($payload['proformas'] ?? null) ? $payload['proformas'] : [];
+
+        $enviadas = [];
+        $omitidas = [];
+        $fallidas = [];
+
+        foreach ($proformas as $item) {
+            $proformaId = (int) ($item['id'] ?? 0);
+            $empresa = trim((string) ($item['empresa'] ?? 'Sin nombre'));
+
+            if ($proformaId <= 0) {
+                $omitidas[] = ['empresa' => $empresa, 'motivo' => 'ID de proforma invalido.'];
+                continue;
+            }
+
+            $proforma = $this->proformasService->findProformaById($proformaId);
+
+            if (!$proforma) {
+                $omitidas[] = ['empresa' => $empresa, 'motivo' => 'Proforma no encontrada.'];
+                continue;
+            }
+
+            if ((int) ($proforma->enviado ?? 0) === 1) {
+                $omitidas[] = ['empresa' => $empresa, 'motivo' => 'La proforma ya estaba enviada.'];
+                continue;
+            }
+
+            try {
+                $this->asegurarPdfDeProforma($proformaId);
+                $proformaActualizada = $this->proformasService->findProformaById($proformaId);
+
+                if (!$this->proformasService->canSendProforma($proformaActualizada)) {
+                    $omitidas[] = ['empresa' => $empresa, 'motivo' => 'La proforma no quedo lista para envio.'];
+                    continue;
+                }
+
+                $this->proformaEmailService->sendProforma($proformaActualizada);
+                $this->proformasService->registrarEnvioExitoso($proformaId);
+
+                $enviadas[] = $empresa;
+            } catch (\Throwable $exception) {
+                $this->proformasService->registrarIntentoFallido($proformaId);
+
+                Log::error('Error en envio masivo de proformas desde cobros.', [
+                    'grupo' => $grupo,
+                    'proforma_id' => $proformaId,
+                    'empresa' => $empresa,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                report($exception);
+
+                $fallidas[] = [
+                    'empresa' => $empresa,
+                    'error' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        session()->forget('cobros.proformas_listas_para_envio');
+
+        $message = "Envio masivo grupo {$grupo} finalizado. Enviadas: ".count($enviadas).'. Omitidas: '.count($omitidas).'. Fallidas: '.count($fallidas).'.';
+
+        if ($enviadas !== []) {
+            $message .= ' Enviadas: '.collect($enviadas)->take(5)->implode(', ').'.';
+        }
+
+        if ($omitidas !== []) {
+            $message .= ' Omitidas: '.collect($omitidas)
+                ->take(5)
+                ->map(fn (array $omitida) => $omitida['empresa'].' ('.$omitida['motivo'].')')
+                ->implode(' | ').'.';
+        }
+
+        if ($fallidas !== []) {
+            $message .= ' Fallidas: '.collect($fallidas)
+                ->take(5)
+                ->map(fn (array $fallida) => $fallida['empresa'].' ('.$fallida['error'].')')
+                ->implode(' | ').'.';
+        }
+
+        return redirect()
+            ->route('cobros.index', array_filter($filters, fn ($value) => $value !== null && $value !== ''))
+            ->with('status', $message)
+            ->with('status_type', count($fallidas) > 0 ? 'warning' : 'success');
+    }
 
     public function show(int $id): View
     {
@@ -404,5 +619,10 @@ $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$resultado['filename'].'"',
         ]);
+    }
+
+    private function asegurarPdfDeProforma(int $proformaId): array
+    {
+        return $this->proformaPdfService->generateForProformaId($proformaId);
     }
 }

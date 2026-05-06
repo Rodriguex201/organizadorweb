@@ -4,18 +4,92 @@
 
 @section('content')
 <div class="max-w-7xl mx-auto px-4 py-8">
+    @php
+        $proformasListasParaEnvio = session('cobros.proformas_listas_para_envio');
+        $proformasListas = is_array($proformasListasParaEnvio['proformas'] ?? null) ? $proformasListasParaEnvio['proformas'] : [];
+        $grupoListoParaEnvio = (int) ($proformasListasParaEnvio['grupo'] ?? 0);
+    @endphp
+
     <div class="mb-6 flex items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-bold">Módulo Cobros</h1>
             <p class="text-sm text-slate-600">Listado inicial desde <code>valores_externos</code> con datos de clientes potenciales.</p>
         </div>
-        <a href="{{ route('proformas.index') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
-            Proformas Generadas
-        </a>
+        <div class="flex flex-wrap items-center gap-2">
+            <form method="POST" action="{{ route('cobros.proformas-masivo', ['grupo' => 7]) }}">
+                @csrf
+                <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">
+                <input type="hidden" name="anio" value="{{ $filters['anio'] ?? '' }}">
+                <input type="hidden" name="proforma" value="{{ $filters['proforma'] ?? '' }}">
+                <input type="hidden" name="buscar" value="{{ $filters['buscar'] ?? '' }}">
+                <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
+                <input type="hidden" name="grupo_fecha" value="{{ $filters['grupo_fecha'] ?? '' }}">
+                <input type="hidden" name="filtro_nota" value="{{ $filters['filtro_nota'] ?? '' }}">
+                <input type="hidden" name="filtro_envio" value="{{ $filters['filtro_envio'] ?? '' }}">
+                <button type="submit" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-200">
+                    Generar proformas grupo 7
+                </button>
+            </form>
+
+            <form method="POST" action="{{ route('cobros.proformas-masivo', ['grupo' => 27]) }}">
+                @csrf
+                <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">
+                <input type="hidden" name="anio" value="{{ $filters['anio'] ?? '' }}">
+                <input type="hidden" name="proforma" value="{{ $filters['proforma'] ?? '' }}">
+                <input type="hidden" name="buscar" value="{{ $filters['buscar'] ?? '' }}">
+                <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
+                <input type="hidden" name="grupo_fecha" value="{{ $filters['grupo_fecha'] ?? '' }}">
+                <input type="hidden" name="filtro_nota" value="{{ $filters['filtro_nota'] ?? '' }}">
+                <input type="hidden" name="filtro_envio" value="{{ $filters['filtro_envio'] ?? '' }}">
+                <button type="submit" class="inline-flex items-center rounded bg-sky-100 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200">
+                    Generar proformas grupo 27
+                </button>
+            </form>
+
+            <a href="{{ route('proformas.index') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
+                Proformas Generadas
+            </a>
+        </div>
     </div>
 
+    @if(session('status'))
+        <div class="mb-4 rounded border px-4 py-3 text-sm {{
+            session('status_type') === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-amber-200 bg-amber-50 text-amber-800'
+        }}">
+            {{ session('status') }}
+        </div>
+    @endif
+
+    @if($proformasListas !== [] && in_array($grupoListoParaEnvio, [7, 27], true))
+        <div class="mb-4 rounded border border-cyan-200 bg-cyan-50 px-4 py-4">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-sm font-semibold text-cyan-800">
+                        Se generaron o actualizaron {{ count($proformasListas) }} proformas del grupo {{ $grupoListoParaEnvio }}.
+                    </p>
+                    <p class="text-sm text-cyan-700">
+                        Desea enviarlas ahora a los correos registrados?
+                    </p>
+                </div>
+
+                <form method="POST" action="{{ route('cobros.proformas-masivo.enviar', ['grupo' => $grupoListoParaEnvio]) }}">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center rounded bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">
+                        Si, enviar correos
+                    </button>
+                </form>
+            </div>
+
+            <p class="mt-3 text-xs text-cyan-700">
+                Empresas listas: {{ collect($proformasListas)->pluck('empresa')->take(8)->implode(', ') }}{{ count($proformasListas) > 8 ? '...' : '' }}
+            </p>
+        </div>
+    @endif
+
     <div class="bg-white rounded-lg shadow p-4 mb-6">
-        <form id="cobros-filter-form" method="GET" action="{{ route('cobros.index') }}" class="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
+        <form id="cobros-filter-form" method="GET" action="{{ route('cobros.index') }}" class="grid grid-cols-1 md:grid-cols-8 gap-4 items-end">
             <div>
                 <label for="mes" class="block text-sm font-medium mb-1">Mes</label>
 
@@ -66,6 +140,16 @@
                     <option value="">Todas</option>
                     <option value="con" @selected(($filters['filtro_nota'] ?? '') === 'con')>Con nota</option>
                     <option value="sin" @selected(($filters['filtro_nota'] ?? '') === 'sin')>Sin nota</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="filtro_envio" class="block text-sm font-medium mb-1">Envio proforma</label>
+                <select id="filtro_envio" name="filtro_envio"
+                        class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="">Todas</option>
+                    <option value="enviadas" @selected(($filters['filtro_envio'] ?? '') === 'enviadas')>Enviadas</option>
+                    <option value="no_enviadas" @selected(($filters['filtro_envio'] ?? '') === 'no_enviadas')>No enviadas</option>
                 </select>
             </div>
 
