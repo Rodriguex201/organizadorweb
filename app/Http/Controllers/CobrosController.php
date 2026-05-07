@@ -329,6 +329,8 @@ $validated = $request->validate([
     'numero_equipos' => ['nullable', 'numeric', 'min:0'],
     'valor_principal' => ['nullable', 'numeric', 'min:0'],
     'valor_terminal' => ['nullable', 'numeric', 'min:0'],
+    'numero_equipos_extra' => ['nullable', 'numeric', 'min:0'],
+    'valor_equipo_extra' => ['nullable', 'numeric', 'min:0'],
     'empleados' => ['nullable', 'numeric', 'min:0'],
     'valor_nomina' => ['nullable', 'numeric', 'min:0'],
     'numero_moviles' => ['nullable', 'numeric', 'min:0'],
@@ -359,9 +361,17 @@ if ($request->filled('precio_factura') && $idCliente) {
         ]);
 }
 
+$clienteSelect = ['vlrfactura', 'vlrsoporte', 'vlrecepcion'];
+if (Schema::hasColumn('clientes_potenciales', 'numextra')) {
+    $clienteSelect[] = 'numextra';
+}
+if (Schema::hasColumn('clientes_potenciales', 'vlrextrae')) {
+    $clienteSelect[] = 'vlrextrae';
+}
+
 $preciosCliente = DB::table('clientes_potenciales')
     ->where('idclientes_potenciales', $idCliente ?? 0)
-    ->select(['vlrfactura', 'vlrsoporte', 'vlrecepcion'])
+    ->select($clienteSelect)
     ->first();
 
 $validated['precio_factura'] = $request->filled('precio_factura')
@@ -390,6 +400,8 @@ $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
             'numero_equipos' => 'numero_equipos',
             'valor_principal' => 'valor_principal',
             'valor_terminal' => 'valor_terminal',
+            'numero_equipos_extra' => 'numextra',
+            'valor_equipo_extra' => 'vlrextrae',
             'empleados' => 'empleados',
             'valor_nomina' => 'vlrnomina',
             'numero_moviles' => 'numero_moviles',
@@ -426,6 +438,20 @@ $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
             DB::table('valores_externos')
                 ->where('id_cobro', $id)
                 ->update($payload);
+        }
+
+        $payloadCliente = [];
+        if ($idCliente && Schema::hasColumn('clientes_potenciales', 'numextra')) {
+            $payloadCliente['numextra'] = (float) ($formData['numero_equipos_extra'] ?? 0);
+        }
+        if ($idCliente && Schema::hasColumn('clientes_potenciales', 'vlrextrae')) {
+            $payloadCliente['vlrextrae'] = (float) ($formData['valor_equipo_extra'] ?? 0);
+        }
+
+        if ($idCliente && $payloadCliente !== []) {
+            DB::table('clientes_potenciales')
+                ->where('idclientes_potenciales', $idCliente)
+                ->update($payloadCliente);
         }
 
         if ($accion === 'generar') {
@@ -511,6 +537,8 @@ $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
             'numero_equipos' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_equipos ?? null, $cobro->cliente_numequipos ?? null),
             'valor_principal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_principal ?? null, $cobro->cliente_vlrprincipal ?? null),
             'valor_terminal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal ?? null, $cobro->cliente_vlrterminal ?? null),
+            'numero_equipos_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numextra ?? null, $cobro->cliente_numextra ?? null),
+            'valor_equipo_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->vlrextrae ?? null, $cobro->cliente_vlrextrae ?? null),
             'empleados' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->empleados ?? null, $cobro->cliente_numero_empleados ?? null),
             'valor_nomina' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->vlrnomina ?? null, $cobro->cliente_vlrnomina ?? null),
             'numero_moviles' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_moviles ?? null, $cobro->cliente_numeromoviles ?? null),
@@ -538,6 +566,8 @@ $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
             $cobro->total_documentos ?? null,
             $cobro->valor_terminal_recepcion ?? null,
             $cobro->otro_valor_extra ?? null,
+            $cobro->numextra ?? null,
+            $cobro->vlrextrae ?? null,
         ];
 
         foreach ($indicadores as $valor) {

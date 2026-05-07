@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 class ProformaStoreService
 {
 
-    private const CODIGOS_CONCEPTO_OFICIALES = ['0010', '0099', '0081', '0101', '0102', 'EXTRA'];
+    private const CODIGOS_CONCEPTO_OFICIALES = ['0010', '0011', '0099', '0081', '0101', '0102', 'EXTRA'];
 
 
     private const MESES_ES = [
@@ -29,6 +29,8 @@ class ProformaStoreService
 
     public function __construct(
         private readonly ProformaPreviewService $proformaPreviewService,
+        private readonly RevisarProformaCalculator $revisarProformaCalculator,
+        private readonly ConceptosCatalogService $conceptosCatalogService,
     ) {
     }
 
@@ -56,6 +58,7 @@ class ProformaStoreService
     {
         return DB::transaction(function () use ($cobro, $extraConcepto) {
             $preview = $this->proformaPreviewService->buildFromCobro($cobro);
+            $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
 
             $nit = trim((string) ($cobro->cliente_nit ?? ''));
             $mesTexto = trim((string) ($cobro->mes ?? ''));
@@ -79,8 +82,9 @@ class ProformaStoreService
                 );
                 $totalPreview = $this->calcularTotalDesdeLineas($lineas);
 
-                $this->actualizarCabeceraProformaExistente((int) $proformaExistente->id, $cobro, $preview);
+                $this->actualizarCabeceraProformaExistente((int) $proformaExistente->id, $cobro, $preview, $revision);
                 $this->actualizarTotalCabecera((int) $proformaExistente->id, $totalPreview);
+                $this->actualizarValoresExternosDesdeRevision($cobro, $revision);
                 $this->reemplazarDetalleProforma((int) $proformaExistente->id, $lineas);
                 $this->marcarCobroComoProformaGenerada((int) $cobro->id_cobro);
 
@@ -111,7 +115,7 @@ class ProformaStoreService
                 'anio' => $anio,
                 'nro_prof' => $nroProf,
                 'estado' => 2,
-                'vlr_mens' => (float) ($cobro->valor_mensualidad ?? 0),
+                'vlr_mens' => (float) ($revision['total_mensualidad'] ?? 0),
                 'vlr_nom' => (float) ($cobro->vlrnomina ?? 0),
                 'vlr_fe' => (float) ($cobro->valor_facturas ?? 0),
                 'vlr_rec' => (float) ($cobro->valor_acuse ?? 0),
@@ -141,6 +145,7 @@ class ProformaStoreService
                 DB::table('sg_proford')->insert($detalleRows);
             }
 
+            $this->actualizarValoresExternosDesdeRevision($cobro, $revision);
             $this->marcarCobroComoProformaGenerada((int) $cobro->id_cobro);
 
             return [
@@ -224,11 +229,11 @@ class ProformaStoreService
         return $mesNumero;
     }
 
-    private function actualizarCabeceraProformaExistente(int $proformaId, object $cobro, array $preview): void
+    private function actualizarCabeceraProformaExistente(int $proformaId, object $cobro, array $preview, array $revision): void
     {
         $payload = [
             'emp' => $this->resolveEmpresaCliente($cobro),
-            'vlr_mens' => (float) ($cobro->valor_mensualidad ?? 0),
+            'vlr_mens' => (float) ($revision['total_mensualidad'] ?? 0),
             'vlr_nom' => (float) ($cobro->vlrnomina ?? 0),
             'vlr_fe' => (float) ($cobro->valor_facturas ?? 0),
             'vlr_rec' => (float) ($cobro->valor_acuse ?? 0),
@@ -322,12 +327,10 @@ class ProformaStoreService
      */
     private function obtenerCatalogoConceptos(): array
     {
-        return DB::table('conceptos')
-            ->select('codigo', 'nombre')
-            ->whereIn('codigo', self::CODIGOS_CONCEPTO_OFICIALES)
-            ->get()
-            ->mapWithKeys(fn ($concepto) => [(string) $concepto->codigo => $concepto])
-            ->all();
+        return array_map(
+            fn (array $concepto) => (object) $concepto,
+            $this->conceptosCatalogService->findByCodes(self::CODIGOS_CONCEPTO_OFICIALES),
+        );
     }
 
     /**
@@ -427,6 +430,107 @@ class ProformaStoreService
             fn (float $acumulado, array $linea) => $acumulado + (float) ($linea['valor_parcial'] ?? 0),
             0.0,
         );
+    }
+
+    private function actualizarValoresExternosDesdeRevision(object $cobro, array $revision): void
+    {
+        $idCobro = (int) ($cobro->id_cobro ?? 0);
+
+        if ($idCobro <= 0) {
+            return;
+        }
+
+        $payload = [];
+
+        foreach ([
+            'numextra' => 'numero_equipos_extra',
+            'vlrextrae' => 'valor_equipo_extra',
+            'valor_mensualidad' => 'total_mensualidad',
+            'valor_total' => 'valor_total_proforma',
+        ] as $column => $key) {
+            if (!Schema::hasColumn('valores_externos', $column)) {
+                continue;
+            }
+
+            $payload[$column] = (float) ($revision[$key] ?? 0);
+        }
+
+        if ($payload === []) {
+            return;
+        }
+
+        DB::table('valores_externos')
+            ->where('id_cobro', $idCobro)
+            ->update($payload);
+    }
+
+    private function mapCobroToCalculationData(object $cobro): array
+    {
+        $existeRevisionGuardada = $this->existeRevisionGuardada($cobro);
+
+        return [
+            'numero_equipos' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_equipos ?? null, $cobro->cliente_numequipos ?? null),
+            'valor_principal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_principal ?? null, $cobro->cliente_vlrprincipal ?? null),
+            'valor_terminal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal ?? null, $cobro->cliente_vlrterminal ?? null),
+            'numero_equipos_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numextra ?? null, $cobro->cliente_numextra ?? null),
+            'valor_equipo_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->vlrextrae ?? null, $cobro->cliente_vlrextrae ?? null),
+            'empleados' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->empleados ?? null, $cobro->cliente_numero_empleados ?? null),
+            'valor_nomina' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->vlrnomina ?? null, $cobro->cliente_vlrnomina ?? null),
+            'numero_moviles' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_moviles ?? null, $cobro->cliente_numeromoviles ?? null),
+            'valor_movil' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_movil ?? null, $cobro->cliente_vlrmovil ?? null),
+            'facturas' => (float) ($cobro->numero_facturas ?? 0),
+            'nota_debito' => (float) ($cobro->numero_nota_debito ?? 0),
+            'nota_credito' => (float) ($cobro->numero_nota_credito ?? 0),
+            'soporte' => (float) ($cobro->numero_documento_soporte ?? 0),
+            'nota_ajuste' => (float) ($cobro->numero_nota_ajuste ?? 0),
+            'acuse' => (float) ($cobro->numero_acuse ?? 0),
+            'otro_valor_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra ?? null, $cobro->cliente_vlrextra ?? null),
+            'valor_terminal_recepcion' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
+            'precio_factura' => (float) ($cobro->cliente_vlrfactura ?? 0),
+            'precio_soporte' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_soporte ?? null, $cobro->cliente_vlrsoporte ?? null),
+            'precio_acuse' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_acuse ?? null, $cobro->cliente_vlrecepcion ?? null),
+        ];
+    }
+
+    private function existeRevisionGuardada(object $cobro): bool
+    {
+        foreach ([
+            $cobro->precio_soporte ?? null,
+            $cobro->precio_acuse ?? null,
+            $cobro->total_facturas ?? null,
+            $cobro->total_documentos ?? null,
+            $cobro->valor_terminal_recepcion ?? null,
+            $cobro->otro_valor_extra ?? null,
+            $cobro->numextra ?? null,
+            $cobro->vlrextrae ?? null,
+        ] as $valor) {
+            if ($valor !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function valorRevisionOBase(bool $existeRevisionGuardada, mixed $valorRevision, mixed $valorBase): float
+    {
+        if ($existeRevisionGuardada && $valorRevision !== null) {
+            return (float) $valorRevision;
+        }
+
+        if (!$existeRevisionGuardada && $valorBase !== null) {
+            return (float) $valorBase;
+        }
+
+        if ($valorRevision !== null) {
+            return (float) $valorRevision;
+        }
+
+        if ($valorBase !== null) {
+            return (float) $valorBase;
+        }
+
+        return 0.0;
     }
 
 

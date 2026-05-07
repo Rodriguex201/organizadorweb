@@ -12,9 +12,11 @@ class RevisarProformaCalculatorTest extends TestCase
         $service = new RevisarProformaCalculator();
 
         $resultado = $service->calculate([
-            'numero_equipos' => 2,
+            'numero_equipos' => 3,
             'valor_principal' => 100,
             'valor_terminal' => 50,
+            'numero_equipos_extra' => 2,
+            'valor_equipo_extra' => 30,
             'empleados' => 3,
             'valor_nomina' => 10,
             'numero_moviles' => 1,
@@ -33,11 +35,27 @@ class RevisarProformaCalculatorTest extends TestCase
         ]);
 
         $this->assertSame(8.0, $resultado['total_facturas']);
-        $this->assertSame(16.0, $resultado['valor_facturas']);
+        $this->assertSame(10.0, $resultado['valor_facturas']);
         $this->assertSame(5.0, $resultado['total_documentos']);
         $this->assertSame(12.0, $resultado['valor_documentos']);
         $this->assertSame(12.0, $resultado['valor_acuse']);
-        $this->assertSame(300.0, $resultado['total_mensualidad']);
-        $this->assertSame(355.0, $resultado['valor_total_proforma']);
+        $this->assertSame(270.0, $resultado['total_mensualidad']);
+        $this->assertSame(319.0, $resultado['valor_total_proforma']);
+    }
+
+    public function test_no_agrega_extra_si_numero_equipos_extra_es_cero(): void
+    {
+        $service = new RevisarProformaCalculator();
+
+        $resultado = $service->calculate([
+            'numero_equipos' => 1,
+            'valor_principal' => 100,
+            'valor_terminal' => 50,
+            'numero_equipos_extra' => 0,
+            'valor_equipo_extra' => 99,
+            'valor_nomina' => 25,
+        ]);
+
+        $this->assertSame(125.0, $resultado['total_mensualidad']);
     }
 }

@@ -89,39 +89,47 @@ return $query
 
     public function findCobroById(int $idCobro): ?object
     {
+        $select = [
+            've.*',
+            'cp.idclientes_potenciales as cliente_id',
+            'cp.nombre as cliente_nombre',
+            'cp.empresa as cliente_empresa',
+            'cp.nit as cliente_nit',
+            'cp.codigo as cliente_codigo',
+            'cp.contacto as cliente_contacto',
+            'cp.celular1 as cliente_celular1',
+            'cp.celular2 as cliente_celular2',
+            'cp.email as cliente_email',
+            'cp.direccion as cliente_direccion',
+            'cp.regimen as cliente_regimen',
+            'cp.modalidad as cliente_modalidad',
+            'cp.categoria as cliente_categoria',
+            'cp.vlrprincipal as cliente_vlrprincipal',
+            'cp.numequipos as cliente_numequipos',
+            'cp.vlrterminal as cliente_vlrterminal',
+            'cp.vlrnomina as cliente_vlrnomina',
+            'cp.numeromoviles as cliente_numeromoviles',
+            'cp.vlrmovil as cliente_vlrmovil',
+            'cp.numero_empleados as cliente_numero_empleados',
+            'cp.vlrfactura as cliente_vlrfactura',
+            'cp.vlrecepcion as cliente_vlrecepcion',
+            'cp.vlrsoporte as cliente_vlrsoporte',
+            'cp.nominaterminal as cliente_nominaterminal',
+            'cp.vlrextra as cliente_vlrextra',
+            'cp.vlrextra2 as cliente_vlrextra2',
+        ];
+
+        if (Schema::hasColumn('clientes_potenciales', 'numextra')) {
+            $select[] = 'cp.numextra as cliente_numextra';
+        }
+
+        if (Schema::hasColumn('clientes_potenciales', 'vlrextrae')) {
+            $select[] = 'cp.vlrextrae as cliente_vlrextrae';
+        }
+
         return DB::table('valores_externos as ve')
             ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
-            ->select([
-                've.*',
-                'cp.idclientes_potenciales as cliente_id',
-                'cp.nombre as cliente_nombre',
-                'cp.empresa as cliente_empresa',
-                'cp.nit as cliente_nit',
-                'cp.codigo as cliente_codigo',
-                'cp.contacto as cliente_contacto',
-                'cp.celular1 as cliente_celular1',
-
-                'cp.celular2 as cliente_celular2',
-                'cp.email as cliente_email',
-                'cp.direccion as cliente_direccion',
-                'cp.regimen as cliente_regimen',
-                'cp.modalidad as cliente_modalidad',
-                'cp.categoria as cliente_categoria',
-                'cp.vlrprincipal as cliente_vlrprincipal',
-                'cp.numequipos as cliente_numequipos',
-                'cp.vlrterminal as cliente_vlrterminal',
-                'cp.vlrnomina as cliente_vlrnomina',
-                'cp.numeromoviles as cliente_numeromoviles',
-                'cp.vlrmovil as cliente_vlrmovil',
-                'cp.numero_empleados as cliente_numero_empleados',
-                'cp.vlrfactura as cliente_vlrfactura',
-                'cp.vlrecepcion as cliente_vlrecepcion',
-                'cp.vlrsoporte as cliente_vlrsoporte',
-                'cp.nominaterminal as cliente_nominaterminal',
-                'cp.vlrextra as cliente_vlrextra',
-                'cp.vlrextra2 as cliente_vlrextra2',
-
-            ])
+            ->select($select)
             ->where('ve.id_cobro', $idCobro)
             ->first();
     }
@@ -133,6 +141,8 @@ return $query
             'numero_equipos' => 'numero_equipos',
             'valor_principal' => 'valor_principal',
             'valor_terminal' => 'valor_terminal',
+            'numero_equipos_extra' => 'numextra',
+            'valor_equipo_extra' => 'vlrextrae',
             'empleados' => 'empleados',
             'valor_nomina' => 'vlrnomina',
             'numero_moviles' => 'numero_moviles',

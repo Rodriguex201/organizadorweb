@@ -16,10 +16,12 @@ class RevisarProformaCalculator
 
         $data['valor_acuse'] = $data['acuse'] * $data['precio_acuse'];
 
-        $data['total_mensualidad'] = ($data['numero_equipos'] * $data['valor_principal'])
-            + ($data['numero_moviles'] * $data['valor_movil'])
-            + ($data['empleados'] * $data['valor_nomina'])
-            + $data['valor_terminal'];
+        $equiposAdicionales = max($data['numero_equipos'] - 1, 0);
+
+        $data['total_mensualidad'] = $data['valor_principal']
+            + ($data['valor_terminal'] * $equiposAdicionales)
+            + ($data['valor_equipo_extra'] * $data['numero_equipos_extra'])
+            + $data['valor_nomina'];
 
         $data['valor_total_proforma'] = $data['total_mensualidad']
             + $data['valor_facturas']
@@ -37,6 +39,8 @@ class RevisarProformaCalculator
             'numero_equipos',
             'valor_principal',
             'valor_terminal',
+            'numero_equipos_extra',
+            'valor_equipo_extra',
             'empleados',
             'valor_nomina',
             'numero_moviles',
