@@ -24,6 +24,11 @@ class ProformaPdfService
         12 => 'diciembre',
     ];
 
+    public function __construct(
+        private readonly NumeroALetrasService $numeroALetrasService,
+    ) {
+    }
+
     public function generateForProformaId(int $proformaId, bool $regenerar = false): array
     {
         $cabecera = DB::table('sg_proform')->where('id', $proformaId)->first();
@@ -63,6 +68,7 @@ class ProformaPdfService
             'mes_nombre' => $this->resolverNombreMes((int) ($cabecera->mes ?? 0)),
             'fecha_emision' => now()->format('Y-m-d'),
             'logo_path' => $this->resolverLogoPath((string) ($cabecera->emisora ?? '')),
+            'total_en_letras' => $this->numeroALetrasService->toColombianPesos((float) ($cabecera->vtotal ?? 0)),
         ];
 
         $pdf = Pdf::loadView('proformas.pdf', $data)->setPaper('a4');

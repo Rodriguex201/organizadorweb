@@ -146,7 +146,7 @@ $mensajesPagoPorEmisora = [
 </div>
 
 <div class="section-title">Total en letras</div>
-<div class="subtle">{{ $cabecera->total_letras ?? 'Pendiente de configuración.' }}</div>
+<div class="subtle">{{ $total_en_letras ?? '' }}</div>
 
 <div class="total-box">
     <div class="total-title">Total Proforma</div>
