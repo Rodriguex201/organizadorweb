@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Storage;
 
 class ProformasService
 {
+    private ?bool $sgProformHasIdCobroColumn = null;
+
     public const ESTADO_GENERADA = 2;
     public const ESTADO_ENVIADA = 3;
     public const ESTADO_PAGADA = 4;
@@ -78,6 +80,7 @@ class ProformasService
         $empresa = trim((string) ($filters['empresa'] ?? ''));
         $emisora = trim((string) ($filters['emisora'] ?? ''));
         $estado = $this->normalizarEntero($filters['estado'] ?? null);
+        $envio = $this->normalizarEntero($filters['envio'] ?? null);
         $anio = $this->normalizarEntero($filters['anio'] ?? null);
         $mes = $this->normalizarMes($filters['mes'] ?? null);
 
@@ -96,6 +99,7 @@ class ProformasService
             ->when($empresa !== '', fn ($q) => $q->where('p.emp', 'like', "%{$empresa}%"))
             ->when($emisora !== '', fn ($q) => $q->where('p.emisora', $emisora))
             ->when($estado !== null, fn ($q) => $q->where('p.estado', $estado))
+            ->when($envio !== null, fn ($q) => $q->where('p.enviado', $envio))
             ->when($anio !== null, fn ($q) => $q->where('p.anio', $anio))
             ->when($mes !== null, fn ($q) => $q->where('p.mes', $mes))
             ->orderByDesc('p.anio')->orderByDesc('p.mes')->orderByDesc('p.id')
@@ -277,7 +281,7 @@ class ProformasService
     private function syncEstadoEnValoresExternos(int $proformaId, int $nuevoEstado): int
     {
         $select = ['id', 'nit', 'mes', 'anio', 'emisora'];
-        $hasCobroReference = Schema::hasColumn('sg_proform', 'id_cobro');
+        $hasCobroReference = $this->hasSgProformIdCobroColumn();
 
         if ($hasCobroReference) {
             $select[] = 'id_cobro';
@@ -479,7 +483,7 @@ class ProformasService
             })
             ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
             ->where(function ($query) {
-                if (Schema::hasColumn('sg_proform', 'id_cobro')) {
+                if ($this->hasSgProformIdCobroColumn()) {
                     $query
                         ->where(function ($exact) {
                             $exact
@@ -518,6 +522,15 @@ class ProformasService
                      END = BINARY UPPER(TRIM(COALESCE(p.emisora, 'SAS')))");
             })
             ->orderByDesc('ve.id_cobro');
+    }
+
+    private function hasSgProformIdCobroColumn(): bool
+    {
+        if ($this->sgProformHasIdCobroColumn !== null) {
+            return $this->sgProformHasIdCobroColumn;
+        }
+
+        return $this->sgProformHasIdCobroColumn = Schema::hasColumn('sg_proform', 'id_cobro');
     }
 
     private function proformaMesTextoSql(string $mesColumn): string

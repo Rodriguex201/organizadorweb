@@ -84,6 +84,14 @@
                     @endforeach
                 </select>
             </div>
+            <div>
+                <label for="envio" class="mb-1 block text-sm font-medium">Envío</label>
+                <select id="envio" name="envio" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Todos</option>
+                    <option value="1" @selected((string) request('envio', session('proformas.envio')) === '1')>Enviada</option>
+                    <option value="0" @selected((string) request('envio', session('proformas.envio')) === '0')>No enviada</option>
+                </select>
+            </div>
             <div class="flex items-end gap-2">
                 <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Filtrar</button>
                 <a href="{{ route('proformas.clear-filters') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Limpiar</a>

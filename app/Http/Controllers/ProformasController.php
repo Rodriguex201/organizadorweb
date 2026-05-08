@@ -39,7 +39,7 @@ if ($request->get('from') === 'detalle') {
     return redirect()->route('proformas.index', $filtros);
 }
 
-    $filterKeys = ['nro_prof', 'codigo', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado'];
+    $filterKeys = ['nro_prof', 'codigo', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio'];
     $hasRequestFilters = collect($filterKeys)->contains(fn (string $key) => $request->filled($key));
 
     $rawFilters = [
@@ -51,6 +51,7 @@ if ($request->get('from') === 'detalle') {
         'mes' => $request->input('mes', session('proformas.mes')),
         'anio' => $request->input('anio', session('proformas.anio')),
         'estado' => $request->input('estado', session('proformas.estado')),
+        'envio' => $request->input('envio', session('proformas.envio')),
     ];
 
     $validated = Validator::make($rawFilters, [
@@ -62,6 +63,7 @@ if ($request->get('from') === 'detalle') {
         'mes' => ['nullable', 'string', 'max:20'],
         'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
         'estado' => ['nullable', 'integer', 'min:0'],
+        'envio' => ['nullable', 'in:0,1'],
     ])->validate();
 
     $periodo = $this->proformasService->normalizePeriodoFilters(
@@ -87,6 +89,7 @@ if ($request->get('from') === 'detalle') {
         'mes' => $periodo['mes'],
         'anio' => $periodo['anio'],
         'estado' => $validated['estado'] ?? null,
+        'envio' => isset($validated['envio']) ? (string) $validated['envio'] : null,
     ];
 
     if ($hasRequestFilters) {
@@ -99,6 +102,7 @@ if ($request->get('from') === 'detalle') {
             'proformas.mes' => $filters['mes'],
             'proformas.anio' => $filters['anio'],
             'proformas.estado' => $filters['estado'],
+            'proformas.envio' => $filters['envio'],
         ]);
     }
 
