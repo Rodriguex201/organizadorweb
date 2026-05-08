@@ -35,6 +35,9 @@ class ClientesController extends Controller
             $mapping['fecha_arriendo'] ? "{$mapping['fecha_arriendo']} as fecha_arriendo" : DB::raw('NULL as fecha_arriendo'),
             $mapping['fecha_cotizacion'] ? "{$mapping['fecha_cotizacion']} as fecha_cotizacion" : DB::raw('NULL as fecha_cotizacion'),
             $mapping['fecha_retiro'] ? "{$mapping['fecha_retiro']} as fecha_retiro" : DB::raw('NULL as fecha_retiro'),
+            $mapping['retiro_flag'] ? "{$mapping['retiro_flag']} as retiro_flag" : DB::raw('NULL as retiro_flag'),
+            $mapping['fecha_reactivacion'] ? "{$mapping['fecha_reactivacion']} as fecha_reactivacion" : DB::raw('NULL as fecha_reactivacion'),
+            $mapping['motivo_reactivacion'] ? "{$mapping['motivo_reactivacion']} as motivo_reactivacion" : DB::raw('NULL as motivo_reactivacion'),
             $mapping['ip_empresa'] ? "{$mapping['ip_empresa']} as ip_empresa" : DB::raw('NULL as ip_empresa'),
             $mapping['contrato'] ? "{$mapping['contrato']} as contrato" : DB::raw('NULL as contrato'),
         ];
@@ -73,6 +76,11 @@ class ClientesController extends Controller
         }
 
         $clientes = $query->paginate(15)->withQueryString();
+        $clientes->getCollection()->transform(function ($cliente) use ($mapping) {
+            $cliente->esta_retirado = $this->isClienteRetirado($cliente, $mapping);
+
+            return $cliente;
+        });
 
         $contratos = [];
         if ($mapping['contrato']) {
@@ -94,6 +102,7 @@ class ClientesController extends Controller
             ],
             'contratos' => $contratos,
             'mapping' => $mapping,
+            'motivosReactivacion' => $this->loadReactivationReasons(),
         ]);
     }
 
@@ -157,11 +166,14 @@ class ClientesController extends Controller
 
         abort_if(!$cliente, 404);
 
+        $cliente->esta_retirado = $this->isClienteRetirado($cliente, $mapping);
+
         return view('clientes.edit', [
             'cliente' => $cliente,
             'clienteId' => $id,
             'mapping' => $mapping,
             'catalogos' => $this->loadFormCatalogs(),
+            'motivosReactivacion' => $this->loadReactivationReasons(),
         ]);
     }
 
@@ -196,8 +208,10 @@ class ClientesController extends Controller
 
         if ($mapping['fecha_retiro']) {
             $payload[$mapping['fecha_retiro']] = Carbon::now()->toDateString();
-        } elseif ($mapping['retirado_flag']) {
-            $payload[$mapping['retirado_flag']] = 1;
+        }
+
+        if ($mapping['retiro_flag']) {
+            $payload[$mapping['retiro_flag']] = 1;
         }
 
         if ($payload === []) {
@@ -214,6 +228,90 @@ class ClientesController extends Controller
         $query->update($payload);
 
         return redirect()->route('clientes.index')->with('status', 'Cliente marcado como retirado.');
+    }
+
+    public function reactivar(Request $request, int $id): RedirectResponse
+    {
+        $mapping = $this->resolveColumnMapping();
+        $motivosCatalogo = $this->loadReactivationReasons();
+
+        $validated = $request->validate([
+            'motivo_reactivacion' => array_merge(['required'], $this->catalogRule($motivosCatalogo)),
+            'observacion_reactivacion' => ['nullable', 'string', 'max:2000'],
+            'cliente_reactivacion_id' => ['nullable', 'integer'],
+        ], [
+            'motivo_reactivacion.in' => 'Selecciona un motivo de reactivación válido.',
+        ]);
+
+        if (
+            !$mapping['fecha_reactivacion']
+            && !$mapping['motivo_reactivacion']
+            && !$mapping['fecha_retiro']
+            && !$mapping['retiro_flag']
+            && !$mapping['tipo_retiro']
+        ) {
+            return back()->withInput()->withErrors([
+                'general' => 'No existen columnas disponibles para registrar la reactivación en clientes_potenciales.',
+            ]);
+        }
+
+        $query = DB::table('clientes_potenciales');
+        if ($mapping['id']) {
+            $query->where($mapping['id'], $id);
+        }
+
+        $cliente = $query->first();
+
+        if (!$cliente) {
+            abort(404);
+        }
+
+        if (!$this->isClienteRetirado($cliente, $mapping)) {
+            return back()->with('status', 'El cliente ya se encuentra activo.');
+        }
+
+        $payload = [];
+        $hoy = Carbon::now()->toDateString();
+
+        if ($mapping['fecha_reactivacion']) {
+            $payload[$mapping['fecha_reactivacion']] = $hoy;
+        }
+
+        if ($mapping['motivo_reactivacion']) {
+            $motivo = $motivosCatalogo['by_id'][(string) ($validated['motivo_reactivacion'] ?? '')] ?? null;
+            $payload[$mapping['motivo_reactivacion']] = $motivo['label'] ?? null;
+        }
+
+        $motivoTexto = $mapping['motivo_reactivacion']
+            ? ($payload[$mapping['motivo_reactivacion']] ?? null)
+            : null;
+
+        if ($mapping['retiro_flag']) {
+            $payload[$mapping['retiro_flag']] = 0;
+        }
+
+        if ($mapping['fecha_retiro']) {
+            $payload[$mapping['fecha_retiro']] = null;
+        }
+
+        if ($mapping['tipo_retiro']) {
+            $payload[$mapping['tipo_retiro']] = null;
+        }
+
+        $observacion = trim((string) ($validated['observacion_reactivacion'] ?? ''));
+        $commentColumn = $mapping['comentarios_reactivacion'] ?? null;
+        if ($observacion !== '' && $commentColumn) {
+            $payload[$commentColumn] = $this->buildReactivationComment(
+                $cliente->{$commentColumn} ?? null,
+                $hoy,
+                $motivoTexto,
+                $observacion
+            );
+        }
+
+        $query->update($payload);
+
+        return redirect()->route('clientes.index')->with('status', 'Cliente reactivado correctamente.');
     }
 
     private function buildPayload(array $validated, array $mapping, array $catalogos): array
@@ -361,6 +459,46 @@ class ClientesController extends Controller
         ];
     }
 
+    private function loadReactivationReasons(): array
+    {
+        if (!Schema::hasTable('motivos_re')) {
+            return ['options' => [], 'by_id' => [], 'ids' => []];
+        }
+
+        $catalogo = $this->loadCatalog('motivos_re', ['id'], ['nombre']);
+
+        if ($catalogo['options'] === [] || !Schema::hasColumn('motivos_re', 'activo')) {
+            return $catalogo;
+        }
+
+        $rows = DB::table('motivos_re')
+            ->select(['id', 'nombre'])
+            ->where('activo', 1)
+            ->orderBy('nombre')
+            ->get();
+
+        $options = [];
+        $byId = [];
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $item = [
+                'id' => $row->id,
+                'label' => (string) $row->nombre,
+            ];
+
+            $options[] = $item;
+            $byId[(string) $row->id] = $item;
+            $ids[] = (string) $row->id;
+        }
+
+        return [
+            'options' => $options,
+            'by_id' => $byId,
+            'ids' => $ids,
+        ];
+    }
+
     private function loadCatalog(string $table, array $idCandidates, array $labelCandidates): array
     {
         if (!Schema::hasTable($table)) {
@@ -424,6 +562,23 @@ class ClientesController extends Controller
         }
 
         return in_array($type, ['integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true);
+    }
+
+    private function isClienteRetirado(object $cliente, array $mapping): bool
+    {
+        $fechaRetiro = $mapping['fecha_retiro'] ? ($cliente->{$mapping['fecha_retiro']} ?? null) : ($cliente->fecha_retiro ?? null);
+        $retiroFlag = $mapping['retiro_flag'] ? ($cliente->{$mapping['retiro_flag']} ?? null) : ($cliente->retiro_flag ?? null);
+
+        return !empty($fechaRetiro) || (int) $retiroFlag === 1;
+    }
+
+    private function buildReactivationComment(mixed $currentValue, string $fecha, ?string $motivo, string $observacion): string
+    {
+        $actual = trim((string) $currentValue);
+        $prefijo = $actual !== '' ? $actual . PHP_EOL : '';
+        $motivoTexto = $motivo ? " Motivo: {$motivo}." : '';
+
+        return trim($prefijo . "[REACTIVACION {$fecha}]{$motivoTexto} {$observacion}");
     }
 
 
@@ -584,12 +739,16 @@ private function normalizeFolderName(string $value): string
             'fecha_arriendo' => $pick(['fecha_arriendo']),
             'fecha_cotizacion' => $pick(['fecha_cotizacion']),
             'fecha_retiro' => $pick(['fecha_retiro']),
+            'fecha_reactivacion' => $pick(['freact']),
             'ip_empresa' => $pick(['ip_empresa']),
             'clase' => $pick(['clase', 'idclase', 'idclases']),
             'modalidad' => $pick(['modalidad']),
             'llego' => $pick(['llego', 'idllego']),
             'contrato' => $pick(['modalidad', 'contrato']),
-            'retirado_flag' => $pick(['retirado']),
+            'retiro_flag' => $pick(['retiro', 'retirado']),
+            'motivo_reactivacion' => $pick(['mreact']),
+            'tipo_retiro' => $pick(['tipoRetiro']),
+            'comentarios_reactivacion' => $pick(['Comentarios', 'notas']),
         ];
     }
 }

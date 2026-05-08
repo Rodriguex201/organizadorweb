@@ -26,6 +26,7 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/clientes/{id}/edit', [ClientesController::class, 'edit'])->name('clientes.edit');
     Route::put('/clientes/{id}', [ClientesController::class, 'update'])->name('clientes.update');
     Route::patch('/clientes/{id}/retirar', [ClientesController::class, 'retirar'])->name('clientes.retirar');
+    Route::patch('/clientes/{id}/reactivar', [ClientesController::class, 'reactivar'])->name('clientes.reactivar');
 
     Route::get('/cobros', [CobrosController::class, 'index'])->name('cobros.index');
     Route::post('/cobros/proformas-masivo/{grupo}', [CobrosController::class, 'generarProformasMasivo'])->name('cobros.proformas-masivo');
