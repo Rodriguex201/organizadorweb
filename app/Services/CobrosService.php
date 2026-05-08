@@ -28,6 +28,39 @@ class CobrosService
         12 => 'diciembre',
     ];
 
+    private const REVISION_VALORES_EXTERNOS_MAP = [
+        'facturas' => 'numero_facturas',
+        'nota_debito' => 'numero_nota_debito',
+        'nota_credito' => 'numero_nota_credito',
+        'soporte' => 'numero_documento_soporte',
+        'nota_ajuste' => 'numero_nota_ajuste',
+        'acuse' => 'numero_acuse',
+        'otro_valor_extra' => 'valor_extra',
+        'valor_terminal_recepcion' => 'valor_extra2',
+        'valor_facturas' => 'valor_facturas',
+        'valor_documentos' => 'valor_documentos',
+        'valor_acuse' => 'valor_acuse',
+        'total_mensualidad' => 'valor_mensualidad',
+        'valor_total_proforma' => 'valor_total',
+    ];
+
+    private const REVISION_CLIENTES_MAP = [
+        'numero_equipos' => 'numequipos',
+        'valor_principal' => 'vlrprincipal',
+        'valor_terminal' => 'vlrterminal',
+        'numero_equipos_extra' => 'numextra',
+        'valor_equipo_extra' => 'vlrextrae',
+        'empleados' => 'numero_empleados',
+        'valor_nomina' => 'vlrnomina',
+        'numero_moviles' => 'numeromoviles',
+        'valor_movil' => 'vlrmovil',
+        'otro_valor_extra' => 'vlrextra',
+        'valor_terminal_recepcion' => 'vlrextra2',
+        'precio_factura' => 'vlrfactura',
+        'precio_soporte' => 'vlrsoporte',
+        'precio_acuse' => 'vlrecepcion',
+    ];
+
 
     public function paginateCobros(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
@@ -137,39 +170,9 @@ return $query
 
     public function updateCobroRevision(int $idCobro, array $data): bool
     {
-        $allowedColumns = [
-            'numero_equipos' => 'numero_equipos',
-            'valor_principal' => 'valor_principal',
-            'valor_terminal' => 'valor_terminal',
-            'numero_equipos_extra' => 'numextra',
-            'valor_equipo_extra' => 'vlrextrae',
-            'empleados' => 'empleados',
-            'valor_nomina' => 'vlrnomina',
-            'numero_moviles' => 'numero_moviles',
-            'valor_movil' => 'valor_movil',
-            'total_mensualidad' => 'valor_mensualidad',
-            'facturas' => 'numero_facturas',
-            'nota_debito' => 'numero_nota_debito',
-            'nota_credito' => 'numero_nota_credito',
-            'total_facturas' => 'total_facturas',
-            'valor_facturas' => 'valor_facturas',
-            'soporte' => 'numero_documento_soporte',
-            'nota_ajuste' => 'numero_nota_ajuste',
-            'total_documentos' => 'total_documentos',
-            'valor_documentos' => 'valor_documentos',
-            'acuse' => 'numero_acuse',
-            'valor_acuse' => 'valor_acuse',
-            'otro_valor_extra' => 'otro_valor_extra',
-            'valor_terminal_recepcion' => 'valor_terminal_recepcion',
-            'valor_total_proforma' => 'valor_total',
-            'precio_factura' => 'precio_factura',
-            'precio_soporte' => 'precio_soporte',
-            'precio_acuse' => 'precio_acuse',
-        ];
-
         $payload = [];
 
-        foreach ($allowedColumns as $inputKey => $column) {
+        foreach (self::REVISION_VALORES_EXTERNOS_MAP as $inputKey => $column) {
             if (!array_key_exists($inputKey, $data)) {
                 continue;
             }
@@ -190,6 +193,57 @@ return $query
             ->update($payload) > 0;
     }
 
+    public function updateClienteRevision(int $idCliente, array $data): bool
+    {
+        $payload = [];
+
+        foreach (self::REVISION_CLIENTES_MAP as $inputKey => $column) {
+            if (!array_key_exists($inputKey, $data)) {
+                continue;
+            }
+
+            if (!Schema::hasColumn('clientes_potenciales', $column)) {
+                continue;
+            }
+
+            $payload[$column] = (float) $data[$inputKey];
+        }
+
+        if ($payload === []) {
+            return false;
+        }
+
+        return DB::table('clientes_potenciales')
+            ->where('idclientes_potenciales', $idCliente)
+            ->update($payload) > 0;
+    }
+
+    public function mapCobroToRevisionValues(object $cobro): array
+    {
+        return [
+            'numero_equipos' => $this->revisionValue($cobro, ['numero_equipos', 'cliente_numequipos']),
+            'valor_principal' => $this->revisionValue($cobro, ['valor_principal', 'cliente_vlrprincipal']),
+            'valor_terminal' => $this->revisionValue($cobro, ['valor_terminal', 'cliente_vlrterminal']),
+            'numero_equipos_extra' => $this->revisionValue($cobro, ['numextra', 'cliente_numextra']),
+            'valor_equipo_extra' => $this->revisionValue($cobro, ['vlrextrae', 'cliente_vlrextrae']),
+            'empleados' => $this->revisionValue($cobro, ['empleados', 'cliente_numero_empleados']),
+            'valor_nomina' => $this->revisionValue($cobro, ['vlrnomina', 'cliente_vlrnomina']),
+            'numero_moviles' => $this->revisionValue($cobro, ['numero_moviles', 'cliente_numeromoviles']),
+            'valor_movil' => $this->revisionValue($cobro, ['valor_movil', 'cliente_vlrmovil']),
+            'facturas' => $this->revisionValue($cobro, ['numero_facturas']),
+            'nota_debito' => $this->revisionValue($cobro, ['numero_nota_debito']),
+            'nota_credito' => $this->revisionValue($cobro, ['numero_nota_credito']),
+            'soporte' => $this->revisionValue($cobro, ['numero_documento_soporte']),
+            'nota_ajuste' => $this->revisionValue($cobro, ['numero_nota_ajuste']),
+            'acuse' => $this->revisionValue($cobro, ['numero_acuse']),
+            'otro_valor_extra' => $this->revisionValue($cobro, ['otro_valor_extra', 'valor_extra', 'cliente_vlrextra']),
+            'valor_terminal_recepcion' => $this->revisionValue($cobro, ['valor_terminal_recepcion', 'valor_extra2', 'cliente_vlrextra2']),
+            'precio_factura' => $this->revisionValue($cobro, ['precio_factura', 'cliente_vlrfactura']),
+            'precio_soporte' => $this->revisionValue($cobro, ['precio_soporte', 'cliente_vlrsoporte']),
+            'precio_acuse' => $this->revisionValue($cobro, ['precio_acuse', 'cliente_vlrecepcion']),
+        ];
+    }
+
     /**
      * TODO: Integrar lógica de persistencia para sg_proform y sg_proford.
      */
@@ -203,6 +257,19 @@ return $query
                 'items' => $data['items'] ?? [],
             ],
         ];
+    }
+
+    private function revisionValue(object $cobro, array $sources): float
+    {
+        foreach ($sources as $source) {
+            if (!isset($cobro->{$source}) || $cobro->{$source} === null || $cobro->{$source} === '') {
+                continue;
+            }
+
+            return (float) $cobro->{$source};
+        }
+
+        return 0.0;
     }
 
 

@@ -304,16 +304,13 @@ $filters = [
             throw new NotFoundHttpException('Cobro no encontrado.');
         }
 
-        $valores = DB::table('valores_externos')
-            ->where('id_cobro', $id)
-            ->first();
-
-        $formData = $this->revisarProformaCalculator->calculate($this->mapCobroToRevisionData($cobro));
+        $reviewValues = $this->cobrosService->mapCobroToRevisionValues($cobro);
+        $formData = $this->revisarProformaCalculator->calculate($reviewValues);
         $proformaPersistidaId = $this->proformaStoreService->findExistingProformaIdFromCobro($cobro);
 
         return view('cobros.revisar', [
             'cobro' => $cobro,
-            'valores' => $valores,
+            'reviewValues' => $reviewValues,
             'formData' => $formData,
             'proformaPersistidaId' => $proformaPersistidaId,
         ]);
@@ -380,81 +377,94 @@ $validated['precio_factura'] = $request->filled('precio_factura')
     ? (float) $request->input('precio_factura')
     : (float) ($preciosCliente->vlrfactura ?? 0);
 
-$validated['precio_soporte'] = (float) ($preciosCliente->vlrsoporte ?? 0);
-$validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
+$validated['precio_soporte'] = $request->filled('precio_soporte')
+    ? (float) $request->input('precio_soporte')
+    : (float) ($preciosCliente->vlrsoporte ?? 0);
+$validated['precio_acuse'] = $request->filled('precio_acuse')
+    ? (float) $request->input('precio_acuse')
+    : (float) ($preciosCliente->vlrecepcion ?? 0);
         $formData = $this->revisarProformaCalculator->calculate($validated);
         $accion = $validated['accion'] ?? 'guardar';
         $valorExtra = (float) ($formData['otro_valor_extra'] ?? 0);
 
-        if ($accion === 'recalcular') {
-            $valores = DB::table('valores_externos')
-                ->where('id_cobro', $id)
-                ->first();
+        Log::info('Cobros revisar request recibido.', [
+            'id_cobro' => $id,
+            'accion' => $accion,
+            'validated' => $validated,
+            'form_data' => $formData,
+        ]);
 
+        if ($accion === 'recalcular') {
             return view('cobros.revisar', [
                 'cobro' => $cobro,
-                'valores' => $valores,
+                'reviewValues' => $formData,
                 'formData' => $formData,
+                'proformaPersistidaId' => $this->proformaStoreService->findExistingProformaIdFromCobro($cobro),
             ])->with('status', 'Valores recalculados en pantalla. Aún no se guardan.')->with('status_type', 'warning');
         }
 
-        $columnMap = [
-            'numero_equipos' => 'numero_equipos',
-            'valor_principal' => 'valor_principal',
-            'valor_terminal' => 'valor_terminal',
-            'numero_equipos_extra' => 'numextra',
-            'valor_equipo_extra' => 'vlrextrae',
-            'empleados' => 'empleados',
-            'valor_nomina' => 'vlrnomina',
-            'numero_moviles' => 'numero_moviles',
-            'valor_movil' => 'valor_movil',
-            'facturas' => 'numero_facturas',
-            'nota_debito' => 'numero_nota_debito',
-            'nota_credito' => 'numero_nota_credito',
-            'soporte' => 'numero_documento_soporte',
-            'nota_ajuste' => 'numero_nota_ajuste',
-            'acuse' => 'numero_acuse',
-            'otro_valor_extra' => 'valor_extra',
-            'valor_terminal_recepcion' => 'valor_extra2',
-            'precio_soporte' => 'precio_soporte',
-            'precio_acuse' => 'precio_acuse',
-            'total_facturas' => 'total_facturas',
-            'valor_facturas' => 'valor_facturas',
-            'total_documentos' => 'total_documentos',
-            'valor_documentos' => 'valor_documentos',
-            'valor_acuse' => 'valor_acuse',
-            'total_mensualidad' => 'valor_mensualidad',
-            'valor_total_proforma' => 'valor_total',
-        ];
+        $payloadValoresExternos = $this->extractPersistedPayload(
+            'valores_externos',
+            [
+                'facturas' => 'numero_facturas',
+                'nota_debito' => 'numero_nota_debito',
+                'nota_credito' => 'numero_nota_credito',
+                'soporte' => 'numero_documento_soporte',
+                'nota_ajuste' => 'numero_nota_ajuste',
+                'acuse' => 'numero_acuse',
+                'otro_valor_extra' => 'valor_extra',
+                'valor_terminal_recepcion' => 'valor_extra2',
+                'valor_facturas' => 'valor_facturas',
+                'valor_documentos' => 'valor_documentos',
+                'valor_acuse' => 'valor_acuse',
+                'total_mensualidad' => 'valor_mensualidad',
+                'valor_total_proforma' => 'valor_total',
+            ],
+            $formData,
+        );
 
-        $payload = [];
-        foreach ($columnMap as $key => $column) {
-            if (!array_key_exists($key, $formData) || !Schema::hasColumn('valores_externos', $column)) {
-                continue;
-            }
+        $payloadClientes = $this->extractPersistedPayload(
+            'clientes_potenciales',
+            [
+                'numero_equipos' => 'numequipos',
+                'valor_principal' => 'vlrprincipal',
+                'valor_terminal' => 'vlrterminal',
+                'numero_equipos_extra' => 'numextra',
+                'valor_equipo_extra' => 'vlrextrae',
+                'empleados' => 'numero_empleados',
+                'valor_nomina' => 'vlrnomina',
+                'numero_moviles' => 'numeromoviles',
+                'valor_movil' => 'vlrmovil',
+                'otro_valor_extra' => 'vlrextra',
+                'valor_terminal_recepcion' => 'vlrextra2',
+                'precio_factura' => 'vlrfactura',
+                'precio_soporte' => 'vlrsoporte',
+                'precio_acuse' => 'vlrecepcion',
+            ],
+            $formData,
+        );
 
-            $payload[$column] = (float) $formData[$key];
-        }
+        $actualizoValoresExternos = $this->cobrosService->updateCobroRevision($id, $formData);
+        $actualizoCliente = $idCliente
+            ? $this->cobrosService->updateClienteRevision((int) $idCliente, $formData)
+            : false;
 
-        if ($payload !== []) {
-            DB::table('valores_externos')
-                ->where('id_cobro', $id)
-                ->update($payload);
-        }
+        $cobroRefrescado = $this->cobrosService->findCobroById($id) ?: $cobro;
+        $reviewValuesPersistidos = $this->cobrosService->mapCobroToRevisionValues($cobroRefrescado);
 
-        $payloadCliente = [];
-        if ($idCliente && Schema::hasColumn('clientes_potenciales', 'numextra')) {
-            $payloadCliente['numextra'] = (float) ($formData['numero_equipos_extra'] ?? 0);
-        }
-        if ($idCliente && Schema::hasColumn('clientes_potenciales', 'vlrextrae')) {
-            $payloadCliente['vlrextrae'] = (float) ($formData['valor_equipo_extra'] ?? 0);
-        }
-
-        if ($idCliente && $payloadCliente !== []) {
-            DB::table('clientes_potenciales')
-                ->where('idclientes_potenciales', $idCliente)
-                ->update($payloadCliente);
-        }
+        Log::info('Cobros revisar payload persistido.', [
+            'id_cobro' => $id,
+            'id_cliente' => $idCliente,
+            'payload_valores_externos' => $payloadValoresExternos,
+            'payload_clientes_potenciales' => $payloadClientes,
+            'actualizo_valores_externos' => $actualizoValoresExternos,
+            'actualizo_clientes_potenciales' => $actualizoCliente,
+            'review_values_persistidos' => $reviewValuesPersistidos,
+            'snapshot_valores_externos' => DB::table('valores_externos')->where('id_cobro', $id)->first(),
+            'snapshot_cliente' => $idCliente
+                ? DB::table('clientes_potenciales')->where('idclientes_potenciales', $idCliente)->first()
+                : null,
+        ]);
 
         if ($accion === 'generar') {
             if ($valorExtra > 0) {
@@ -558,31 +568,22 @@ $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
 
     private function mapCobroToRevisionData(object $cobro): array
     {
+        return $this->cobrosService->mapCobroToRevisionValues($cobro);
+    }
 
-        $existeRevisionGuardada = $this->existeRevisionGuardada($cobro);
+    private function extractPersistedPayload(string $table, array $map, array $data): array
+    {
+        $payload = [];
 
-        return [
-            'numero_equipos' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_equipos ?? null, $cobro->cliente_numequipos ?? null),
-            'valor_principal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_principal ?? null, $cobro->cliente_vlrprincipal ?? null),
-            'valor_terminal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal ?? null, $cobro->cliente_vlrterminal ?? null),
-            'numero_equipos_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numextra ?? null, $cobro->cliente_numextra ?? null),
-            'valor_equipo_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->vlrextrae ?? null, $cobro->cliente_vlrextrae ?? null),
-            'empleados' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->empleados ?? null, $cobro->cliente_numero_empleados ?? null),
-            'valor_nomina' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->vlrnomina ?? null, $cobro->cliente_vlrnomina ?? null),
-            'numero_moviles' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_moviles ?? null, $cobro->cliente_numeromoviles ?? null),
-            'valor_movil' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_movil ?? null, $cobro->cliente_vlrmovil ?? null),
-            'facturas' => (float) ($cobro->numero_facturas ?? 0),
-            'nota_debito' => (float) ($cobro->numero_nota_debito ?? 0),
-            'nota_credito' => (float) ($cobro->numero_nota_credito ?? 0),
-            'soporte' => (float) ($cobro->numero_documento_soporte ?? 0),
-            'nota_ajuste' => (float) ($cobro->numero_nota_ajuste ?? 0),
-            'acuse' => (float) ($cobro->numero_acuse ?? 0),
-            'otro_valor_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra ?? null, $cobro->cliente_vlrextra ?? null),
-            'valor_terminal_recepcion' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
-            'precio_factura' => (float) ($cobro->cliente_vlrfactura ?? 0),
-            'precio_soporte' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_soporte ?? null, $cobro->cliente_vlrsoporte ?? null),
-            'precio_acuse' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_acuse ?? null, $cobro->cliente_vlrecepcion ?? null),
-        ];
+        foreach ($map as $inputKey => $column) {
+            if (!array_key_exists($inputKey, $data) || !Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            $payload[$column] = (float) $data[$inputKey];
+        }
+
+        return $payload;
     }
 
     private function existeRevisionGuardada(object $cobro): bool
