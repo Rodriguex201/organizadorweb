@@ -42,30 +42,30 @@
         <form id="proformas-filter-form" method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-10">
             <div>
                 <label for="nro_prof" class="mb-1 block text-sm font-medium">Número</label>
-                <input id="nro_prof" name="nro_prof" value="{{ request('nro_prof', session('proformas.numero')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="nro_prof" name="nro_prof" value="{{ $filters['nro_prof'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="codigo" class="mb-1 block text-sm font-medium">Código</label>
-                <input id="codigo" name="codigo" value="{{ request('codigo', session('proformas.codigo')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="codigo" name="codigo" value="{{ $filters['codigo'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="nit" class="mb-1 block text-sm font-medium">NIT</label>
-                <input id="nit" name="nit" value="{{ request('nit', session('proformas.nit')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="nit" name="nit" value="{{ $filters['nit'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="empresa" class="mb-1 block text-sm font-medium">Empresa</label>
-                <input id="empresa" name="empresa" value="{{ request('empresa') }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="empresa" name="empresa" value="{{ $filters['empresa'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="emisora" class="mb-1 block text-sm font-medium">Emisora</label>
-                <input id="emisora" name="emisora" value="{{ request('emisora', session('proformas.emisora')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="emisora" name="emisora" value="{{ $filters['emisora'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="mes" class="mb-1 block text-sm font-medium">Mes</label>
                 <select id="mes" name="mes" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
                     @foreach($meses as $mesNumero => $mesNombre)
-                        <option value="{{ $mesNumero }}" @selected((string) request('mes', session('proformas.mes')) === (string) $mesNumero || (string) request('mes', session('proformas.mes')) === $mesNombre)>
+                        <option value="{{ $mesNumero }}" @selected((string) ($filters['mes'] ?? '') === (string) $mesNumero || (string) ($filters['mes'] ?? '') === $mesNombre)>
                             {{ ucfirst($mesNombre) }}
                         </option>
                     @endforeach
@@ -73,14 +73,14 @@
             </div>
             <div>
                 <label for="anio" class="mb-1 block text-sm font-medium">Año</label>
-                <input id="anio" name="anio" type="number" min="1900" max="9999" value="{{ request('anio', session('proformas.anio')) }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="anio" name="anio" type="number" min="1900" max="9999" value="{{ $filters['anio'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="estado" class="mb-1 block text-sm font-medium">Estado</label>
                 <select id="estado" name="estado" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
                     @foreach($estados as $estadoCodigo => $estadoLabel)
-                        <option value="{{ $estadoCodigo }}" @selected((string) request('estado', session('proformas.estado')) === (string) $estadoCodigo)>{{ $estadoLabel }}</option>
+                        <option value="{{ $estadoCodigo }}" @selected((string) ($filters['estado'] ?? '') === (string) $estadoCodigo)>{{ $estadoLabel }}</option>
                     @endforeach
                 </select>
             </div>
@@ -88,8 +88,8 @@
                 <label for="envio" class="mb-1 block text-sm font-medium">Envío</label>
                 <select id="envio" name="envio" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
-                    <option value="1" @selected((string) request('envio', session('proformas.envio')) === '1')>Enviada</option>
-                    <option value="0" @selected((string) request('envio', session('proformas.envio')) === '0')>No enviada</option>
+                    <option value="1" @selected((string) ($filters['envio'] ?? '') === '1')>Enviada</option>
+                    <option value="0" @selected((string) ($filters['envio'] ?? '') === '0')>No enviada</option>
                 </select>
             </div>
             <div class="flex items-end gap-2">
@@ -274,7 +274,7 @@
         const ESTADO_PAGADA = {{ \App\Services\ProformasService::ESTADO_PAGADA }};
         const ESTADO_FACTURADA = {{ \App\Services\ProformasService::ESTADO_FACTURADA }};
         const csrfToken = @json(csrf_token());
-        const activeEstadoFilter = @json(request('estado', session('proformas.estado')));
+        const activeEstadoFilter = @json($filters['estado'] ?? null);
 
         const tableRows = Array.from(document.querySelectorAll('[data-proforma-row]'));
         const menu = document.getElementById('proforma-context-menu');

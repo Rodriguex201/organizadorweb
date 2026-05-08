@@ -27,7 +27,7 @@
             <h1 class="text-2xl font-bold text-slate-900">Detalle de proforma #{{ $proforma->nro_prof ?: $proforma->id }}</h1>
             <p class="mt-1 text-sm text-slate-600">Vista consolidada de informacion operativa y tecnica.</p>
         </div>
-        <a href="{{ route('proformas.index', ['from' => 'detalle']) }}">
+        <a href="{{ route('proformas.back-to-index', $proforma->id) }}">
             Volver al listado
         </a>
     </div>

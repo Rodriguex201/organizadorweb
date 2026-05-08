@@ -33,7 +33,7 @@
                         <span class="text-base">📊</span>
                         <span class="sidebar-label">Dashboard</span>
                     </a>
-                    
+
                     @if(strtolower(trim(session('rol_nombre'))) === 'admin')
                         <div class="rounded px-3 py-2 {{ request()->routeIs('configuracion.*') ? 'bg-slate-800' : '' }}">
                             <div class="flex items-center gap-3 text-sm font-medium">
@@ -68,7 +68,6 @@
     </aside>
 
     <main class="flex-1 p-4 md:p-8">
-
         <header class="mb-4 flex items-center gap-3">
             <div class="flex items-center gap-3">
                 <button id="sidebar-toggle" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded bg-slate-900 text-xl text-white transition-all duration-300 hover:bg-slate-800" aria-label="Colapsar o expandir menú lateral" aria-expanded="true">
@@ -84,16 +83,12 @@
 
 <script>
     (() => {
-
         const SIDEBAR_COLLAPSED_KEY = 'sidebarCollapsed';
-
         const sidebar = document.getElementById('admin-sidebar');
         const toggle = document.getElementById('sidebar-toggle');
         const brand = document.getElementById('sidebar-brand');
 
-
         if (!sidebar || !toggle) return;
-
 
         const applyCollapsedState = (collapsed) => {
             sidebar.classList.toggle('md:w-64', !collapsed);
@@ -115,7 +110,6 @@
             toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         };
 
-
         const getStoredCollapsedState = () => {
             return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
         };
@@ -133,21 +127,6 @@
             setStoredCollapsedState(collapsed);
         });
     })();
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    // 🔥 Detecta si vienes desde otra vista (no desde submit)
-    const nav = performance.getEntriesByType("navigation")[0];
-
-    if (nav?.type === "navigate") {
-        const form = document.querySelector("form");
-
-        if (form) {
-            form.reset(); // 🔥 limpia inputs
-        }
-    }
-});
 </script>
 
 @stack('scripts')

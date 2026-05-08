@@ -125,7 +125,10 @@ class ProformasIndexFiltersTest extends TestCase
 
         $response = $this->get(route('proformas.back-to-index', ['id' => 123]));
 
-        $response->assertRedirect(route('proformas.index'));
+        $response->assertRedirect(route('proformas.index', [
+            'mes' => 4,
+            'anio' => 2026,
+        ]));
         $response->assertSessionHas('warning');
         $response->assertSessionMissing('proformas.estado');
         $response->assertSessionHas('proformas.mes', 4);
@@ -158,7 +161,9 @@ class ProformasIndexFiltersTest extends TestCase
 
         $response = $this->get(route('proformas.back-to-index', ['id' => 456]));
 
-        $response->assertRedirect(route('proformas.index'));
+        $response->assertRedirect(route('proformas.index', [
+            'estado' => 3,
+        ]));
         $response->assertSessionMissing('warning');
         $response->assertSessionHas('proformas.estado', 3);
     }
@@ -205,5 +210,97 @@ class ProformasIndexFiltersTest extends TestCase
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);
         $response->assertSessionHas('proformas.envio', '0');
+    }
+
+    public function test_ignora_filtros_stale_en_sesion_cuando_entra_limpio_a_proformas(): void
+    {
+        $this->withoutMiddleware();
+
+        $service = Mockery::mock(ProformasService::class);
+        $pdfService = Mockery::mock(ProformaPdfService::class);
+        $emailService = Mockery::mock(ProformaEmailService::class);
+
+        $expectedFilters = [
+            'nro_prof' => null,
+            'codigo' => null,
+            'nit' => null,
+            'empresa' => null,
+            'emisora' => null,
+            'mes' => (int) now()->format('n'),
+            'anio' => (int) now()->format('Y'),
+            'estado' => null,
+            'envio' => null,
+        ];
+
+        $service->shouldReceive('normalizePeriodoFilters')
+            ->once()
+            ->with(null, null)
+            ->andReturn([
+                'mes' => $expectedFilters['mes'],
+                'anio' => $expectedFilters['anio'],
+            ]);
+
+        $service->shouldReceive('paginateProformas')
+            ->once()
+            ->with($expectedFilters)
+            ->andReturn(new LengthAwarePaginator([], 0, 15));
+
+        $this->app->instance(ProformasService::class, $service);
+        $this->app->instance(ProformaPdfService::class, $pdfService);
+        $this->app->instance(ProformaEmailService::class, $emailService);
+
+        $this->withSession([
+            'proformas.numero' => 'PF-999',
+            'proformas.empresa' => 'Empresa vieja',
+            'proformas.estado' => 3,
+            'proformas.envio' => '1',
+        ]);
+
+        $response = $this->get(route('proformas.index'));
+
+        $response->assertOk();
+        $response->assertViewHas('filters', $expectedFilters);
+        $response->assertSessionHas('proformas.numero', null);
+        $response->assertSessionHas('proformas.empresa', null);
+        $response->assertSessionHas('proformas.estado', null);
+        $response->assertSessionHas('proformas.envio', null);
+    }
+
+    public function test_volver_al_listado_reutiliza_filtros_originales_validos(): void
+    {
+        $this->withoutMiddleware();
+
+        $service = Mockery::mock(ProformasService::class);
+        $pdfService = Mockery::mock(ProformaPdfService::class);
+        $emailService = Mockery::mock(ProformaEmailService::class);
+
+        $service->shouldReceive('findProformaById')
+            ->once()
+            ->with(789)
+            ->andReturn((object) [
+                'id' => 789,
+                'estado' => 3,
+            ]);
+
+        $this->app->instance(ProformasService::class, $service);
+        $this->app->instance(ProformaPdfService::class, $pdfService);
+        $this->app->instance(ProformaEmailService::class, $emailService);
+
+        $this->withSession([
+            'proformas.estado' => 3,
+            'proformas.filtros_originales' => [
+                'empresa' => 'Acme',
+                'envio' => '0',
+                'page' => 4,
+                'from' => 'detalle',
+            ],
+        ]);
+
+        $response = $this->get(route('proformas.back-to-index', ['id' => 789]));
+
+        $response->assertRedirect(route('proformas.index', [
+            'empresa' => 'Acme',
+            'envio' => '0',
+        ]));
     }
 }

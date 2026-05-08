@@ -5,19 +5,18 @@ namespace App\Http\Controllers;
 use App\Services\ProformaEmailService;
 use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
-
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use Illuminate\Support\Facades\DB;
-
 
 class ProformasController extends Controller
 {
+    private const FILTER_KEYS = ['nro_prof', 'codigo', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio'];
+
     public function __construct(
         private readonly ProformasService $proformasService,
         private readonly ProformaPdfService $proformaPdfService,
@@ -25,99 +24,59 @@ class ProformasController extends Controller
     ) {
     }
 
-public function index(Request $request): View|RedirectResponse
-{
-    // 🔥 SOLO limpiar, NO redirigir
-if ($request->get('from') === 'detalle') {
+    public function index(Request $request): View|RedirectResponse
+    {
+        $hasFilterQuery = collect(self::FILTER_KEYS)->contains(
+            fn (string $key) => $request->query->has($key)
+        );
 
-    $filtros = session('proformas.filtros_originales', []);
+        $rawFilters = $hasFilterQuery
+            ? $request->only(self::FILTER_KEYS)
+            : [];
 
-    // 🔥 limpiar solo estado
-    unset($filtros['estado']);
+        $validated = Validator::make($rawFilters, [
+            'nro_prof' => ['nullable', 'string', 'max:100'],
+            'codigo' => ['nullable', 'string', 'max:50'],
+            'nit' => ['nullable', 'string', 'max:60'],
+            'empresa' => ['nullable', 'string', 'max:200'],
+            'emisora' => ['nullable', 'string', 'max:20'],
+            'mes' => ['nullable', 'string', 'max:20'],
+            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+            'estado' => ['nullable', 'integer', 'min:0'],
+            'envio' => ['nullable', 'in:0,1'],
+        ])->validate();
 
-    // 🔥 redirigir con filtros originales
-    return redirect()->route('proformas.index', $filtros);
-}
+        $periodo = $this->proformasService->normalizePeriodoFilters(
+            $validated['mes'] ?? null,
+            $validated['anio'] ?? null,
+        );
 
-    $filterKeys = ['nro_prof', 'codigo', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio'];
-    $hasRequestFilters = collect($filterKeys)->contains(fn (string $key) => $request->filled($key));
+        $filters = [
+            'nro_prof' => $validated['nro_prof'] ?? null,
+            'codigo' => $validated['codigo'] ?? null,
+            'nit' => $validated['nit'] ?? null,
+            'empresa' => $validated['empresa'] ?? null,
+            'emisora' => $validated['emisora'] ?? null,
+            'mes' => $periodo['mes'],
+            'anio' => $periodo['anio'],
+            'estado' => $validated['estado'] ?? null,
+            'envio' => isset($validated['envio']) ? (string) $validated['envio'] : null,
+        ];
 
-    $rawFilters = [
-        'nro_prof' => $request->input('nro_prof', session('proformas.numero')),
-        'codigo' => $request->input('codigo', session('proformas.codigo')),
-        'nit' => $request->input('nit', session('proformas.nit')),
-        'empresa' => $request->input('empresa', session('proformas.empresa')),
-        'emisora' => $request->input('emisora', session('proformas.emisora')),
-        'mes' => $request->input('mes', session('proformas.mes')),
-        'anio' => $request->input('anio', session('proformas.anio')),
-        'estado' => $request->input('estado', session('proformas.estado')),
-        'envio' => $request->input('envio', session('proformas.envio')),
-    ];
+        $this->storeFilterSession($filters);
 
-    $validated = Validator::make($rawFilters, [
-        'nro_prof' => ['nullable', 'string', 'max:100'],
-        'codigo' => ['nullable', 'string', 'max:50'],
-        'nit' => ['nullable', 'string', 'max:60'],
-        'empresa' => ['nullable', 'string', 'max:200'],
-        'emisora' => ['nullable', 'string', 'max:20'],
-        'mes' => ['nullable', 'string', 'max:20'],
-        'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
-        'estado' => ['nullable', 'integer', 'min:0'],
-        'envio' => ['nullable', 'in:0,1'],
-    ])->validate();
-
-    $periodo = $this->proformasService->normalizePeriodoFilters(
-        $validated['mes'] ?? null,
-        $validated['anio'] ?? null,
-    );
-
-    // 🔥 AQUÍ VA
-    if (!$request->filled('mes')) {
-        $request->merge(['mes' => $periodo['mes']]);
-    }
-
-    if (!$request->filled('anio')) {
-        $request->merge(['anio' => $periodo['anio']]);
-    }
-
-    $filters = [
-        'nro_prof' => $validated['nro_prof'] ?? null,
-        'codigo' => $validated['codigo'] ?? null,
-        'nit' => $validated['nit'] ?? null,
-        'empresa' => $validated['empresa'] ?? null,
-        'emisora' => $validated['emisora'] ?? null,
-        'mes' => $periodo['mes'],
-        'anio' => $periodo['anio'],
-        'estado' => $validated['estado'] ?? null,
-        'envio' => isset($validated['envio']) ? (string) $validated['envio'] : null,
-    ];
-
-    if ($hasRequestFilters) {
-        session([
-            'proformas.numero' => $filters['nro_prof'],
-            'proformas.codigo' => $filters['codigo'],
-            'proformas.nit' => $filters['nit'],
-            'proformas.empresa' => $filters['empresa'],
-            'proformas.emisora' => $filters['emisora'],
-            'proformas.mes' => $filters['mes'],
-            'proformas.anio' => $filters['anio'],
-            'proformas.estado' => $filters['estado'],
-            'proformas.envio' => $filters['envio'],
+        return view('proformas.index', [
+            'proformas' => $this->proformasService->paginateProformas($filters),
+            'filters' => $filters,
+            'estados' => ProformasService::ESTADOS,
+            'meses' => ProformasService::MESES,
+            'proformasService' => $this->proformasService,
         ]);
     }
 
-    return view('proformas.index', [
-        'proformas' => $this->proformasService->paginateProformas($filters),
-        'filters' => $filters,
-        'estados' => ProformasService::ESTADOS,
-        'meses' => ProformasService::MESES,
-        'proformasService' => $this->proformasService,
-    ]);
-}
-
     public function clearFilters(): RedirectResponse
     {
-        session()->forget('proformas');
+        session()->forget(['proformas', 'proformas.filtros_originales']);
 
         return redirect()->route('proformas.index');
     }
@@ -220,7 +179,7 @@ if ($request->get('from') === 'detalle') {
         $omitidas += max(0, count($ids) - $candidatas->count());
 
         $statusType = count($fallidas) > 0 ? 'error' : 'success';
-        $message = "Envío masivo grupo {$grupo} finalizado. Enviadas: {$enviadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
+        $message = "Envio masivo grupo {$grupo} finalizado. Enviadas: {$enviadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
 
         if ($fallidas !== []) {
             $message .= ' Fallas: '.collect($fallidas)
@@ -237,8 +196,6 @@ if ($request->get('from') === 'detalle') {
             ->with('status', $message)
             ->with('status_type', $statusType);
     }
-
-
 
     public function dashboard(Request $request): View
     {
@@ -265,7 +222,6 @@ if ($request->get('from') === 'detalle') {
         ]);
     }
 
-
     public function showPdf(Request $request, int $id): BinaryFileResponse
     {
         $resultado = $this->proformaPdfService->generateForProformaId(
@@ -288,22 +244,21 @@ if ($request->get('from') === 'detalle') {
         ]);
     }
 
-public function show(int $id): View
-{
-    $proforma = $this->proformasService->findProformaById($id);
+    public function show(int $id): View
+    {
+        $proforma = $this->proformasService->findProformaById($id);
 
-    if (!$proforma) {
-        abort(404, 'Proforma no encontrada');
+        if (!$proforma) {
+            abort(404, 'Proforma no encontrada');
+        }
+
+        session(['proformas.filtros_originales' => $this->sanitizeFilterArray(request()->query())]);
+
+        return view('proformas.show', [
+            'proforma' => $proforma,
+            'proformasService' => $this->proformasService,
+        ]);
     }
-
-    // 🔥 AQUÍ VA
-    session(['proformas.filtros_originales' => request()->query()]);
-
-    return view('proformas.show', [
-        'proforma' => $proforma,
-        'proformasService' => $this->proformasService,
-    ]);
-}
 
     public function backToIndex(int $id): RedirectResponse
     {
@@ -313,6 +268,7 @@ public function show(int $id): View
             throw new NotFoundHttpException('Proforma no encontrada.');
         }
 
+        $redirectFilters = $this->getStoredReturnFilters();
         $estadoFiltrado = session('proformas.estado');
         $estadoActual = (int) ($proforma->estado ?? 0);
         $debeLimpiarFiltroEstado = $estadoFiltrado !== null
@@ -321,13 +277,14 @@ public function show(int $id): View
 
         if ($debeLimpiarFiltroEstado) {
             session()->forget('proformas.estado');
+            unset($redirectFilters['estado']);
 
             return redirect()
-                ->route('proformas.index')
-                ->with('warning', 'La proforma cambió de estado y ya no coincide con el filtro actual.');
+                ->route('proformas.index', $redirectFilters)
+                ->with('warning', 'La proforma cambio de estado y ya no coincide con el filtro actual.');
         }
 
-        return redirect()->route('proformas.index');
+        return redirect()->route('proformas.index', $redirectFilters);
     }
 
     public function enviarCorreo(int $id): RedirectResponse|JsonResponse
@@ -338,12 +295,11 @@ public function show(int $id): View
             throw new NotFoundHttpException('Proforma no encontrada.');
         }
 
-
-            if (!$this->proformasService->canSendProforma($proforma)) {
-                return redirect()->back()
-                    ->with('status', 'Primero debe generar la proforma antes de enviarla')
-                    ->with('status_type', 'error');
-            }
+        if (!$this->proformasService->canSendProforma($proforma)) {
+            return redirect()->back()
+                ->with('status', 'Primero debe generar la proforma antes de enviarla')
+                ->with('status_type', 'error');
+        }
 
         try {
             $this->proformaEmailService->sendProforma($proforma);
@@ -403,6 +359,70 @@ public function show(int $id): View
         return $resultado['ok']
             ? $redirect->with('status', $resultado['message'])->with('status_type', 'success')
             : $redirect->with('status', $resultado['message'])->with('status_type', 'error');
+    }
 
+    private function storeFilterSession(array $filters): void
+    {
+        session([
+            'proformas.numero' => $filters['nro_prof'],
+            'proformas.codigo' => $filters['codigo'],
+            'proformas.nit' => $filters['nit'],
+            'proformas.empresa' => $filters['empresa'],
+            'proformas.emisora' => $filters['emisora'],
+            'proformas.mes' => $filters['mes'],
+            'proformas.anio' => $filters['anio'],
+            'proformas.estado' => $filters['estado'],
+            'proformas.envio' => $filters['envio'],
+        ]);
+    }
+
+    private function getStoredReturnFilters(): array
+    {
+        $storedFilters = session('proformas.filtros_originales');
+
+        if (is_array($storedFilters) && $storedFilters !== []) {
+            return $this->sanitizeFilterArray($storedFilters);
+        }
+
+        return $this->sanitizeFilterArray([
+            'nro_prof' => session('proformas.numero'),
+            'codigo' => session('proformas.codigo'),
+            'nit' => session('proformas.nit'),
+            'empresa' => session('proformas.empresa'),
+            'emisora' => session('proformas.emisora'),
+            'mes' => session('proformas.mes'),
+            'anio' => session('proformas.anio'),
+            'estado' => session('proformas.estado'),
+            'envio' => session('proformas.envio'),
+        ]);
+    }
+
+    private function sanitizeFilterArray(array $filters): array
+    {
+        $sanitized = [];
+
+        foreach (self::FILTER_KEYS as $key) {
+            if (!array_key_exists($key, $filters)) {
+                continue;
+            }
+
+            $value = $filters[$key];
+
+            if ($value === null) {
+                continue;
+            }
+
+            if (is_string($value)) {
+                $value = trim($value);
+            }
+
+            if ($value === '') {
+                continue;
+            }
+
+            $sanitized[$key] = $value;
+        }
+
+        return $sanitized;
     }
 }
