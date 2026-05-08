@@ -40,6 +40,7 @@ Route::middleware('auth.custom')->group(function (): void {
 
     Route::get('/cobros/{id}/proforma/preview', [CobrosController::class, 'previewProforma'])->name('cobros.proforma.preview');
     Route::post('/cobros/{id}/proforma', [CobrosController::class, 'storeProforma'])->name('cobros.proforma.store');
+    Route::post('/cobros/{id}/proforma/regenerar', [CobrosController::class, 'regenerateProforma'])->name('cobros.proforma.regenerar');
 
     Route::get('/proformas', [ProformasController::class, 'index'])->name('proformas.index');
     Route::get('/proformas/limpiar-filtros', [ProformasController::class, 'clearFilters'])->name('proformas.clear-filters');

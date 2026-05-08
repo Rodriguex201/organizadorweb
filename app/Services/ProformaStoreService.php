@@ -74,6 +74,11 @@ class ProformaStoreService
                 ->first();
 
             if ($proformaExistente !== null) {
+                $extraConcepto = $this->completarConceptoExtraDesdeProformaExistente(
+                    (int) $proformaExistente->id,
+                    $cobro,
+                    $extraConcepto,
+                );
 
                 $lineas = $this->garantizarLineaValorExtra(
                     $preview['detalle']['lineas'] ?? [],
@@ -155,6 +160,15 @@ class ProformaStoreService
                 'message' => 'Proforma guardada correctamente en sg_proform y sg_proford.',
             ];
         });
+    }
+
+    public function regenerateFromCobro(object $cobro, array $extraConcepto = []): array
+    {
+        $resultado = $this->storeFromCobro($cobro, $extraConcepto);
+
+        return $resultado + [
+            'regenerated' => true,
+        ];
     }
 
     /**
@@ -430,6 +444,58 @@ class ProformaStoreService
             fn (float $acumulado, array $linea) => $acumulado + (float) ($linea['valor_parcial'] ?? 0),
             0.0,
         );
+    }
+
+    private function completarConceptoExtraDesdeProformaExistente(int $proformaId, object $cobro, array $extraConcepto): array
+    {
+        $codigoActual = trim((string) ($extraConcepto['codigo_concepto_extra'] ?? ''));
+        $descripcionActual = trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? ''));
+        $valorExtra = (float) ($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? 0);
+
+        if (($codigoActual !== '' && $descripcionActual !== '') || $valorExtra <= 0) {
+            return $extraConcepto;
+        }
+
+        $detalle = DB::table('sg_proford')
+            ->where('proforma_id', $proformaId)
+            ->orderBy('orden')
+            ->get();
+
+        $candidatos = $detalle
+            ->filter(function (object $linea) use ($valorExtra) {
+                return (float) ($linea->cantidad ?? 0) === 1.0
+                    && (float) ($linea->vr_unidad ?? 0) === $valorExtra
+                    && (float) ($linea->vr_parcial ?? 0) === $valorExtra;
+            })
+            ->values();
+
+        if ($candidatos->count() > 1) {
+            $candidatos = $candidatos
+                ->filter(fn (object $linea) => !in_array((string) ($linea->ref_codigo ?? ''), self::CODIGOS_CONCEPTO_OFICIALES, true))
+                ->values();
+        }
+
+        if ($candidatos->isEmpty()) {
+            $candidatos = $detalle
+                ->filter(fn (object $linea) => stripos((string) ($linea->descripcion ?? ''), 'extra') !== false)
+                ->values();
+        }
+
+        $lineaExtra = $candidatos->first();
+
+        if (!$lineaExtra) {
+            return $extraConcepto;
+        }
+
+        if ($codigoActual === '') {
+            $extraConcepto['codigo_concepto_extra'] = trim((string) ($lineaExtra->ref_codigo ?? ''));
+        }
+
+        if ($descripcionActual === '') {
+            $extraConcepto['descripcion_concepto_extra'] = trim((string) ($lineaExtra->descripcion ?? ''));
+        }
+
+        return $extraConcepto;
     }
 
     private function actualizarValoresExternosDesdeRevision(object $cobro, array $revision): void

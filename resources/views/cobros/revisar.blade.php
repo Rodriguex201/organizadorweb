@@ -16,8 +16,20 @@
     </div>
 
     @if (session('status'))
-        <div class="rounded border px-4 py-3 text-sm {{ session('status_type') === 'warning' ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-emerald-300 bg-emerald-50 text-emerald-700' }}">
+        <div class="rounded border px-4 py-3 text-sm {{
+            session('status_type') === 'warning'
+                ? 'border-amber-300 bg-amber-50 text-amber-700'
+                : (session('status_type') === 'error'
+                    ? 'border-rose-300 bg-rose-50 text-rose-700'
+                    : 'border-emerald-300 bg-emerald-50 text-emerald-700')
+        }}">
             {{ session('status') }}
+        </div>
+    @endif
+
+    @if(!empty($proformaPersistidaId))
+        <div class="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Ya existe una proforma generada para este cobro. Si cambió algún valor manual, puede reconstruirla sin crear duplicados.
         </div>
     @endif
 
@@ -168,14 +180,37 @@
                 <button type="submit" name="accion" value="guardar" class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
                     Guardar revision
                 </button>
-                <button type="submit" name="accion" value="generar" id="btnGenerarProforma" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
-                    Generar proforma
-                </button>
-                <span class="inline-flex items-center rounded bg-amber-100 px-3 py-2 text-xs text-amber-700">Envio por correo: pendiente para siguiente fase.</span>
+                @if(!empty($proformaPersistidaId))
+                    <button type="submit" form="regenerarProformaForm" class="inline-flex items-center gap-2 rounded bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 1 1-9.588-3.368H3.5a.75.75 0 0 1 0-1.5h4a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0V9.18a4 4 0 1 0 6.98 2.45.75.75 0 0 1 1.482-.206Z" clip-rule="evenodd" />
+                        </svg>
+                        Regenerar proforma
+                    </button>
+                    <a href="{{ route('proformas.pdf.show', $proformaPersistidaId) }}" target="_blank" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                        Ver PDF de proforma guardada
+                    </a>
+                @else
+                    <button type="submit" name="accion" value="generar" id="btnGenerarProforma" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                        Generar proforma
+                    </button>
+                @endif
             </div>
         </section>
     </form>
 </div>
+
+@if(!empty($proformaPersistidaId))
+    <form
+        id="regenerarProformaForm"
+        method="POST"
+        action="{{ route('cobros.proforma.regenerar', $cobro->id_cobro) }}"
+        onsubmit="return confirm('Esto reemplazará la proforma actual y actualizará sus valores. ¿Desea continuar?');"
+    >
+        @csrf
+        <input type="hidden" name="redirect_to" value="revisar">
+    </form>
+@endif
 
 <div id="conceptoExtraModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 px-4" aria-hidden="true">
     <div class="w-full max-w-lg rounded-lg bg-white shadow-xl">

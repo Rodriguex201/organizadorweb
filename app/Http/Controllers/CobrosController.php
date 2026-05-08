@@ -309,11 +309,13 @@ $filters = [
             ->first();
 
         $formData = $this->revisarProformaCalculator->calculate($this->mapCobroToRevisionData($cobro));
+        $proformaPersistidaId = $this->proformaStoreService->findExistingProformaIdFromCobro($cobro);
 
         return view('cobros.revisar', [
             'cobro' => $cobro,
             'valores' => $valores,
             'formData' => $formData,
+            'proformaPersistidaId' => $proformaPersistidaId,
         ]);
     }
 
@@ -481,8 +483,34 @@ $validated['precio_acuse'] = (float) ($preciosCliente->vlrecepcion ?? 0);
         }
 
         return redirect()
-            ->route('cobros.show', $id)
-            ->with('status', 'Revisión guardada correctamente.')
+            ->route('cobros.revisar', $id)
+            ->with('status', 'Revisión guardada correctamente. Ya puede regenerar la proforma actual si lo necesita.')
+            ->with('status_type', 'success');
+    }
+
+    public function regenerateProforma(Request $request, int $id): RedirectResponse
+    {
+        $cobro = $this->cobrosService->findCobroById($id);
+
+        if (!$cobro) {
+            throw new NotFoundHttpException('Cobro no encontrado.');
+        }
+
+        $cobroActualizado = $this->cobrosService->findCobroById($id) ?: $cobro;
+        $resultado = $this->proformaStoreService->regenerateFromCobro($cobroActualizado);
+        $proformaId = (int) ($resultado['proforma_id'] ?? 0);
+
+        if ($proformaId <= 0) {
+            throw new NotFoundHttpException('No se pudo resolver la proforma a regenerar.');
+        }
+
+        $this->proformaPdfService->generateForProformaId($proformaId, true);
+
+        $redirectRoute = $request->input('redirect_to') === 'revisar' ? 'cobros.revisar' : 'cobros.show';
+
+        return redirect()
+            ->route($redirectRoute, $id)
+            ->with('status', 'Proforma regenerada correctamente. Se reemplazaron cabecera, detalle y PDF con los valores actuales.')
             ->with('status_type', 'success');
     }
 

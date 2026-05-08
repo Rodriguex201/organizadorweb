@@ -170,6 +170,16 @@
                     <a href="{{ route('proformas.pdf.show', $proformaPersistidaId) }}" target="_blank" class="inline-flex w-full items-center justify-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
                         Ver PDF de proforma guardada
                     </a>
+                    <form method="POST" action="{{ route('cobros.proforma.regenerar', $cobro->id_cobro) }}" onsubmit="return confirm('Esto reemplazará la proforma actual y actualizará sus valores. ¿Desea continuar?');">
+                        @csrf
+                        <input type="hidden" name="redirect_to" value="show">
+                        <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 1 1-9.588-3.368H3.5a.75.75 0 0 1 0-1.5h4a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0V9.18a4 4 0 1 0 6.98 2.45.75.75 0 0 1 1.482-.206Z" clip-rule="evenodd" />
+                            </svg>
+                            Regenerar proforma
+                        </button>
+                    </form>
                     <form method="POST" action="{{ route('proformas.enviar', $proformaPersistidaId) }}">
                         @csrf
                         <button type="submit" class="inline-flex w-full items-center justify-center rounded bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700">

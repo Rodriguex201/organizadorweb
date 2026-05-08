@@ -34,12 +34,17 @@ class ProformaPdfService
 
         $rutaExistente = trim((string) ($cabecera->rpdf ?? ''));
         $nombreExistente = trim((string) ($cabecera->npdf ?? ''));
-        if (!$regenerar && $rutaExistente !== '' && $nombreExistente !== '') {
-            $relative = $this->construirRutaRelativa($rutaExistente, $nombreExistente);
-            if (Storage::disk('local')->exists($relative)) {
+        $relativeAnterior = null;
+
+        if ($rutaExistente !== '' && $nombreExistente !== '') {
+            $relativeAnterior = $this->construirRutaRelativa($rutaExistente, $nombreExistente);
+        }
+
+        if (!$regenerar && $relativeAnterior !== null) {
+            if (Storage::disk('local')->exists($relativeAnterior)) {
                 return [
-                    'relative_path' => $relative,
-                    'absolute_path' => Storage::disk('local')->path($relative),
+                    'relative_path' => $relativeAnterior,
+                    'absolute_path' => Storage::disk('local')->path($relativeAnterior),
                     'filename' => $nombreExistente,
                     'reused' => true,
                 ];
@@ -67,7 +72,20 @@ class ProformaPdfService
         $nombreArchivo = $this->construirNombreArchivo($cabecera, $proformaId);
         $relativePath = $this->construirRutaRelativa($ruta, $nombreArchivo);
 
+        if ($regenerar && $relativeAnterior !== null && Storage::disk('local')->exists($relativeAnterior)) {
+            Storage::disk('local')->delete($relativeAnterior);
+        }
+
         Storage::disk('local')->put($relativePath, $pdfBinario);
+
+        if (
+            !$regenerar
+            && $relativeAnterior !== null
+            && $relativeAnterior !== $relativePath
+            && Storage::disk('local')->exists($relativeAnterior)
+        ) {
+            Storage::disk('local')->delete($relativeAnterior);
+        }
 
         $hash = hash('sha256', $pdfBinario);
 
