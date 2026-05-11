@@ -781,9 +781,14 @@ private function crearEstructuraDirectoriosCliente(array $payload, array $mappin
 
         File::makeDirectory($rutaFinal, 0777, true, true);
 
-        foreach ($this->subcarpetasCliente() as $subcarpeta) {
+        foreach ($this->subcarpetasCliente() as $subcarpeta => $subcarpetasInternas) {
             $rutaSubcarpeta = $this->joinWindowsPath($rutaFinal, $subcarpeta);
             File::makeDirectory($rutaSubcarpeta, 0777, true, true);
+
+            foreach ($subcarpetasInternas as $subcarpetaInterna) {
+                $rutaSubcarpetaInterna = $this->joinWindowsPath($rutaSubcarpeta, $subcarpetaInterna);
+                File::makeDirectory($rutaSubcarpetaInterna, 0777, true, true);
+            }
         }
 
         Log::info('Carpeta creada', [
@@ -842,14 +847,33 @@ private function normalizeFolderName(string $value): string
     private function subcarpetasCliente(): array
     {
         return [
-            $this->normalizeFolderName('Capacitaciones'),
-            $this->normalizeFolderName('Cartera'),
-            $this->normalizeFolderName('Desarrollo de software'),
-            $this->normalizeFolderName('Documentos'),
-            $this->normalizeFolderName('Documentos historicos'),
-            $this->normalizeFolderName('Equipos de computo'),
-            $this->normalizeFolderName('Sistemas de informacion'),
-            $this->normalizeFolderName('soporte'),
+            $this->normalizeFolderName('Capacitaciones') => [
+                $this->normalizeFolderName('ACTAS'),
+            ],
+            $this->normalizeFolderName('Cartera') => [
+                $this->normalizeFolderName('SOPORTES DE PAGO'),
+            ],
+            $this->normalizeFolderName('Desarrollo de software') => [],
+            $this->normalizeFolderName('Documentos') => [
+                $this->normalizeFolderName('AUTORIZACIONES'),
+                $this->normalizeFolderName('CONTRATOS'),
+                $this->normalizeFolderName('COTIZACIONES'),
+                $this->normalizeFolderName('ELECTRONICOS'),
+                $this->normalizeFolderName('LEGALES'),
+            ],
+            $this->normalizeFolderName('Documentos historicos') => [],
+            $this->normalizeFolderName('Equipos de computo') => [
+                $this->normalizeFolderName('GARANTIAS CAMBIOS'),
+                $this->normalizeFolderName('VENTA EQUIPOS'),
+            ],
+            $this->normalizeFolderName('Sistemas de informacion') => [
+                $this->normalizeFolderName('ARCHIVOS INSTALACION'),
+                $this->normalizeFolderName('FORMATOS'),
+                $this->normalizeFolderName('LOGOS GRAFICOS'),
+            ],
+            $this->normalizeFolderName('soporte') => [
+                $this->normalizeFolderName('CORRESPONDENCIA'),
+            ],
         ];
     }
 
