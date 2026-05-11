@@ -6,11 +6,11 @@
     <title>@yield('title', 'OrganizadorWeb')</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-slate-100 text-slate-800">
+<body class="min-h-screen bg-slate-100 text-slate-800">
 
-<div id="admin-layout" class="min-h-screen md:flex">
-    <aside id="admin-sidebar" class="h-screen w-full border-b border-slate-200 bg-slate-900 text-slate-100 transition-all duration-300 md:w-64 md:border-b-0 md:border-r">
-        <div class="flex h-full flex-col">
+<div id="admin-layout" class="flex min-h-screen flex-col items-stretch md:flex-row">
+    <aside id="admin-sidebar" class="w-full self-stretch border-b border-slate-200 bg-slate-900 text-slate-100 transition-all duration-300 md:min-h-screen md:w-64 md:border-b-0 md:border-r">
+        <div class="flex h-full min-h-full flex-col">
             <div class="flex-1 overflow-y-auto">
                 <div class="flex items-center justify-between px-5 py-4">
                     <span id="sidebar-brand" class="text-lg font-semibold transition-all duration-300">OrganizadorWeb</span>
@@ -67,7 +67,7 @@
         </div>
     </aside>
 
-    <main class="flex-1 p-4 md:p-8">
+    <main class="w-full min-w-0 flex-1 p-4 md:p-8">
         <header class="mb-4 flex items-center gap-3">
             <div class="flex items-center gap-3">
                 <button id="sidebar-toggle" type="button" class="inline-flex h-10 w-10 items-center justify-center rounded bg-slate-900 text-xl text-white transition-all duration-300 hover:bg-slate-800" aria-label="Colapsar o expandir menú lateral" aria-expanded="true">

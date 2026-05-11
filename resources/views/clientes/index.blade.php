@@ -3,7 +3,7 @@
 @section('title', 'Inicio | Clientes')
 
 @section('content')
-<div class="mx-auto max-w-7xl px-4 py-8">
+<div class="w-full min-w-0 px-2 py-6 md:px-4 md:py-8">
     <div class="mb-6 flex items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-bold">Inicio · Clientes / Empresas</h1>
@@ -47,58 +47,61 @@
         </form>
     </div>
 
-    <div class="overflow-hidden rounded-lg bg-white shadow">
-        <div class="overflow-x-auto">
+    <div class="min-w-0 overflow-hidden rounded-lg bg-white shadow">
+        <div class="min-w-0 overflow-x-auto">
             <table class="min-w-full text-sm">
                 <thead class="bg-slate-50 text-xs uppercase text-slate-600">
                 <tr>
-                    <th class="px-4 py-3 text-left">NIT</th>
-                    <th class="px-4 py-3 text-left">DV</th>
-                    <th class="px-4 py-3 text-left">Nombre</th>
-                    <th class="px-4 py-3 text-left">Estado</th>
-                    <th class="px-4 py-3 text-left">Codigo</th>
-                    <th class="px-4 py-3 text-left">Empresa</th>
-                    <th class="px-4 py-3 text-left">Correo</th>
-                    <th class="px-4 py-3 text-left">Telefono</th>
-                    <th class="px-4 py-3 text-left">Contacto</th>
-                    <th class="px-4 py-3 text-left">Fecha inicio</th>
-                    <th class="px-4 py-3 text-left">Fecha arriendo</th>
-                    <th class="px-4 py-3 text-left">IP empresa</th>
-                    <th class="px-4 py-3 text-left">Fecha cotizacion</th>
-                    <th class="px-4 py-3 text-left">Fecha retiro</th>
-                    <th class="px-4 py-3 text-left">Fecha reactivacion</th>
-                    <th class="px-4 py-3 text-left">Motivo reactivacion</th>
-                    <th class="px-4 py-3 text-left">Contrato / Modalidad</th>
-                    <th class="px-4 py-3 text-left">Acciones</th>
+                    <th class="px-3 py-3 text-left">Cliente</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Estado</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Codigo</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Fecha inicio</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Fecha arriendo</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">IP empresa</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Fecha cotizacion</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Fecha retiro</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Fecha reactivacion</th>
+                    <th class="px-3 py-3 text-left">Motivo reactivacion</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Acciones</th>
                 </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                 @forelse($clientes as $cliente)
+                    @php
+                        $empresaPrincipal = $cliente->empresa ?: ($cliente->nombre ?: '-');
+                        $nombreSecundario = $cliente->empresa && $cliente->nombre && $cliente->empresa !== $cliente->nombre
+                            ? $cliente->nombre
+                            : null;
+                    @endphp
                     <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-3">{{ $cliente->nit ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->dv ?: '-' }}</td>
-                        <td class="px-4 py-3 font-medium">{{ $cliente->nombre ?: '-' }}</td>
-                        <td class="px-4 py-3">
+                        <td class="px-3 py-3 align-top">
+                            <div class="min-w-[18rem] space-y-1 text-sm leading-tight text-slate-600">
+                                <p class="font-semibold text-slate-900">{{ $empresaPrincipal }}</p>
+                                @if($nombreSecundario)
+                                    <p class="text-xs text-slate-500">{{ $nombreSecundario }}</p>
+                                @endif
+                                <p class="text-xs text-slate-500">NIT: {{ $cliente->nit ?: '-' }}</p>
+                                <p class="text-xs text-slate-500">Contacto: {{ $cliente->contacto ?: '-' }}</p>
+                                <p class="text-xs text-slate-500">Tel: {{ $cliente->telefono ?: '-' }}</p>
+                                <p class="break-all text-xs text-slate-500">Correo: {{ $cliente->correo ?: '-' }}</p>
+                            </div>
+                        </td>
+                        <td class="px-3 py-3 align-top whitespace-nowrap">
                             @if($cliente->esta_retirado)
                                 <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">Retirado</span>
                             @else
                                 <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Activo</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3">{{ $cliente->codigo ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->empresa ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->correo ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->telefono ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->contacto ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->fecha_inicio ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ \Illuminate\Support\Carbon::make($cliente->fecha_arriendo)?->format('d-m-Y') ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->ip_empresa ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->fecha_cotizacion ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->fecha_retiro ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->fecha_reactivacion ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->motivo_reactivacion ?: '-' }}</td>
-                        <td class="px-4 py-3">{{ $cliente->contrato ?: '-' }}</td>
-                        <td class="px-4 py-3">
+                        <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->codigo ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->fecha_inicio ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ \Illuminate\Support\Carbon::make($cliente->fecha_arriendo)?->format('d-m-Y') ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->ip_empresa ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->fecha_cotizacion ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->fecha_retiro ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->fecha_reactivacion ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top text-xs leading-tight text-slate-700">{{ $cliente->motivo_reactivacion ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top">
                             <div class="flex flex-wrap gap-2">
                                 @if($cliente->id)
                                     <a href="{{ route('clientes.show', $cliente->id) }}" class="inline-flex items-center rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Ver</a>
@@ -129,7 +132,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="18" class="px-4 py-8 text-center text-slate-500">No hay clientes disponibles para los filtros seleccionados.</td>
+                        <td colspan="11" class="px-4 py-8 text-center text-slate-500">No hay clientes disponibles para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>

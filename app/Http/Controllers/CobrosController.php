@@ -9,6 +9,7 @@ use App\Services\ProformaPdfService;
 use App\Services\ProformaPreviewService;
 use App\Services\ProformasService;
 use App\Services\ProformaStoreService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -48,9 +49,16 @@ public function index(Request $request): View
     ]);
 
     // 🔥 SOLO ESTE FILTER
+    $isFirstCleanVisit = $request->query() === [];
+    $now = Carbon::now();
+
 $filters = [
-    'mes' => isset($validated['mes']) ? strtolower(trim($validated['mes'])) : null,
-    'anio' => isset($validated['anio']) ? (int)$validated['anio'] : null,
+    'mes' => isset($validated['mes'])
+        ? strtolower(trim($validated['mes']))
+        : ($isFirstCleanVisit ? (CobrosService::MESES[(int) $now->month] ?? null) : null),
+    'anio' => isset($validated['anio'])
+        ? (int) $validated['anio']
+        : ($isFirstCleanVisit ? (int) $now->year : null),
     'proforma' => $request->filled('proforma') ? $validated['proforma'] : null,
     'buscar' => $validated['buscar'] ?? null,
     'orden_fecha' => $validated['orden_fecha'] ?? null,
