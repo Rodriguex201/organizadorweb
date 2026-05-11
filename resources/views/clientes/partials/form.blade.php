@@ -12,6 +12,8 @@
     };
 
     $fieldUnavailable = static fn (?string $column): bool => $column === null;
+    $codigoAssistEnabled = $cliente === null && !$fieldUnavailable($mapping['codigo']);
+    $codigoMode = old('codigo_mode', $codigoAssistEnabled ? 'secuencia' : 'manual');
 
     $selectedClase = (string) $value('clase', $mapping['clase'] ?? null);
     $selectedModalidad = (string) $value('modalidad', $mapping['modalidad'] ?? null);
@@ -37,10 +39,24 @@
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
-        <label class="block text-sm font-medium mb-1" for="nit">NIT</label>
-        <input id="nit" name="nit" type="text" value="{{ $value('nit', $mapping['nit']) }}" @disabled($fieldUnavailable($mapping['nit']))
-               class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+        <div class="grid grid-cols-4 gap-3">
+            <div class="col-span-3">
+                <label class="block text-sm font-medium mb-1" for="nit">NIT</label>
+                <input id="nit" name="nit" type="text" value="{{ $value('nit', $mapping['nit']) }}" @disabled($fieldUnavailable($mapping['nit']))
+                       class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-1" for="dv">DV</label>
+                <input id="dv" name="dv" type="text" value="{{ $value('dv', $mapping['dv']) }}" maxlength="3" @disabled($fieldUnavailable($mapping['dv']))
+                       class="w-full border border-slate-300 rounded px-3 py-2 uppercase disabled:bg-slate-100">
+            </div>
+        </div>
+
         @error('nit')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
+        @error('dv')
             <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
         @enderror
     </div>
@@ -55,6 +71,22 @@
         <label class="block text-sm font-medium mb-1" for="codigo">Código</label>
         <input id="codigo" name="codigo" type="text" value="{{ $value('codigo', $mapping['codigo']) }}" @disabled($fieldUnavailable($mapping['codigo']))
                class="w-full border border-slate-300 rounded px-3 py-2 disabled:bg-slate-100">
+        @if($codigoAssistEnabled)
+            <div class="mt-3 flex flex-wrap gap-4 text-sm text-slate-600">
+                <label class="inline-flex items-center gap-2">
+                    <input type="radio" name="codigo_mode" value="secuencia" class="text-indigo-600 focus:ring-indigo-500" @checked($codigoMode === 'secuencia')>
+                    <span>Continuar secuencia</span>
+                </label>
+                <label class="inline-flex items-center gap-2">
+                    <input type="radio" name="codigo_mode" value="manual" class="text-indigo-600 focus:ring-indigo-500" @checked($codigoMode === 'manual')>
+                    <span>Escribir manualmente</span>
+                </label>
+            </div>
+            <p id="codigo_modo_estado" class="mt-2 text-xs text-slate-500">
+                {{ $codigoMode === 'secuencia' ? 'Usa el código actual como referencia y se completará el siguiente consecutivo.' : 'Puedes escribir el código libremente. La disponibilidad se valida en tiempo real.' }}
+            </p>
+            <p id="codigo_estado" class="mt-1 text-xs text-slate-500"></p>
+        @endif
         @error('codigo')
             <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
         @enderror
@@ -168,6 +200,182 @@
     @push('scripts')
         <script>
             (() => {
+                const codigoInput = document.getElementById('codigo');
+                const codigoEstado = document.getElementById('codigo_estado');
+                const codigoModoEstado = document.getElementById('codigo_modo_estado');
+                const codigoModeInputs = document.querySelectorAll('input[name="codigo_mode"]');
+
+                if (codigoInput && codigoEstado && codigoModeInputs.length) {
+                    const availabilityUrl = `{{ route('clientes.codigo.disponibilidad') }}`;
+                    const nextCodigoUrl = `{{ route('clientes.codigo.siguiente') }}`;
+                    let availabilityTimeout = null;
+                    let nextTimeout = null;
+                    let availabilityController = null;
+                    let nextController = null;
+
+                    const normalizeCodigo = (value) => value.trim().toUpperCase();
+
+                    const selectedMode = () => {
+                        const current = Array.from(codigoModeInputs).find((input) => input.checked);
+                        return current ? current.value : 'manual';
+                    };
+
+                    const setCodigoEstado = (message, tone = 'neutral') => {
+                        codigoEstado.textContent = message;
+                        codigoEstado.classList.remove('text-slate-500', 'text-emerald-600', 'text-rose-600');
+
+                        if (tone === 'success') {
+                            codigoEstado.classList.add('text-emerald-600');
+                            return;
+                        }
+
+                        if (tone === 'error') {
+                            codigoEstado.classList.add('text-rose-600');
+                            return;
+                        }
+
+                        codigoEstado.classList.add('text-slate-500');
+                    };
+
+                    const syncModoHint = () => {
+                        if (!codigoModoEstado) {
+                            return;
+                        }
+
+                        codigoModoEstado.textContent = selectedMode() === 'secuencia'
+                            ? 'Usa el código actual como referencia y se completará el siguiente consecutivo.'
+                            : 'Puedes escribir el código libremente. La disponibilidad se valida en tiempo real.';
+                    };
+
+                    const validateAvailability = async (value) => {
+                        const codigo = normalizeCodigo(value);
+
+                        if (availabilityController) {
+                            availabilityController.abort();
+                        }
+
+                        if (codigo === '') {
+                            setCodigoEstado('Escribe un código para validar.');
+                            return;
+                        }
+
+                        availabilityController = new AbortController();
+                        setCodigoEstado('Validando código...');
+
+                        try {
+                            const response = await fetch(`${availabilityUrl}?codigo=${encodeURIComponent(codigo)}`, {
+                                headers: { 'Accept': 'application/json' },
+                                signal: availabilityController.signal,
+                            });
+                            const payload = await response.json();
+
+                            if (!response.ok) {
+                                setCodigoEstado(payload.message ?? 'No fue posible validar el código.', 'error');
+                                return;
+                            }
+
+                            setCodigoEstado(
+                                payload.message ?? (payload.available ? 'Código disponible' : 'Código en uso'),
+                                payload.available ? 'success' : 'error'
+                            );
+                        } catch (error) {
+                            if (error.name === 'AbortError') {
+                                return;
+                            }
+
+                            setCodigoEstado('No fue posible validar el código.', 'error');
+                        }
+                    };
+
+                    const requestNextCodigo = async (value) => {
+                        const hint = normalizeCodigo(value);
+
+                        if (nextController) {
+                            nextController.abort();
+                        }
+
+                        nextController = new AbortController();
+                        setCodigoEstado('Buscando siguiente consecutivo...');
+
+                        try {
+                            const response = await fetch(`${nextCodigoUrl}?codigo=${encodeURIComponent(hint)}`, {
+                                headers: { 'Accept': 'application/json' },
+                                signal: nextController.signal,
+                            });
+                            const payload = await response.json();
+
+                            if (!response.ok || !payload.codigo) {
+                                setCodigoEstado(payload.message ?? 'No fue posible generar el siguiente código.', 'error');
+                                return;
+                            }
+
+                            codigoInput.value = payload.codigo;
+                            await validateAvailability(payload.codigo);
+                        } catch (error) {
+                            if (error.name === 'AbortError') {
+                                return;
+                            }
+
+                            setCodigoEstado('No fue posible generar el siguiente código.', 'error');
+                        }
+                    };
+
+                    const scheduleAvailabilityValidation = () => {
+                        clearTimeout(availabilityTimeout);
+                        availabilityTimeout = setTimeout(() => {
+                            validateAvailability(codigoInput.value);
+                        }, 300);
+                    };
+
+                    const scheduleNextCodigo = () => {
+                        clearTimeout(nextTimeout);
+                        nextTimeout = setTimeout(() => {
+                            requestNextCodigo(codigoInput.value);
+                        }, 350);
+                    };
+
+                    codigoInput.addEventListener('input', () => {
+                        codigoInput.value = normalizeCodigo(codigoInput.value);
+
+                        if (selectedMode() === 'secuencia') {
+                            scheduleNextCodigo();
+                            return;
+                        }
+
+                        scheduleAvailabilityValidation();
+                    });
+
+                    codigoInput.addEventListener('blur', () => {
+                        if (selectedMode() === 'secuencia') {
+                            requestNextCodigo(codigoInput.value);
+                            return;
+                        }
+
+                        validateAvailability(codigoInput.value);
+                    });
+
+                    codigoModeInputs.forEach((input) => {
+                        input.addEventListener('change', () => {
+                            syncModoHint();
+
+                            if (selectedMode() === 'secuencia') {
+                                requestNextCodigo(codigoInput.value);
+                                return;
+                            }
+
+                            validateAvailability(codigoInput.value);
+                        });
+                    });
+
+                    syncModoHint();
+
+                    if (selectedMode() === 'secuencia') {
+                        requestNextCodigo(codigoInput.value);
+                    } else {
+                        validateAvailability(codigoInput.value);
+                    }
+                }
+
                 const inputBusqueda = document.getElementById('ciudad_busqueda');
                 const botonBuscar = document.getElementById('ciudad_buscar_btn');
 

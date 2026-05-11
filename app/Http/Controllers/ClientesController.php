@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use App\Models\ConfiguracionDirectorio;
@@ -114,6 +115,62 @@ class ClientesController extends Controller
         ]);
     }
 
+    public function checkCodigoAvailability(Request $request): JsonResponse
+    {
+        $mapping = $this->resolveColumnMapping();
+        $codigoColumn = $mapping['codigo'] ?? null;
+        $codigo = $this->normalizeCodigo((string) $request->query('codigo', ''));
+
+        if (!$codigoColumn) {
+            return response()->json([
+                'available' => false,
+                'message' => 'La columna código no está disponible en esta instancia.',
+            ], 422);
+        }
+
+        if ($codigo === '') {
+            return response()->json([
+                'available' => false,
+                'message' => 'Escribe un código para validar.',
+            ]);
+        }
+
+        $exists = DB::table('clientes_potenciales')
+            ->whereRaw('UPPER(TRIM(' . $codigoColumn . ')) = ?', [$codigo])
+            ->exists();
+
+        return response()->json([
+            'available' => !$exists,
+            'message' => $exists ? 'Código en uso' : 'Código disponible',
+        ]);
+    }
+
+    public function nextCodigo(Request $request): JsonResponse
+    {
+        $mapping = $this->resolveColumnMapping();
+        $codigoColumn = $mapping['codigo'] ?? null;
+
+        if (!$codigoColumn) {
+            return response()->json([
+                'message' => 'La columna código no está disponible en esta instancia.',
+            ], 422);
+        }
+
+        $hint = $this->normalizeCodigo((string) $request->query('codigo', ''));
+        $nextCodigo = $this->resolveNextCodigo($codigoColumn, $hint);
+
+        if ($nextCodigo === null) {
+            return response()->json([
+                'message' => 'No fue posible calcular el siguiente consecutivo.',
+            ], 422);
+        }
+
+        return response()->json([
+            'codigo' => $nextCodigo,
+            'message' => 'Código sugerido generado correctamente.',
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $mapping = $this->resolveColumnMapping();
@@ -182,7 +239,10 @@ class ClientesController extends Controller
         $mapping = $this->resolveColumnMapping();
         $catalogos = $this->loadFormCatalogs();
 
-        $validated = $request->validate($this->rules($catalogos, $mapping));
+        $validated = $request->validate(
+            $this->rules($catalogos, $mapping),
+            $this->validationMessages()
+        );
         $payload = $this->buildPayload($validated, $mapping, $catalogos);
 
         if ($payload === []) {
@@ -318,6 +378,7 @@ class ClientesController extends Controller
     {
         $textInputsToUppercase = [
             'nit',
+            'dv',
             'nombre',
             'codigo',
             'empresa',
@@ -337,6 +398,7 @@ class ClientesController extends Controller
 
         $inputToLogical = [
             'nit' => 'nit',
+            'dv' => 'dv',
             'nombre' => 'nombre',
             'codigo' => 'codigo',
             'empresa' => 'empresa',
@@ -395,6 +457,7 @@ class ClientesController extends Controller
     {
         $rules = [
             'nit' => ['nullable', 'string', 'max:30'],
+            'dv' => ['nullable', 'string', 'max:3', 'regex:/^[0-9xX]+$/'],
             'nombre' => ['nullable', 'string', 'max:150'],
             'empresa' => ['nullable', 'string', 'max:150'],
             'celular1' => ['nullable', 'string', 'max:30'],
@@ -426,6 +489,8 @@ class ClientesController extends Controller
     {
         return [
             'nit.unique' => 'El NIT ingresado ya existe en clientes potenciales.',
+            'dv.max' => 'El DV no puede tener más de 3 caracteres.',
+            'dv.regex' => 'El DV solo permite números y la letra X.',
             'codigo.unique' => 'El código ingresado ya existe en clientes potenciales.',
         ];
     }
@@ -439,6 +504,98 @@ class ClientesController extends Controller
         return function_exists('mb_strtoupper')
             ? mb_strtoupper($value, 'UTF-8')
             : strtoupper($value);
+    }
+
+    private function normalizeCodigo(string $codigo): string
+    {
+        return trim($this->toUppercase($codigo));
+    }
+
+    private function resolveNextCodigo(string $codigoColumn, string $hint = ''): ?string
+    {
+        $sequence = $this->extractCodigoSequence($hint);
+
+        if ($sequence !== null) {
+            $next = $this->findNextCodigoForPrefix($codigoColumn, $sequence['prefix']);
+
+            if ($next !== null) {
+                return $next;
+            }
+
+            return $sequence['prefix'] . str_pad((string) ($sequence['number'] + 1), $sequence['width'], '0', STR_PAD_LEFT);
+        }
+
+        if ($hint !== '') {
+            $next = $this->findNextCodigoForPrefix($codigoColumn, $hint);
+
+            if ($next !== null) {
+                return $next;
+            }
+        }
+
+        return $this->findNextCodigoForPrefix($codigoColumn, null);
+    }
+
+    private function findNextCodigoForPrefix(string $codigoColumn, ?string $prefix): ?string
+    {
+        $query = DB::table('clientes_potenciales')
+            ->select($codigoColumn)
+            ->whereNotNull($codigoColumn)
+            ->where($codigoColumn, '!=', '');
+
+        if ($prefix !== null && $prefix !== '') {
+            $query->where($codigoColumn, 'like', $prefix . '%');
+        }
+
+        $codigos = $query->pluck($codigoColumn);
+
+        $maxNumber = null;
+        $maxWidth = 0;
+        $resolvedPrefix = $prefix;
+
+        foreach ($codigos as $codigo) {
+            $sequence = $this->extractCodigoSequence((string) $codigo);
+
+            if ($sequence === null) {
+                continue;
+            }
+
+            if ($prefix !== null && $prefix !== '' && $sequence['prefix'] !== $prefix) {
+                continue;
+            }
+
+            if ($maxNumber === null || $sequence['number'] > $maxNumber) {
+                $maxNumber = $sequence['number'];
+                $maxWidth = $sequence['width'];
+                $resolvedPrefix = $sequence['prefix'];
+                continue;
+            }
+
+            if ($sequence['number'] === $maxNumber && $sequence['width'] > $maxWidth) {
+                $maxWidth = $sequence['width'];
+            }
+        }
+
+        if ($maxNumber === null || $resolvedPrefix === null || $resolvedPrefix === '') {
+            return null;
+        }
+
+        return $resolvedPrefix . str_pad((string) ($maxNumber + 1), $maxWidth, '0', STR_PAD_LEFT);
+    }
+
+    private function extractCodigoSequence(string $codigo): ?array
+    {
+        $normalized = $this->normalizeCodigo($codigo);
+
+        if ($normalized === '' || !preg_match('/^([A-Z]+)(\d+)$/', $normalized, $matches)) {
+            return null;
+        }
+
+        return [
+            'prefix' => $matches[1],
+            'number' => (int) $matches[2],
+            'width' => strlen($matches[2]),
+        ];
     }
 
     private function catalogRule(array $catalogo): array

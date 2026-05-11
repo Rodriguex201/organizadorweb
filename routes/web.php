@@ -21,6 +21,8 @@ Route::middleware('auth.custom')->group(function (): void {
 
     Route::get('/clientes', [ClientesController::class, 'index'])->name('clientes.index');
     Route::get('/clientes/create', [ClientesController::class, 'create'])->name('clientes.create');
+    Route::get('/clientes/codigo/disponibilidad', [ClientesController::class, 'checkCodigoAvailability'])->name('clientes.codigo.disponibilidad');
+    Route::get('/clientes/codigo/siguiente', [ClientesController::class, 'nextCodigo'])->name('clientes.codigo.siguiente');
     Route::post('/clientes', [ClientesController::class, 'store'])->name('clientes.store');
     Route::get('/clientes/{id}', [ClientesController::class, 'show'])->name('clientes.show');
     Route::get('/clientes/{id}/edit', [ClientesController::class, 'edit'])->name('clientes.edit');
