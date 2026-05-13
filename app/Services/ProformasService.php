@@ -77,7 +77,7 @@ class ProformasService
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
         $codigo = trim((string) ($filters['codigo'] ?? ''));
         $nit = trim((string) ($filters['nit'] ?? ''));
-        $empresa = trim((string) ($filters['empresa'] ?? ''));
+        $empresa = $this->normalizeTextFilter($filters['empresa'] ?? '');
         $emisora = trim((string) ($filters['emisora'] ?? ''));
         $estado = $this->normalizarEntero($filters['estado'] ?? null);
         $envio = $this->normalizarEntero($filters['envio'] ?? null);
@@ -96,7 +96,23 @@ class ProformasService
             })
 
             ->when($nit !== '', fn ($q) => $q->where('p.nit', 'like', "%{$nit}%"))
-            ->when($empresa !== '', fn ($q) => $q->where('p.emp', 'like', "%{$empresa}%"))
+            ->when($empresa !== '', function ($q) use ($empresa) {
+                $empresaLike = '%'.$empresa.'%';
+
+                $q->where(function ($empresaQuery) use ($empresaLike) {
+                    $empresaQuery
+                        ->whereRaw($this->normalizedSqlExpression('p.emp').' LIKE ?', [$empresaLike])
+                        ->orWhereExists(
+                            $this->buildClienteRelacionSubquery()
+                                ->select(DB::raw(1))
+                                ->where(function ($clienteQuery) use ($empresaLike) {
+                                    $clienteQuery
+                                        ->whereRaw($this->normalizedSqlExpression('cp.nombre').' LIKE ?', [$empresaLike])
+                                        ->orWhereRaw($this->normalizedSqlExpression('cp.empresa').' LIKE ?', [$empresaLike]);
+                                })
+                        );
+                });
+            })
             ->when($emisora !== '', fn ($q) => $q->where('p.emisora', $emisora))
             ->when($estado !== null, fn ($q) => $q->where('p.estado', $estado))
             ->when($envio !== null, fn ($q) => $q->where('p.enviado', $envio))
@@ -383,6 +399,25 @@ class ProformasService
         }
         $mesInt = array_search($mesTexto, self::MESES, true);
         return $mesInt !== false ? (int) $mesInt : null;
+    }
+
+    private function normalizeTextFilter(null|string|int $value): string
+    {
+        $normalized = preg_replace('/\s+/u', ' ', trim((string) $value));
+
+        return mb_strtolower($normalized ?? '');
+    }
+
+    private function normalizedSqlExpression(string $column): string
+    {
+        $trimmed = "TRIM(COALESCE({$column}, ''))";
+        $collapsed = $trimmed;
+
+        for ($i = 0; $i < 5; $i++) {
+            $collapsed = "REPLACE({$collapsed}, '  ', ' ')";
+        }
+
+        return "LOWER({$collapsed})";
     }
 
     public function invalidReasonForBatch(object $proforma): ?string
