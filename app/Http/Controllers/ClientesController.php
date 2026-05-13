@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ClienteValorTotalCalculator;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +17,11 @@ use Illuminate\Validation\Rule;
 
 class ClientesController extends Controller
 {
+    public function __construct(
+        private readonly ClienteValorTotalCalculator $clienteValorTotalCalculator,
+    ) {
+    }
+
     public function index(Request $request): View
     {
         $mapping = $this->resolveColumnMapping();
@@ -427,6 +433,39 @@ class ClientesController extends Controller
         $this->mapCatalogValue($payload, $validated, $mapping['modalidad'] ?? null, 'modalidad', $catalogos['modalidad']);
         $this->mapCatalogValue($payload, $validated, $mapping['llego'] ?? null, 'llego', $catalogos['llego']);
 
+        $numericInputsToLogical = [
+            'vlrprincipal' => 'vlrprincipal',
+            'numequipos' => 'numequipos',
+            'vlrterminal' => 'vlrterminal',
+            'vlrterminal_recepcion' => 'vlrterminal_recepcion',
+            'vlrnomina' => 'vlrnomina',
+            'nominaterminal' => 'nominaterminal',
+            'vlrterminal_nomina' => 'vlrterminal_nomina',
+            'vlracuse' => 'vlracuse',
+            'vlrfactura' => 'vlrfactura',
+            'vlrsoporte' => 'vlrsoporte',
+            'vlrextra' => 'vlrextra',
+            'numeromoviles' => 'numeromoviles',
+            'vlrmovil' => 'vlrmovil',
+            'numextra' => 'numextra',
+            'vlrextrae' => 'vlrextrae',
+        ];
+
+        foreach ($numericInputsToLogical as $input => $logicalKey) {
+            $column = $mapping[$logicalKey] ?? null;
+            if (!$column || !array_key_exists($input, $validated)) {
+                continue;
+            }
+
+            $payload[$column] = $validated[$input] !== '' && $validated[$input] !== null
+                ? (float) $validated[$input]
+                : null;
+        }
+
+        if (($mapping['valor_total'] ?? null) && array_key_exists('valor_total', $validated)) {
+            $payload[$mapping['valor_total']] = $this->clienteValorTotalCalculator->calculate($validated);
+        }
+
         return $payload;
     }
 
@@ -467,6 +506,22 @@ class ClientesController extends Controller
             'fecha_arriendo' => ['nullable', 'date'],
             'ip_empresa' => ['nullable', 'string', 'max:255'],
             'departamento' => ['nullable', 'string', 'max:150'],
+            'vlrprincipal' => ['nullable', 'numeric', 'min:0'],
+            'numequipos' => ['nullable', 'numeric', 'min:0'],
+            'vlrterminal' => ['nullable', 'numeric', 'min:0'],
+            'vlrterminal_recepcion' => ['nullable', 'numeric', 'min:0'],
+            'vlrnomina' => ['nullable', 'numeric', 'min:0'],
+            'nominaterminal' => ['nullable', 'numeric', 'min:0'],
+            'vlrterminal_nomina' => ['nullable', 'numeric', 'min:0'],
+            'vlracuse' => ['nullable', 'numeric', 'min:0'],
+            'vlrfactura' => ['nullable', 'numeric', 'min:0'],
+            'vlrsoporte' => ['nullable', 'numeric', 'min:0'],
+            'vlrextra' => ['nullable', 'numeric', 'min:0'],
+            'numeromoviles' => ['nullable', 'numeric', 'min:0'],
+            'vlrmovil' => ['nullable', 'numeric', 'min:0'],
+            'numextra' => ['nullable', 'numeric', 'min:0'],
+            'vlrextrae' => ['nullable', 'numeric', 'min:0'],
+            'valor_total' => ['nullable', 'numeric', 'min:0'],
             'clase' => $this->catalogRule($catalogos['clases']),
             'modalidad' => $this->catalogRule($catalogos['modalidad']),
             'llego' => $this->catalogRule($catalogos['llego']),
@@ -926,6 +981,22 @@ private function normalizeFolderName(string $value): string
             'modalidad' => $pick(['modalidad']),
             'llego' => $pick(['llego', 'idllego']),
             'contrato' => $pick(['modalidad', 'contrato']),
+            'vlrprincipal' => $pick(['vlrprincipal']),
+            'numequipos' => $pick(['numequipos']),
+            'vlrterminal' => $pick(['vlrterminal']),
+            'vlrterminal_recepcion' => $pick(['vlrextra2', 'vlrterminalrecepcion']),
+            'vlrnomina' => $pick(['vlrnomina']),
+            'nominaterminal' => $pick(['nominaterminal']),
+            'vlrterminal_nomina' => $pick(['vlrterminalnomina', 'vlrterminal_nomina', 'vlrnominaterminal']),
+            'vlracuse' => $pick(['vlrecepcion', 'vlrrecepcion', 'vlracuse']),
+            'vlrfactura' => $pick(['vlrfactura']),
+            'vlrsoporte' => $pick(['vlrsoporte']),
+            'vlrextra' => $pick(['vlrextra']),
+            'numeromoviles' => $pick(['numeromoviles']),
+            'vlrmovil' => $pick(['vlrmovil']),
+            'numextra' => $pick(['numextra']),
+            'vlrextrae' => $pick(['vlrextrae']),
+            'valor_total' => $pick(['valor_total']),
             'retiro_flag' => $pick(['retiro', 'retirado']),
             'motivo_reactivacion' => $pick(['mreact']),
             'tipo_retiro' => $pick(['tipoRetiro']),
