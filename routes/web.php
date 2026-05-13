@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CiudadesController;
 use App\Http\Controllers\ClientesController;
+use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
@@ -70,5 +71,11 @@ Route::middleware('auth.custom')->group(function (): void {
 
         Route::get('/configuracion/estados-proforma', [ConfiguracionEstadoProformaController::class, 'index'])->name('configuracion.estados-proforma.index');
         Route::patch('/configuracion/estados-proforma/{estadoCodigo}', [ConfiguracionEstadoProformaController::class, 'update'])->name('configuracion.estados-proforma.update');
+
+        Route::get('/configuracion/conceptos', [ConfiguracionConceptoController::class, 'index'])->name('configuracion.conceptos.index');
+        Route::post('/configuracion/conceptos', [ConfiguracionConceptoController::class, 'store'])->name('configuracion.conceptos.store');
+        Route::put('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'update'])->name('configuracion.conceptos.update');
+        Route::patch('/configuracion/conceptos/{concepto}/toggle', [ConfiguracionConceptoController::class, 'toggle'])->name('configuracion.conceptos.toggle');
+        Route::delete('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'destroy'])->name('configuracion.conceptos.destroy');
     });
 });
