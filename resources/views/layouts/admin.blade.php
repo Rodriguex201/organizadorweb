@@ -44,6 +44,7 @@
                                 <a href="{{ route('configuracion.directorio.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.directorio.*') ? 'bg-slate-700' : '' }}">Directorio</a>
                                 <a href="{{ route('configuracion.estados-proforma.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.estados-proforma.*') ? 'bg-slate-700' : '' }}">Estados proforma</a>
                                 <a href="{{ route('configuracion.conceptos.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.conceptos.*') ? 'bg-slate-700' : '' }}">Conceptos</a>
+                                <a href="{{ route('configuracion.tarifas.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.tarifas.*') ? 'bg-slate-700' : '' }}">Tarifas</a>
                             </div>
                         </div>
                     @endif

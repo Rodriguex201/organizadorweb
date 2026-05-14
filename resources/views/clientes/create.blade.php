@@ -12,8 +12,9 @@
     <div class="bg-white rounded-lg shadow p-6">
         @php
             $cliente = null;
-            $value = static function (string $input, ?string $column = null) {
-                return old($input);
+            $tarifasDefaults = $tarifasDefaults ?? [];
+            $value = static function (string $input, ?string $column = null) use ($tarifasDefaults) {
+                return old($input, $tarifasDefaults[$input] ?? null);
             };
             $fieldUnavailable = static fn (?string $column): bool => $column === null;
             $initialStep = old('wizard_step', $errors->any() ? '2' : '1');
@@ -83,6 +84,7 @@
                     'mapping' => $mapping,
                     'value' => $value,
                     'fieldUnavailable' => $fieldUnavailable,
+                    'tarifasDefaults' => $tarifasDefaults,
                 ])
 
                 <div class="mt-6 flex items-center gap-3">

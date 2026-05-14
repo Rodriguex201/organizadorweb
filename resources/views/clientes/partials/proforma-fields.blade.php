@@ -7,8 +7,14 @@
     };
 
     $fieldUnavailable = $fieldUnavailable ?? static fn (?string $column): bool => $column === null;
+    $tarifasDefaults = $tarifasDefaults ?? [];
     $numberValue = static function (string $input, ?string $column = null) use ($value) {
         $resolved = $value($input, $column);
+
+        return $resolved === null ? '' : $resolved;
+    };
+    $defaultValue = static function (string $input) use ($tarifasDefaults) {
+        $resolved = $tarifasDefaults[$input] ?? null;
 
         return $resolved === null ? '' : $resolved;
     };
@@ -43,9 +49,20 @@
             <h3 class="text-base font-semibold text-slate-900">Valores proforma</h3>
             <p class="text-xs text-slate-500">Captura compacta tipo administrativo, con cálculo automático del valor total.</p>
         </div>
-        <div class="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-right shadow-sm">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Valor total</p>
-            <p id="valor_total_display" class="text-lg font-bold text-emerald-700">$0</p>
+        <div class="flex flex-wrap items-center justify-end gap-2">
+            @if($tarifasDefaults !== [])
+                <button
+                    type="button"
+                    id="restaurar_tarifas_button"
+                    class="inline-flex items-center rounded bg-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-300"
+                >
+                    Restaurar tarifas predeterminadas
+                </button>
+            @endif
+            <div class="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-right shadow-sm">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Valor total</p>
+                <p id="valor_total_display" class="text-lg font-bold text-emerald-700">$0</p>
+            </div>
         </div>
     </div>
 
@@ -64,6 +81,7 @@
                             step="{{ $field['step'] }}"
                             value="{{ $numberValue($field['name'], $field['column']) }}"
                             data-proforma-input
+                            data-default-value="{{ $defaultValue($field['name']) }}"
                             @disabled($fieldUnavailable($field['column']))
                             class="h-9 w-full rounded-md border border-slate-300 px-2 text-sm disabled:bg-slate-100"
                         >
@@ -89,6 +107,7 @@
                             step="{{ $field['step'] }}"
                             value="{{ $numberValue($field['name'], $field['column']) }}"
                             data-proforma-input
+                            data-default-value="{{ $defaultValue($field['name']) }}"
                             @disabled($fieldUnavailable($field['column']))
                             class="h-9 w-full rounded-md border border-slate-300 px-2 text-sm disabled:bg-slate-100"
                         >

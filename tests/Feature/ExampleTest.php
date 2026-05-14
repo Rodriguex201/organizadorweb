@@ -12,8 +12,11 @@ class ExampleTest extends TestCase
      */
     public function test_the_application_returns_a_successful_response(): void
     {
-        $response = $this->get('/');
+        $response = $this->withSession([
+            'idusuario' => 1,
+            'rol_nombre' => 'admin',
+        ])->get('/');
 
-        $response->assertStatus(200);
+        $response->assertRedirect(route('clientes.index'));
     }
 }

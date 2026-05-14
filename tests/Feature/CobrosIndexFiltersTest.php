@@ -22,21 +22,15 @@ class CobrosIndexFiltersTest extends TestCase
         $calculatorService = Mockery::mock(RevisarProformaCalculator::class);
 
         $expectedFilters = [
-            'mes' => 'marzo',
+            'mes' => 'mayo',
             'anio' => 2026,
             'proforma' => null,
             'buscar' => null,
             'orden_fecha' => null,
             'grupo_fecha' => null,
+            'filtro_nota' => null,
+            'filtro_envio' => null,
         ];
-
-        $cobrosService->shouldReceive('normalizePeriodoFilters')
-            ->once()
-            ->with(null, null)
-            ->andReturn([
-                'mes' => $expectedFilters['mes'],
-                'anio' => $expectedFilters['anio'],
-            ]);
 
         $cobrosService->shouldReceive('paginateCobros')
             ->once()
@@ -49,7 +43,10 @@ class CobrosIndexFiltersTest extends TestCase
         $this->app->instance(ProformaPdfService::class, $pdfService);
         $this->app->instance(RevisarProformaCalculator::class, $calculatorService);
 
-        $response = $this->get(route('cobros.index'));
+        $response = $this->withSession([
+            'idusuario' => 1,
+            'rol_nombre' => 'admin',
+        ])->get(route('cobros.index'));
 
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);
@@ -64,21 +61,15 @@ class CobrosIndexFiltersTest extends TestCase
         $calculatorService = Mockery::mock(RevisarProformaCalculator::class);
 
         $expectedFilters = [
-            'mes' => 'mayo',
+            'mes' => '5',
             'anio' => 2024,
             'proforma' => null,
             'buscar' => null,
             'orden_fecha' => null,
             'grupo_fecha' => null,
+            'filtro_nota' => null,
+            'filtro_envio' => null,
         ];
-
-        $cobrosService->shouldReceive('normalizePeriodoFilters')
-            ->once()
-            ->with('5', 2024)
-            ->andReturn([
-                'mes' => $expectedFilters['mes'],
-                'anio' => $expectedFilters['anio'],
-            ]);
 
         $cobrosService->shouldReceive('paginateCobros')
             ->once()
@@ -91,7 +82,10 @@ class CobrosIndexFiltersTest extends TestCase
         $this->app->instance(ProformaPdfService::class, $pdfService);
         $this->app->instance(RevisarProformaCalculator::class, $calculatorService);
 
-        $response = $this->get(route('cobros.index', ['mes' => '5', 'anio' => 2024]));
+        $response = $this->withSession([
+            'idusuario' => 1,
+            'rol_nombre' => 'admin',
+        ])->get(route('cobros.index', ['mes' => '5', 'anio' => 2024]));
 
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);

@@ -42,6 +42,7 @@
         'mapping' => $mapping,
         'value' => $value,
         'fieldUnavailable' => $fieldUnavailable,
+        'tarifasDefaults' => [],
     ])
 </div>
 

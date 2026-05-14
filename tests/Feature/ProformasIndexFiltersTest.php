@@ -260,10 +260,14 @@ class ProformasIndexFiltersTest extends TestCase
 
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);
-        $response->assertSessionHas('proformas.numero', null);
-        $response->assertSessionHas('proformas.empresa', null);
-        $response->assertSessionHas('proformas.estado', null);
-        $response->assertSessionHas('proformas.envio', null);
+        $this->assertTrue(session()->exists('proformas.numero'));
+        $this->assertTrue(session()->exists('proformas.empresa'));
+        $this->assertTrue(session()->exists('proformas.estado'));
+        $this->assertTrue(session()->exists('proformas.envio'));
+        $this->assertNull(session('proformas.numero'));
+        $this->assertNull(session('proformas.empresa'));
+        $this->assertNull(session('proformas.estado'));
+        $this->assertNull(session('proformas.envio'));
     }
 
     public function test_volver_al_listado_reutiliza_filtros_originales_validos(): void

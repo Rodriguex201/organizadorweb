@@ -265,6 +265,7 @@
                 const proformaInputs = Array.from(document.querySelectorAll('[data-proforma-input]'));
                 const valorTotalDisplay = document.getElementById('valor_total_display');
                 const valorTotalInput = document.getElementById('valor_total');
+                const restaurarTarifasButton = document.getElementById('restaurar_tarifas_button');
 
                 if (proformaInputs.length && valorTotalDisplay && valorTotalInput) {
                     const toNumber = (value) => {
@@ -314,6 +315,18 @@
                     proformaInputs.forEach((input) => {
                         input.addEventListener('input', syncTotal);
                         input.addEventListener('change', syncTotal);
+                    });
+
+                    restaurarTarifasButton?.addEventListener('click', () => {
+                        proformaInputs.forEach((input) => {
+                            if (input.disabled) {
+                                return;
+                            }
+
+                            input.value = input.dataset.defaultValue ?? '';
+                        });
+
+                        syncTotal();
                     });
 
                     syncTotal();

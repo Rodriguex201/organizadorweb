@@ -14,11 +14,13 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use App\Services\TarifaConfigService;
 
 class ClientesController extends Controller
 {
     public function __construct(
         private readonly ClienteValorTotalCalculator $clienteValorTotalCalculator,
+        private readonly TarifaConfigService $tarifaConfigService,
     ) {
     }
 
@@ -118,6 +120,7 @@ class ClientesController extends Controller
         return view('clientes.create', [
             'mapping' => $this->resolveColumnMapping(),
             'catalogos' => $this->loadFormCatalogs(),
+            'tarifasDefaults' => $this->tarifaConfigService->clientCreateDefaults(),
         ]);
     }
 

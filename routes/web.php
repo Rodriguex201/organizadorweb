@@ -6,6 +6,7 @@ use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
+use App\Http\Controllers\ConfiguracionTarifaController;
 use App\Http\Controllers\ProformasController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
@@ -77,5 +78,8 @@ Route::middleware('auth.custom')->group(function (): void {
         Route::put('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'update'])->name('configuracion.conceptos.update');
         Route::patch('/configuracion/conceptos/{concepto}/toggle', [ConfiguracionConceptoController::class, 'toggle'])->name('configuracion.conceptos.toggle');
         Route::delete('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'destroy'])->name('configuracion.conceptos.destroy');
+
+        Route::get('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'index'])->name('configuracion.tarifas.index');
+        Route::put('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'update'])->name('configuracion.tarifas.update');
     });
 });
