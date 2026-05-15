@@ -37,7 +37,7 @@ class ProformaPreviewService
             'cabecera' => [
                 'id_cobro' => (int) $cobro->id_cobro,
                 'mes' => (string) ($cobro->mes ?? ''),
-                'anio' => (string) ($cobro->{'año'} ?? $cobro->{'aÃ±o'} ?? ''),
+                'anio' => (string) ($cobro->{'año'} ?? $cobro->{'año'} ?? ''),
                 'proforma_actual' => (int) ($cobro->Proforma ?? 0),
                 'empresa_emisora' => $this->resolverEmpresaEmisora($cobro),
                 'cliente' => [

@@ -8,7 +8,7 @@
         <div>
             <p class="text-sm text-slate-500">Modulo Cobros</p>
             <h1 class="text-2xl font-bold">Revision manual de proforma</h1>
-            <p class="text-sm text-slate-600">Cobro #{{ $cobro->id_cobro }} · {{ ucfirst((string) ($cobro->mes ?? '')) }} {{ $cobro->{'año'} ?? $cobro->{'aÃ±o'} ?? '' }}</p>
+            <p class="text-sm text-slate-600">Cobro #{{ $cobro->id_cobro }} · {{ ucfirst((string) ($cobro->mes ?? '')) }} {{ $cobro->{'año'} ?? $cobro->{'año'} ?? '' }}</p>
         </div>
         <a href="{{ route('cobros.show', array_merge(['id' => $cobro->id_cobro], request()->query())) }}" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
             Volver al detalle

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse as DownloadResponse;
@@ -140,18 +141,32 @@ class ProformaDashboardExportService
         }
 
         $startedAt = microtime(true);
-        Log::info('proformas.dashboard.export.start', [
+        $this->logExportDebug('start', [
             'filters' => $filters,
             'mode' => $mode,
             'format' => $format,
             'selected_columns' => $columns,
+            'ini' => $this->runtimeSnapshot(),
         ]);
 
         $selectedColumns = $this->sanitizeSelectedColumns($columns, $mode);
+        if (($filters['debug_minimal'] ?? false) === true) {
+            $selectedColumns = ['cliente_codigo', 'cliente_empresa'];
+            $filters['debug_limit'] = min((int) ($filters['debug_limit'] ?? 5), 5);
+            $mode = self::EXPORT_MODE_DETAILED;
+
+            $this->logExportDebug('debug_minimal.applied', [
+                'forced_columns' => $selectedColumns,
+                'forced_limit' => $filters['debug_limit'],
+            ]);
+        }
+
         $dataset = $this->buildDataset($filters, $selectedColumns);
         $filename = $this->buildFilename($filters, $mode, $format);
-        $token = (string) \Illuminate\Support\Str::uuid();
+        $token = (string) Str::uuid();
         $relativePath = 'exports/dashboard/'.$token.'-'.$filename;
+        $disk = Storage::disk('local');
+        $absolutePath = $disk->path($relativePath);
         $export = new ProformasDashboardExcelExport(
             $dataset['headings'],
             $dataset['rows'],
@@ -159,13 +174,37 @@ class ProformaDashboardExportService
             $dataset['totals_row_index'],
         );
 
-        Log::info('proformas.dashboard.export.store.start', [
+        $this->logExportDebug('before_generate_xlsx', [
             'token' => $token,
             'relative_path' => $relativePath,
+            'absolute_path' => $absolutePath,
+            'directory' => dirname($absolutePath),
+            'directory_exists' => is_dir(dirname($absolutePath)),
+            'directory_writable' => is_writable(dirname($absolutePath)),
+            'storage_disk' => 'local',
             'record_count' => $dataset['record_count'] ?? 0,
+            'filename' => $filename,
+            'temp_dir' => sys_get_temp_dir(),
+            'temp_dir_exists' => is_dir(sys_get_temp_dir()),
+            'temp_dir_writable' => is_writable(sys_get_temp_dir()),
+            'output_buffer_level' => ob_get_level(),
         ]);
 
         Excel::store($export, $relativePath, 'local');
+
+        clearstatcache(true, $absolutePath);
+        $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+        $this->logExportDebug('after_generate_xlsx', [
+            'token' => $token,
+            'relative_path' => $relativePath,
+            'absolute_path' => $absolutePath,
+            'file_exists' => file_exists($absolutePath),
+            'file_size_bytes' => file_exists($absolutePath) ? filesize($absolutePath) : null,
+            'record_count' => $dataset['record_count'] ?? 0,
+            'duration_ms' => $durationMs,
+            'memory_final_mb' => round(memory_get_usage(true) / 1048576, 2),
+            'memory_peak_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
+        ]);
 
         Cache::put(self::TEMP_EXPORT_CACHE_PREFIX.$token, [
             'relative_path' => $relativePath,
@@ -174,12 +213,12 @@ class ProformaDashboardExportService
             'created_at' => now()->toIso8601String(),
         ], now()->addSeconds(self::TEMP_EXPORT_TTL_SECONDS));
 
-        $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
-        Log::info('proformas.dashboard.export.ready', [
+        $this->logExportDebug('before_response_json', [
             'token' => $token,
             'relative_path' => $relativePath,
             'record_count' => $dataset['record_count'] ?? 0,
             'duration_ms' => $durationMs,
+            'message' => 'RESPUESTA OK',
         ]);
 
         return [
@@ -192,7 +231,7 @@ class ProformaDashboardExportService
 
     public function downloadTemporaryFile(string $token): DownloadResponse
     {
-        Log::info('proformas.dashboard.export.download.start', [
+        $this->logExportDebug('download.start', [
             'token' => $token,
         ]);
 
@@ -213,11 +252,20 @@ class ProformaDashboardExportService
         }
 
         $absolutePath = Storage::disk('local')->path($relativePath);
+        $this->logExportDebug('download.response.prepared', [
+            'token' => $token,
+            'relative_path' => $relativePath,
+            'absolute_path' => $absolutePath,
+            'file_exists' => file_exists($absolutePath),
+            'file_readable' => is_readable($absolutePath),
+            'file_size_bytes' => file_exists($absolutePath) ? filesize($absolutePath) : null,
+            'output_buffer_level' => ob_get_level(),
+        ]);
         $response = response()->download($absolutePath, $filename)->deleteFileAfterSend(true);
         $response->headers->set('X-Export-Records', (string) $recordCount);
         Cache::forget(self::TEMP_EXPORT_CACHE_PREFIX.$token);
 
-        Log::info('proformas.dashboard.export.download.finish', [
+        $this->logExportDebug('download.finish', [
             'token' => $token,
             'relative_path' => $relativePath,
             'filename' => $filename,
@@ -282,6 +330,15 @@ class ProformaDashboardExportService
     {
         $definitions = $this->columnDefinitions();
         $query = DB::table('sg_proform as p');
+        $query->addSelect([
+            'p.id as export_debug_proforma_id',
+            'p.nro_prof as export_debug_proforma_numero',
+            'p.nit as export_debug_nit',
+        ]);
+
+        if ($this->requiresClienteJoins($selectedColumns)) {
+            $this->applyClienteJoins($query);
+        }
 
         foreach ($selectedColumns as $key) {
             ($definitions[$key]['select'])($query);
@@ -289,23 +346,53 @@ class ProformaDashboardExportService
 
         $this->applyFilters($query, $filters);
 
-        Log::info('proformas.dashboard.export.query', [
-            'filters' => $filters,
-            'selected_columns' => $selectedColumns,
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
+        $sqlPreview = $query->toSql();
+        $bindingsPreview = $query->getBindings();
+
+        $this->logExportDebug('path.new_query', [
+            'message' => 'USANDO QUERY NUEVA',
+            'contains_select_subquery' => str_contains(strtolower($sqlPreview), 'select (select'),
+            'service' => self::class,
+            'method' => __FUNCTION__,
         ]);
 
+        $this->logExportDebug('before_query', [
+            'message' => 'ANTES QUERY',
+            'filters' => $filters,
+            'selected_columns' => $selectedColumns,
+            'sql' => $sqlPreview,
+            'bindings' => $bindingsPreview,
+        ]);
+
+        if (request()->boolean('debug_dump_sql')) {
+            dd([
+                'marker' => 'USANDO QUERY NUEVA',
+                'service' => self::class,
+                'method' => __FUNCTION__,
+                'contains_select_subquery' => str_contains(strtolower($sqlPreview), 'select (select'),
+                'sql' => $sqlPreview,
+                'bindings' => $bindingsPreview,
+            ]);
+        }
+
         $queryStartedAt = microtime(true);
-        $rows = $query
+        $orderedQuery = $query
             ->orderByDesc('p.anio')
             ->orderByDesc('p.mes')
-            ->orderByDesc('p.id')
-            ->get();
+            ->orderByDesc('p.id');
+
+        if (($filters['debug_limit'] ?? null) !== null) {
+            $orderedQuery->limit((int) $filters['debug_limit']);
+        }
+
+        $rows = $orderedQuery->get();
         $queryDurationMs = (int) round((microtime(true) - $queryStartedAt) * 1000);
-        Log::info('proformas.dashboard.export.query.result', [
+        $this->logExportDebug('after_query', [
+            'message' => 'DESPUES QUERY',
             'record_count' => $rows->count(),
             'duration_ms' => $queryDurationMs,
+            'memory_used_mb' => round(memory_get_usage(true) / 1048576, 2),
+            'memory_peak_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
         ]);
 
         $headings = [];
@@ -327,15 +414,43 @@ class ProformaDashboardExportService
             }
         }
 
-        foreach ($rows as $row) {
+        $this->logExportDebug('before_map', [
+            'message' => 'ANTES MAP',
+            'selected_columns' => $selectedColumns,
+            'record_count' => $rows->count(),
+        ]);
+
+        foreach ($rows as $index => $row) {
             $formattedRow = [];
+            $recordNumber = $index + 1;
 
-            foreach ($selectedColumns as $key) {
-                $formattedRow[] = ($definitions[$key]['value'])($row);
+            try {
+                foreach ($selectedColumns as $key) {
+                    $formattedRow[] = ($definitions[$key]['value'])($row);
 
-                if (array_key_exists($key, $totals)) {
-                    $totals[$key] += $this->toFloat($row->{$key} ?? null);
+                    if (array_key_exists($key, $totals)) {
+                        $totals[$key] += $this->toFloat($row->{$key} ?? null);
+                    }
                 }
+            } catch (Throwable $exception) {
+                $this->logExportDebug('map.row_exception', [
+                    'record_number' => $recordNumber,
+                    'row_debug' => $this->rowDebugContext($row),
+                    'message' => $exception->getMessage(),
+                    'line' => $exception->getLine(),
+                    'file' => $exception->getFile(),
+                    'trace' => $exception->getTraceAsString(),
+                ]);
+
+                throw $exception;
+            }
+
+            if ($recordNumber % 10 === 0) {
+                $this->logExportDebug('map.progress', [
+                    'message' => "Procesando registro {$recordNumber}",
+                    'record_number' => $recordNumber,
+                    'row_debug' => $this->rowDebugContext($row),
+                ]);
             }
 
             $formattedRows[] = $formattedRow;
@@ -450,7 +565,7 @@ class ProformaDashboardExportService
                 'group' => 'cliente',
                 'label' => 'Tipo cliente',
                 'type' => 'text',
-                'select' => fn (Builder $query) => $query->selectSub($this->buildTipoClienteNombreSubquery(), 'cliente_tipo_cliente'),
+                'select' => fn (Builder $query) => $this->addJoinedTipoClienteSelect($query, 'cliente_tipo_cliente'),
                 'value' => fn (object $row) => $this->displayTextValue($row->cliente_tipo_cliente ?? null),
             ],
             'cliente_clase' => $this->subqueryColumn('cliente_clase', 'cliente', 'clase', 'Clase'),
@@ -599,11 +714,35 @@ class ProformaDashboardExportService
             return;
         }
 
-        $query->selectSub($this->buildClienteFieldSubquery($field), $alias);
+        $this->logExportDebug('path.new_query.addClienteFieldSelect', [
+            'message' => 'USANDO QUERY NUEVA',
+            'field' => $field,
+            'alias' => $alias,
+        ]);
+
+        $query->addSelect(DB::raw($this->joinedClienteFieldExpression($field)." as {$alias}"));
+    }
+
+    private function addJoinedTipoClienteSelect(Builder $query, string $alias): void
+    {
+        if (!Schema::hasTable('tipos_cliente')) {
+            $query->selectRaw("NULL as {$alias}");
+
+            return;
+        }
+
+        $query->addSelect(DB::raw($this->joinedTipoClienteExpression()." as {$alias}"));
     }
 
     private function buildClienteFieldSubquery(string $field): Builder
     {
+        $this->logExportDebug('path.old_query.buildClienteFieldSubquery', [
+            'message' => 'USANDO QUERY VIEJA',
+            'field' => $field,
+            'service' => self::class,
+            'method' => __FUNCTION__,
+        ]);
+
         return $this->buildClienteBaseSubquery()
             ->select("cp.{$field}")
             ->limit(1);
@@ -611,6 +750,12 @@ class ProformaDashboardExportService
 
     private function buildTipoClienteNombreSubquery(): Builder
     {
+        $this->logExportDebug('path.old_query.buildTipoClienteNombreSubquery', [
+            'message' => 'USANDO QUERY VIEJA',
+            'service' => self::class,
+            'method' => __FUNCTION__,
+        ]);
+
         $query = $this->buildClienteBaseSubquery();
 
         if (!Schema::hasTable('tipos_cliente')) {
@@ -625,6 +770,12 @@ class ProformaDashboardExportService
 
     private function buildClienteBaseSubquery(): Builder
     {
+        $this->logExportDebug('path.old_query.buildClienteBaseSubquery', [
+            'message' => 'USANDO QUERY VIEJA',
+            'service' => self::class,
+            'method' => __FUNCTION__,
+        ]);
+
         return DB::table('clientes_potenciales as cp')
             ->where(function (Builder $query): void {
                 $query->whereExists($this->buildClienteValoresExistsSubquery())
@@ -636,6 +787,12 @@ class ProformaDashboardExportService
 
     private function buildClienteValoresExistsSubquery(): Builder
     {
+        $this->logExportDebug('path.old_query.buildClienteValoresExistsSubquery', [
+            'message' => 'USANDO QUERY VIEJA',
+            'service' => self::class,
+            'method' => __FUNCTION__,
+        ]);
+
         return DB::table('valores_externos as ve')
             ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
             ->whereRaw('cp.idclientes_potenciales = CAST(TRIM(ve.id_cliente) AS UNSIGNED)')
@@ -672,13 +829,117 @@ class ProformaDashboardExportService
             });
     }
 
-    private function regimenMatchSql(string $regimenColumn, string $emisoraColumn): string
+    private function applyClienteJoins(Builder $query): void
     {
-        return "BINARY CASE UPPER(TRIM(COALESCE({$regimenColumn}, '')))
+        $this->logExportDebug('path.new_query.applyClienteJoins', [
+            'message' => 'USANDO QUERY NUEVA',
+            'service' => self::class,
+            'method' => __FUNCTION__,
+            'has_id_cobro_column' => $this->hasSgProformIdCobroColumn(),
+        ]);
+
+        if ($this->hasSgProformIdCobroColumn()) {
+            $query->leftJoinSub($this->buildClienteJoinByCobroSubquery(), 've_cobro_match', function ($join): void {
+                $join->on('ve_cobro_match.id_cobro', '=', 'p.id_cobro');
+            });
+        } else {
+            $query->leftJoinSub($this->buildEmptyClienteJoinSubquery(), 've_cobro_match', function ($join): void {
+                $join->whereRaw('1 = 0');
+            });
+        }
+
+        $query->leftJoin('clientes_potenciales as cp_cobro', 'cp_cobro.idclientes_potenciales', '=', 've_cobro_match.id_cliente');
+
+        if (Schema::hasTable('tipos_cliente')) {
+            $query->leftJoin('tipos_cliente as tc_cobro', 'tc_cobro.id', '=', 'cp_cobro.tipo_cliente_id');
+        }
+
+        $query->leftJoinSub($this->buildClienteJoinFallbackSubquery(), 've_fallback_match', function ($join): void {
+            if ($this->hasSgProformIdCobroColumn()) {
+                $join->whereRaw('(p.id_cobro IS NULL OR p.id_cobro = 0)');
+            }
+
+            $join->whereRaw('BINARY ve_fallback_match.nit_normalized = BINARY TRIM(p.nit)')
+                ->whereRaw('BINARY ve_fallback_match.mes_normalized = BINARY '.$this->proformaMesTextoSql('p.mes'))
+                ->whereRaw('ve_fallback_match.anio = p.anio')
+                ->whereRaw('BINARY ve_fallback_match.emisora_normalized = BINARY '.$this->normalizedEmisoraSql('p.emisora'));
+        });
+
+        $query->leftJoin('clientes_potenciales as cp_fallback', 'cp_fallback.idclientes_potenciales', '=', 've_fallback_match.id_cliente');
+
+        if (Schema::hasTable('tipos_cliente')) {
+            $query->leftJoin('tipos_cliente as tc_fallback', 'tc_fallback.id', '=', 'cp_fallback.tipo_cliente_id');
+        }
+    }
+
+    private function buildClienteJoinByCobroSubquery(): Builder
+    {
+        return DB::table('valores_externos as ve')
+            ->selectRaw('ve.id_cobro, MAX(CAST(TRIM(ve.id_cliente) AS UNSIGNED)) as id_cliente')
+            ->whereNotNull('ve.id_cobro')
+            ->whereRaw('ve.id_cobro > 0')
+            ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
+            ->groupBy('ve.id_cobro');
+    }
+
+    private function buildEmptyClienteJoinSubquery(): Builder
+    {
+        return DB::query()
+            ->selectRaw('NULL as id_cobro, NULL as id_cliente')
+            ->whereRaw('1 = 0');
+    }
+
+    private function buildClienteJoinFallbackSubquery(): Builder
+    {
+        return DB::table('valores_externos as ve')
+            ->join('clientes_potenciales as cp_lookup', 'cp_lookup.idclientes_potenciales', '=', DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)'))
+            ->selectRaw('TRIM(cp_lookup.nit) as nit_normalized')
+            ->selectRaw('LOWER(TRIM(ve.mes)) as mes_normalized')
+            ->selectRaw('ve.`año` as anio')
+            ->selectRaw($this->normalizedRegimenSql('cp_lookup.regimen').' as emisora_normalized')
+            ->selectRaw('MAX(cp_lookup.idclientes_potenciales) as id_cliente')
+            ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
+            ->groupByRaw('TRIM(cp_lookup.nit), LOWER(TRIM(ve.mes)), ve.`año`, '.$this->normalizedRegimenSql('cp_lookup.regimen'));
+    }
+
+    private function requiresClienteJoins(array $selectedColumns): bool
+    {
+        foreach ($selectedColumns as $column) {
+            if (str_starts_with($column, 'cliente_')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function joinedClienteFieldExpression(string $field): string
+    {
+        return "COALESCE(cp_cobro.{$field}, cp_fallback.{$field})";
+    }
+
+    private function joinedTipoClienteExpression(): string
+    {
+        return 'COALESCE(tc_cobro.nombre, tc_fallback.nombre)';
+    }
+
+    private function normalizedRegimenSql(string $regimenColumn): string
+    {
+        return "CASE UPPER(TRIM(COALESCE({$regimenColumn}, '')))
             WHEN 'PCS' THEN 'PCS'
             WHEN 'SMP' THEN 'SMP'
             ELSE 'SAS'
-        END = BINARY UPPER(TRIM(COALESCE({$emisoraColumn}, 'SAS')))";
+        END";
+    }
+
+    private function normalizedEmisoraSql(string $emisoraColumn): string
+    {
+        return "UPPER(TRIM(COALESCE({$emisoraColumn}, 'SAS')))";
+    }
+
+    private function regimenMatchSql(string $regimenColumn, string $emisoraColumn): string
+    {
+        return 'BINARY '.$this->normalizedRegimenSql($regimenColumn).' = BINARY '.$this->normalizedEmisoraSql($emisoraColumn);
     }
 
     private function hasSgProformIdCobroColumn(): bool
@@ -795,5 +1056,37 @@ class ProformaDashboardExportService
         }
 
         return (float) $value;
+    }
+
+    private function runtimeSnapshot(): array
+    {
+        return [
+            'memory_limit' => ini_get('memory_limit'),
+            'max_execution_time' => ini_get('max_execution_time'),
+            'default_socket_timeout' => ini_get('default_socket_timeout'),
+            'sys_temp_dir_ini' => ini_get('sys_temp_dir'),
+            'sys_get_temp_dir' => sys_get_temp_dir(),
+            'php_sapi' => PHP_SAPI,
+            'ob_level' => ob_get_level(),
+            'ob_status' => function_exists('ob_get_status') ? ob_get_status(true) : [],
+        ];
+    }
+
+    private function rowDebugContext(object $row): array
+    {
+        return [
+            'proforma_id' => $row->export_debug_proforma_id ?? null,
+            'proforma_numero' => $row->export_debug_proforma_numero ?? null,
+            'nit' => $row->export_debug_nit ?? null,
+        ];
+    }
+
+    private function logExportDebug(string $stage, array $context = []): void
+    {
+        Log::info('proformas.dashboard.export.service.'.$stage, array_merge([
+            'ts_micro' => sprintf('%.6f', microtime(true)),
+            'memory_usage_mb' => round(memory_get_usage(true) / 1048576, 2),
+            'memory_peak_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
+        ], $context));
     }
 }

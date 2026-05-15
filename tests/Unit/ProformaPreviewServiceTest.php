@@ -104,7 +104,7 @@ class ProformaPreviewServiceTest extends TestCase
         $cobro = (object) [
             'id_cobro' => 11,
             'mes' => 'mayo',
-            'aÃ±o' => '2026',
+            'año' => '2026',
             'Proforma' => 0,
             'cliente_regimen' => 'SAS',
             'cliente_vlrprincipal' => 100,

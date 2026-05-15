@@ -123,6 +123,8 @@ class ProformasDashboardExportTest extends TestCase
             'estado' => 3,
             'mes_desde' => 5,
             'mes_hasta' => 5,
+            'debug_minimal' => false,
+            'debug_limit' => null,
         ];
 
         $exportService->shouldReceive('resolveFilters')
@@ -195,6 +197,8 @@ class ProformasDashboardExportTest extends TestCase
             'estado' => 3,
             'mes_desde' => 5,
             'mes_hasta' => 5,
+            'debug_minimal' => false,
+            'debug_limit' => null,
         ];
 
         $exportService->shouldReceive('resolveFilters')
