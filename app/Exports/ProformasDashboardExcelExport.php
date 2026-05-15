@@ -1,8 +1,6 @@
 <?php
 
 namespace App\Exports;
-
-use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -23,39 +21,18 @@ class ProformasDashboardExcelExport implements FromArray, ShouldAutoSize, WithEv
         private readonly array $currencyColumnIndexes = [],
         private readonly ?int $totalsRowIndex = null,
     ) {
-        $this->logExportDebug('construct', [
-            'headings_count' => count($this->headings),
-            'rows_count' => count($this->rows),
-            'currency_column_indexes' => $this->currencyColumnIndexes,
-            'totals_row_index' => $this->totalsRowIndex,
-        ]);
     }
 
     public function array(): array
     {
-        $this->logExportDebug('array.start', [
-            'headings_count' => count($this->headings),
-            'rows_count' => count($this->rows),
-        ]);
-
-        $array = [
+        return [
             $this->headings,
             ...$this->rows,
         ];
-
-        $this->logExportDebug('array.finish', [
-            'sheet_rows_count' => count($array),
-        ]);
-
-        return $array;
     }
 
     public function styles(Worksheet $sheet): array
     {
-        $this->logExportDebug('styles.start', [
-            'worksheet_title' => $sheet->getTitle(),
-        ]);
-
         $styles = [
             1 => [
                 'font' => [
@@ -77,27 +54,16 @@ class ProformasDashboardExcelExport implements FromArray, ShouldAutoSize, WithEv
             ];
         }
 
-        $this->logExportDebug('styles.finish', [
-            'styles_rows' => array_keys($styles),
-        ]);
-
         return $styles;
     }
 
     public function registerEvents(): array
     {
         return [
-            BeforeExport::class => function (): void {
-                $this->logExportDebug('event.before_export');
-            },
-            BeforeWriting::class => function (): void {
-                $this->logExportDebug('event.before_writing');
-            },
-            BeforeSheet::class => function (): void {
-                $this->logExportDebug('event.before_sheet');
-            },
+            BeforeExport::class => static function (): void {},
+            BeforeWriting::class => static function (): void {},
+            BeforeSheet::class => static function (): void {},
             AfterSheet::class => function (AfterSheet $event): void {
-                $this->logExportDebug('event.after_sheet.start');
                 $sheet = $event->sheet->getDelegate();
                 $rowCount = max(count($this->rows) + 1, 1);
                 $columnCount = max(count($this->headings), 1);
@@ -121,22 +87,7 @@ class ProformasDashboardExcelExport implements FromArray, ShouldAutoSize, WithEv
                         ->getStartColor()
                         ->setRGB('E2E8F0');
                 }
-
-                $this->logExportDebug('event.after_sheet.finish', [
-                    'row_count' => $rowCount,
-                    'column_count' => $columnCount,
-                    'range' => $fullRange,
-                ]);
             },
         ];
-    }
-
-    private function logExportDebug(string $stage, array $context = []): void
-    {
-        Log::info('proformas.dashboard.export.excel.'.$stage, array_merge([
-            'ts_micro' => sprintf('%.6f', microtime(true)),
-            'memory_usage_mb' => round(memory_get_usage(true) / 1048576, 2),
-            'memory_peak_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
-        ], $context));
     }
 }

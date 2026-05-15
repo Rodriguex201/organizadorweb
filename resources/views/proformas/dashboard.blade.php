@@ -226,14 +226,6 @@
                                 <p class="mt-2 text-xs text-slate-500">La estructura queda lista para futuros formatos PDF, CSV y Google Sheets.</p>
                             </div>
 
-                            <label class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                                <input id="debug-minimal-checkbox" type="checkbox" class="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500">
-                                <span>
-                                    <span class="block text-sm font-semibold text-amber-900">DepuraciÃ³n mÃ­nima extrema</span>
-                                    <span class="block text-xs text-amber-700">Fuerza una prueba temporal con solo `codigo`, `empresa` y mÃ¡ximo 5 registros para aislar si el cuelgue tambiÃ©n ocurre en el caso mÃ¡s chico.</span>
-                                </span>
-                            </label>
-
                             @if(isset($errors) && $errors->any())
                                 <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                                     {{ $errors->first() }}
@@ -349,22 +341,15 @@
         const submitExportButton = document.getElementById('submit-export-button');
         const submitExportSpinner = document.getElementById('submit-export-spinner');
         const submitExportLabel = document.getElementById('submit-export-label');
-        const debugMinimalCheckbox = document.getElementById('debug-minimal-checkbox');
         const groupButtons = Array.from(document.querySelectorAll('[data-select-group]'));
         const shouldOpenOnLoad = @json(isset($errors) && $errors->any() && old('format') === 'xlsx');
         const currentRecordCount = @json((int) ($dashboard['total_periodo_filtrado'] ?? 0));
-        const EXPORT_TIMEOUT_MS = 30000;
         let isExporting = false;
         let toastTimer = null;
 
         if (!modal || !openButton || !modeSelect || !scopeSelect || !exportForm || !submitExportButton) {
             return;
         }
-
-        const exportTs = () => new Date().toISOString();
-        const consoleExport = (level, message, context = {}) => {
-            console[level](`[export][${exportTs()}] ${message}`, context);
-        };
 
         const getStoredColumns = () => {
             try {
@@ -396,15 +381,9 @@
             exportToast.textContent = message;
             exportToast.className = 'pointer-events-none fixed right-6 top-6 z-[70] max-w-sm rounded-xl border px-4 py-3 text-sm font-medium shadow-lg';
             exportToast.classList.add(
-                type === 'error'
-                    ? 'border-rose-200'
-                    : 'border-emerald-200',
-                type === 'error'
-                    ? 'bg-rose-50'
-                    : 'bg-emerald-50',
-                type === 'error'
-                    ? 'text-rose-700'
-                    : 'text-emerald-700'
+                type === 'error' ? 'border-rose-200' : 'border-emerald-200',
+                type === 'error' ? 'bg-rose-50' : 'bg-emerald-50',
+                type === 'error' ? 'text-rose-700' : 'text-emerald-700'
             );
             exportToast.classList.remove('hidden');
 
@@ -418,7 +397,7 @@
                 return `Exportando ${currentRecordCount} registros del dashboard actual...`;
             }
 
-            return 'Preparando la exportación con las columnas seleccionadas.';
+            return 'Preparando la exportaci�n con las columnas seleccionadas.';
         };
 
         const setExportingState = (exporting) => {
@@ -461,14 +440,12 @@
         };
 
         const triggerDownloadUrl = (downloadUrl) => {
-            consoleExport('info', 'inicio descarga navegador', { download_url: downloadUrl });
             const anchor = document.createElement('a');
             anchor.href = downloadUrl;
             anchor.style.display = 'none';
             document.body.appendChild(anchor);
             anchor.click();
             anchor.remove();
-            consoleExport('info', 'descarga navegador disparada', { download_url: downloadUrl });
         };
 
         openButton.addEventListener('click', () => {
@@ -505,7 +482,9 @@
                 const groupValues = checkboxes
                     .filter((checkbox) => checkbox.dataset.columnGroup === groupKey)
                     .map((checkbox) => checkbox.value);
-                const currentValues = checkboxes.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value);
+                const currentValues = checkboxes
+                    .filter((checkbox) => checkbox.checked)
+                    .map((checkbox) => checkbox.value);
 
                 setCheckedColumns([...new Set([...currentValues, ...groupValues])]);
             });
@@ -524,92 +503,30 @@
 
         scopeSelect.addEventListener('change', syncScopeState);
 
-        const handleInstrumentedExportSubmit = async (event) => {
+        const handleExportSubmit = async (event) => {
             event.preventDefault();
-            event.stopImmediatePropagation();
-
-            consoleExport('info', 'click exportar / inicio submit', {
-                action: exportForm.action,
-                current_record_count: currentRecordCount,
-            });
 
             if (isExporting) {
-                consoleExport('info', 'submit ignorado por exportacion en curso');
                 return;
             }
 
             const selectedColumns = checkboxes.filter((checkbox) => checkbox.checked);
             if (selectedColumns.length === 0) {
-                consoleExport('warn', 'sin columnas seleccionadas');
                 showToast('Selecciona al menos una columna para exportar.', 'error');
-
                 return;
             }
 
             setExportingState(true);
-            consoleExport('info', 'loading activado', {
-                selected_columns: selectedColumns.map((checkbox) => checkbox.value),
-                debug_minimal: Boolean(debugMinimalCheckbox?.checked),
-            });
-
-            const formData = new FormData(exportForm);
-            if (debugMinimalCheckbox?.checked) {
-                formData.set('debug_minimal', '1');
-                formData.set('debug_limit', '5');
-                formData.set('debug_dump_sql', '1');
-            }
-
-            const requestPayload = {};
-            formData.forEach((value, key) => {
-                if (Object.prototype.hasOwnProperty.call(requestPayload, key)) {
-                    if (!Array.isArray(requestPayload[key])) {
-                        requestPayload[key] = [requestPayload[key]];
-                    }
-
-                    requestPayload[key].push(value);
-
-                    return;
-                }
-
-                requestPayload[key] = value;
-            });
-
-            let timeoutId = null;
 
             try {
-                const controller = new AbortController();
-                timeoutId = window.setTimeout(() => {
-                    controller.abort();
-                    setExportingState(false);
-                    showToast('La exportacion esta tardando demasiado. Revise logs.', 'error');
-                    consoleExport('error', 'timeout defensivo alcanzado', {
-                        timeout_ms: EXPORT_TIMEOUT_MS,
-                        request_payload: requestPayload,
-                    });
-                }, EXPORT_TIMEOUT_MS);
-
-                consoleExport('info', 'request enviado', requestPayload);
                 const response = await fetch(exportForm.action, {
                     method: 'POST',
-                    body: formData,
+                    body: new FormData(exportForm),
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
                     },
                     credentials: 'same-origin',
-                    signal: controller.signal,
-                });
-                window.clearTimeout(timeoutId);
-                timeoutId = null;
-
-                const responseBodyText = await response.clone().text();
-                consoleExport('info', 'response status', {
-                    status: response.status,
-                    ok: response.ok,
-                    status_text: response.statusText,
-                });
-                consoleExport('info', 'response body', {
-                    body: responseBodyText,
                 });
 
                 if (!response.ok) {
@@ -633,135 +550,26 @@
                 }
 
                 const payload = await response.json();
-                consoleExport('info', 'payload recibido', payload);
 
                 if (!payload.download_url) {
                     throw new Error(payload.message || 'No se recibio la URL de descarga del Excel.');
                 }
 
-                consoleExport('info', 'download_url recibido', {
-                    download_url: payload.download_url,
-                    record_count: payload.record_count ?? 0,
-                    duration_ms: payload.duration_ms ?? null,
-                });
                 triggerDownloadUrl(payload.download_url);
-                setExportingState(false);
                 closeModal();
                 showToast(
                     (payload.record_count ?? 0) > 0
                         ? `Excel generado correctamente. ${payload.record_count} registros exportados.`
                         : 'Excel generado correctamente.'
                 );
-                consoleExport('info', 'fin descarga disparada');
             } catch (error) {
-                if (timeoutId !== null) {
-                    window.clearTimeout(timeoutId);
-                }
-
-                if (error instanceof DOMException && error.name === 'AbortError') {
-                    consoleExport('error', 'request abortado', {
-                        reason: 'timeout o cancelacion defensiva',
-                    });
-                } else {
-                    consoleExport('error', 'catch', { error });
-                    showToast(error instanceof Error ? error.message : 'No se pudo generar el archivo Excel.', 'error');
-                }
-
-                setExportingState(false);
+                showToast(error instanceof Error ? error.message : 'No se pudo generar el archivo Excel.', 'error');
             } finally {
-                if (timeoutId !== null) {
-                    window.clearTimeout(timeoutId);
-                }
-
-                consoleExport('info', 'fin finally');
                 setExportingState(false);
             }
         };
 
-        exportForm.addEventListener('submit', handleInstrumentedExportSubmit);
-
-        exportForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            console.info('[export] inicio submit');
-
-            if (isExporting) {
-                console.info('[export] submit ignorado por exportación en curso');
-                return;
-            }
-
-            const selectedColumns = checkboxes.filter((checkbox) => checkbox.checked);
-            if (selectedColumns.length === 0) {
-                console.warn('[export] sin columnas seleccionadas');
-                showToast('Selecciona al menos una columna para exportar.', 'error');
-
-                return;
-            }
-
-            setExportingState(true);
-            console.info('[export] loading activado');
-
-            try {
-                console.info('[export] fetch exportación iniciado');
-                const response = await fetch(exportForm.action, {
-                    method: 'POST',
-                    body: new FormData(exportForm),
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                });
-                console.info('[export] fetch exportación finalizado', { status: response.status });
-
-                if (!response.ok) {
-                    let errorMessage = 'No se pudo generar el archivo Excel. Inténtalo nuevamente.';
-
-                    try {
-                        const errorPayload = await response.json();
-                        errorMessage = errorPayload.message
-                            || errorPayload.error
-                            || Object.values(errorPayload.errors ?? {}).flat()[0]
-                            || errorMessage;
-                    } catch (parseError) {
-                        const errorText = await response.text();
-
-                        if (errorText.trim() !== '') {
-                            errorMessage = errorText;
-                        }
-                    }
-
-                    throw new Error(errorMessage);
-                }
-
-                const payload = await response.json();
-                console.info('[export] payload recibido', payload);
-
-                if (!payload.download_url) {
-                    throw new Error(payload.message || 'No se recibió la URL de descarga del Excel.');
-                }
-
-                console.info('[export] inicio descarga navegador', {
-                    download_url: payload.download_url,
-                    record_count: payload.record_count ?? 0,
-                });
-                triggerDownloadUrl(payload.download_url);
-                setExportingState(false);
-                closeModal();
-                showToast(
-                    (payload.record_count ?? 0) > 0
-                        ? `Excel generado correctamente. ${payload.record_count} registros exportados.`
-                        : 'Excel generado correctamente.'
-                );
-                console.info('[export] fin descarga disparada');
-            } catch (error) {
-                console.error('[export] catch', error);
-                setExportingState(false);
-                showToast(error instanceof Error ? error.message : 'No se pudo generar el archivo Excel.', 'error');
-            } finally {
-                console.info('[export] finally');
-                setExportingState(false);
-            }
-        });
+        exportForm.addEventListener('submit', handleExportSubmit);
 
         const storedColumns = getStoredColumns();
         if (!shouldOpenOnLoad && storedColumns.length > 0) {
@@ -779,3 +587,4 @@
     })();
 </script>
 @endpush
+

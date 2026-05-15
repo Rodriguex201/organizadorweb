@@ -10,8 +10,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -248,26 +246,6 @@ class ProformasController extends Controller
             'format' => ['required', 'in:xlsx'],
             'columns' => ['required', 'array', 'min:1'],
             'columns.*' => ['string'],
-            'debug_minimal' => ['nullable', 'boolean'],
-            'debug_limit' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
-
-        $this->logExportDebug('start', [
-            'user_id' => Auth::id(),
-            'user_name' => Auth::user()?->name,
-            'filters_received' => [
-                'dashboard_mes' => $validated['dashboard_mes'] ?? null,
-                'dashboard_anio' => $validated['dashboard_anio'] ?? null,
-                'dashboard_estado' => $validated['dashboard_estado'] ?? null,
-                'scope' => $validated['scope'] ?? null,
-                'anio' => $validated['anio'] ?? null,
-                'mes_desde' => $validated['mes_desde'] ?? null,
-                'mes_hasta' => $validated['mes_hasta'] ?? null,
-                'estado' => $validated['estado'] ?? null,
-                'debug_minimal' => (bool) ($validated['debug_minimal'] ?? false),
-                'debug_limit' => $validated['debug_limit'] ?? null,
-            ],
-            'selected_columns' => $validated['columns'] ?? [],
         ]);
 
         $dashboardFilters = [
@@ -278,13 +256,6 @@ class ProformasController extends Controller
 
         try {
             $filters = $this->proformaDashboardExportService->resolveFilters($validated, $dashboardFilters);
-            $filters['debug_minimal'] = (bool) ($validated['debug_minimal'] ?? false);
-            $filters['debug_limit'] = isset($validated['debug_limit']) ? (int) $validated['debug_limit'] : null;
-
-            $this->logExportDebug('resolved_filters', [
-                'resolved_filters' => $filters,
-                'selected_columns' => $validated['columns'] ?? [],
-            ]);
 
             if ($request->expectsJson()) {
                 $prepared = $this->proformaDashboardExportService->prepareTemporaryDownload(
@@ -311,12 +282,6 @@ class ProformasController extends Controller
                 $validated['format'] ?? ProformaDashboardExportService::FORMAT_XLSX,
             );
         } catch (\Throwable $exception) {
-            $this->logExportDebug('catch', [
-                'message' => $exception->getMessage(),
-                'trace' => $exception->getTraceAsString(),
-                'line' => $exception->getLine(),
-                'file' => $exception->getFile(),
-            ]);
             report($exception);
 
             if ($request->expectsJson()) {
@@ -332,21 +297,8 @@ class ProformasController extends Controller
     public function downloadDashboardExport(string $token): BinaryFileResponse|JsonResponse
     {
         try {
-            $this->logExportDebug('download.start', [
-                'token' => $token,
-                'user_id' => Auth::id(),
-                'user_name' => Auth::user()?->name,
-            ]);
-
             return $this->proformaDashboardExportService->downloadTemporaryFile($token);
         } catch (\Throwable $exception) {
-            $this->logExportDebug('download.catch', [
-                'token' => $token,
-                'message' => $exception->getMessage(),
-                'trace' => $exception->getTraceAsString(),
-                'line' => $exception->getLine(),
-                'file' => $exception->getFile(),
-            ]);
             report($exception);
 
             if (request()->expectsJson()) {
@@ -382,15 +334,6 @@ class ProformasController extends Controller
         return response()->download($resultado['absolute_path'], $resultado['filename'], [
             'Content-Type' => 'application/pdf',
         ]);
-    }
-
-    private function logExportDebug(string $stage, array $context = []): void
-    {
-        Log::info('proformas.dashboard.export.controller.'.$stage, array_merge([
-            'ts_micro' => sprintf('%.6f', microtime(true)),
-            'memory_usage_mb' => round(memory_get_usage(true) / 1048576, 2),
-            'memory_peak_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
-        ], $context));
     }
 
     public function show(int $id): View

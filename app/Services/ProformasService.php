@@ -5,7 +5,6 @@ namespace App\Services;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -65,15 +64,6 @@ class ProformasService
             ->selectSub($this->buildClienteIdSubquery(), 'id_cliente')
             ->selectSub($this->buildClientePotencialIdSubquery(), 'cliente_potencial_id');
 
-        if ($this->shouldLogCodigoJoinDebug()) {
-            $query
-                ->selectSub($this->buildClienteDebugSubquery('ve.id_cobro'), 'codigo_debug_id_cobro')
-                ->selectSub($this->buildClienteDebugSubquery('ve.id_cliente'), 'codigo_debug_id_cliente')
-                ->selectSub($this->buildClienteDebugSubquery('cp.idclientes_potenciales'), 'codigo_debug_cliente_id')
-                ->selectSub($this->buildClienteDebugSubquery('cp.codigo'), 'codigo_debug_cliente_codigo')
-                ->selectSub($this->buildClienteDebugSubquery('cp.nit'), 'codigo_debug_cliente_nit');
-        }
-
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
         $codigo = trim((string) ($filters['codigo'] ?? ''));
         $nit = trim((string) ($filters['nit'] ?? ''));
@@ -120,8 +110,6 @@ class ProformasService
             ->when($mes !== null, fn ($q) => $q->where('p.mes', $mes))
             ->orderByDesc('p.anio')->orderByDesc('p.mes')->orderByDesc('p.id')
             ->paginate($perPage)->withQueryString();
-
-        $this->logCodigoJoinDebug($paginator);
 
         return $paginator;
     }
@@ -506,13 +494,6 @@ class ProformasService
             ->limit(1);
     }
 
-    private function buildClienteDebugSubquery(string $column)
-    {
-        return $this->buildClienteRelacionSubquery()
-            ->selectRaw($column)
-            ->limit(1);
-    }
-
     private function buildClienteRelacionSubquery()
     {
         return DB::table('valores_externos as ve')
@@ -590,41 +571,4 @@ class ProformasService
         END";
     }
 
-    private function shouldLogCodigoJoinDebug(): bool
-    {
-        return (bool) config('app.debug');
-    }
-
-    private function logCodigoJoinDebug(LengthAwarePaginator $paginator): void
-    {
-        if (!$this->shouldLogCodigoJoinDebug()) {
-            return;
-        }
-
-        $rows = collect($paginator->items())
-            ->filter(fn (object $proforma) => trim((string) ($proforma->codigo ?? '')) === '')
-            ->map(fn (object $proforma) => [
-                'proforma_id' => (int) ($proforma->id ?? 0),
-                'nro_prof' => (string) ($proforma->nro_prof ?? ''),
-                'nit' => (string) ($proforma->nit ?? ''),
-                'mes' => (int) ($proforma->mes ?? 0),
-                'anio' => (int) ($proforma->anio ?? 0),
-                'emisora' => (string) ($proforma->emisora ?? ''),
-                've_id_cobro' => $proforma->codigo_debug_id_cobro ?? null,
-                've_id_cliente' => $proforma->codigo_debug_id_cliente ?? null,
-                'cp_id' => $proforma->codigo_debug_cliente_id ?? null,
-                'cp_codigo' => $proforma->codigo_debug_cliente_codigo ?? null,
-                'cp_nit' => $proforma->codigo_debug_cliente_nit ?? null,
-            ])
-            ->values();
-
-        if ($rows->isEmpty()) {
-            return;
-        }
-
-        Log::warning('Proformas listado: filas sin codigo tras join valores_externos -> clientes_potenciales.', [
-            'count' => $rows->count(),
-            'rows' => $rows->all(),
-        ]);
-    }
 }
