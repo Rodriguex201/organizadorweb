@@ -126,9 +126,12 @@ class ProformasService
         return $paginator;
     }
 
-    public function getDashboardData(int $mes, int $anio): array
+    public function getDashboardData(int $mes, int $anio, ?int $estado = null): array
     {
-        $basePeriodo = DB::table('sg_proform as p')->where('p.mes', $mes)->where('p.anio', $anio);
+        $basePeriodo = DB::table('sg_proform as p')
+            ->where('p.mes', $mes)
+            ->where('p.anio', $anio)
+            ->when($estado !== null, fn ($query) => $query->where('p.estado', $estado));
         $totalProformas = (clone $basePeriodo)->count();
         $sumaTotal = (float) ((clone $basePeriodo)->sum('p.vtotal') ?? 0);
 

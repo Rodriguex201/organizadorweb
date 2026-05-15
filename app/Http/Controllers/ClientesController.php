@@ -435,6 +435,7 @@ class ClientesController extends Controller
         $this->mapCatalogValue($payload, $validated, $mapping['clase'] ?? null, 'clase', $catalogos['clases']);
         $this->mapCatalogValue($payload, $validated, $mapping['modalidad'] ?? null, 'modalidad', $catalogos['modalidad']);
         $this->mapCatalogValue($payload, $validated, $mapping['llego'] ?? null, 'llego', $catalogos['llego']);
+        $this->mapCatalogValue($payload, $validated, $mapping['tipo_cliente'] ?? null, 'tipo_cliente_id', $catalogos['tipos_cliente']);
 
         $numericInputsToLogical = [
             'vlrprincipal' => 'vlrprincipal',
@@ -528,6 +529,7 @@ class ClientesController extends Controller
             'clase' => $this->catalogRule($catalogos['clases']),
             'modalidad' => $this->catalogRule($catalogos['modalidad']),
             'llego' => $this->catalogRule($catalogos['llego']),
+            'tipo_cliente_id' => $this->catalogRule($catalogos['tipos_cliente']),
         ];
 
         if ($withUnique) {
@@ -671,6 +673,13 @@ class ClientesController extends Controller
             'clases' => $this->loadCatalog('clases', ['idclases', 'id'], ['clase', 'nombre']),
             'modalidad' => $this->loadCatalog('modalidad', ['idmodalidad', 'id'], ['modalidad', 'nombre']),
             'llego' => $this->loadCatalog('llego', ['idllego', 'id'], ['llego', 'nombre']),
+            'tipos_cliente' => $this->loadCatalog(
+                'tipos_cliente',
+                ['id'],
+                ['nombre'],
+                activeColumnCandidates: ['activo'],
+                orderColumnCandidates: ['orden', 'nombre']
+            ),
         ];
     }
 
@@ -714,7 +723,13 @@ class ClientesController extends Controller
         ];
     }
 
-    private function loadCatalog(string $table, array $idCandidates, array $labelCandidates): array
+    private function loadCatalog(
+        string $table,
+        array $idCandidates,
+        array $labelCandidates,
+        array $activeColumnCandidates = [],
+        array $orderColumnCandidates = []
+    ): array
     {
         if (!Schema::hasTable($table)) {
             return ['options' => [], 'by_id' => [], 'ids' => []];
@@ -723,15 +738,27 @@ class ClientesController extends Controller
         $columns = Schema::getColumnListing($table);
         $idColumn = $this->firstExistingColumn($columns, $idCandidates);
         $labelColumn = $this->firstExistingColumn($columns, $labelCandidates);
+        $activeColumn = $this->firstExistingColumn($columns, $activeColumnCandidates);
+        $orderColumn = $this->firstExistingColumn($columns, $orderColumnCandidates);
 
         if (!$idColumn || !$labelColumn) {
             return ['options' => [], 'by_id' => [], 'ids' => []];
         }
 
-        $rows = DB::table($table)
-            ->select([$idColumn, $labelColumn])
-            ->orderBy($labelColumn)
-            ->get();
+        $query = DB::table($table)
+            ->select([$idColumn, $labelColumn]);
+
+        if ($activeColumn) {
+            $query->where($activeColumn, 1);
+        }
+
+        if ($orderColumn) {
+            $query->orderBy($orderColumn);
+        } else {
+            $query->orderBy($labelColumn);
+        }
+
+        $rows = $query->get();
 
         $options = [];
         $byId = [];
@@ -983,6 +1010,7 @@ private function normalizeFolderName(string $value): string
             'clase' => $pick(['clase', 'idclase', 'idclases']),
             'modalidad' => $pick(['modalidad']),
             'llego' => $pick(['llego', 'idllego']),
+            'tipo_cliente' => $pick(['tipo_cliente_id']),
             'contrato' => $pick(['modalidad', 'contrato']),
             'vlrprincipal' => $pick(['vlrprincipal']),
             'numequipos' => $pick(['numequipos']),

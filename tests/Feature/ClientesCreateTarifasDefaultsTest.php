@@ -31,6 +31,7 @@ class ClientesCreateTarifasDefaultsTest extends TestCase
         $response->assertOk();
         $response->assertViewHas('tarifasDefaults', $defaults);
         $response->assertSee('Restaurar tarifas predeterminadas');
+        $response->assertSee('Tipo de cliente');
         $response->assertSee('data-default-value="150000"', false);
         $response->assertSee('data-default-value="3"', false);
         $response->assertSee('data-default-value="9000"', false);

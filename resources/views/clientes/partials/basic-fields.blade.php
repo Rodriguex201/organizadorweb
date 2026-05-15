@@ -4,6 +4,7 @@
     $clases = $catalogos['clases']['options'] ?? [];
     $modalidades = $catalogos['modalidad']['options'] ?? [];
     $llegos = $catalogos['llego']['options'] ?? [];
+    $tiposCliente = $catalogos['tipos_cliente']['options'] ?? [];
 
     $value = $value ?? static function (string $input, ?string $column = null) use ($cliente) {
         $fallback = $column && $cliente ? ($cliente->{$column} ?? null) : null;
@@ -18,6 +19,7 @@
     $selectedClase = (string) $value('clase', $mapping['clase'] ?? null);
     $selectedModalidad = (string) $value('modalidad', $mapping['modalidad'] ?? null);
     $selectedLlego = (string) $value('llego', $mapping['llego'] ?? null);
+    $selectedTipoCliente = (string) $value('tipo_cliente_id', $mapping['tipo_cliente'] ?? null);
 @endphp
 
 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -51,7 +53,7 @@
     </div>
 
     <div>
-        <label class="mb-1 block text-sm font-medium" for="codigo">Código</label>
+        <label class="mb-1 block text-sm font-medium" for="codigo">Codigo</label>
         <input id="codigo" name="codigo" type="text" value="{{ $value('codigo', $mapping['codigo']) }}" @disabled($fieldUnavailable($mapping['codigo']))
                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
         @if($codigoAssistEnabled)
@@ -66,7 +68,7 @@
                 </label>
             </div>
             <p id="codigo_modo_estado" class="mt-2 text-xs text-slate-500">
-                {{ $codigoMode === 'secuencia' ? 'Usa el código actual como referencia y se completará el siguiente consecutivo.' : 'Puedes escribir el código libremente. La disponibilidad se valida en tiempo real.' }}
+                {{ $codigoMode === 'secuencia' ? 'Usa el codigo actual como referencia y se completara el siguiente consecutivo.' : 'Puedes escribir el codigo libremente. La disponibilidad se valida en tiempo real.' }}
             </p>
             <p id="codigo_estado" class="mt-1 text-xs text-slate-500"></p>
         @endif
@@ -143,7 +145,7 @@
         <label class="mb-1 block text-sm font-medium" for="clase">Clase</label>
         <select id="clase" name="clase" @disabled($fieldUnavailable($mapping['clase']) || $clases === [])
                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
-            <option value="">Selecciona una opción</option>
+            <option value="">Selecciona una opcion</option>
             @foreach($clases as $opcion)
                 <option value="{{ $opcion['id'] }}" @selected($selectedClase === (string) $opcion['id'] || $selectedClase === $opcion['label'])>{{ $opcion['label'] }}</option>
             @endforeach
@@ -154,7 +156,7 @@
         <label class="mb-1 block text-sm font-medium" for="modalidad">Modalidad</label>
         <select id="modalidad" name="modalidad" @disabled($fieldUnavailable($mapping['modalidad']) || $modalidades === [])
                 class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
-            <option value="">Selecciona una opción</option>
+            <option value="">Selecciona una opcion</option>
             @foreach($modalidades as $opcion)
                 <option value="{{ $opcion['id'] }}" @selected($selectedModalidad === (string) $opcion['id'] || $selectedModalidad === $opcion['label'])>{{ $opcion['label'] }}</option>
             @endforeach
@@ -162,10 +164,24 @@
     </div>
 
     <div>
-        <label class="mb-1 block text-sm font-medium" for="llego">Cómo llegó</label>
+        <label class="mb-1 block text-sm font-medium" for="tipo_cliente_id">Tipo de cliente</label>
+        <select id="tipo_cliente_id" name="tipo_cliente_id" @disabled($fieldUnavailable($mapping['tipo_cliente'] ?? null) || $tiposCliente === [])
+                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
+            <option value="">Selecciona una opcion</option>
+            @foreach($tiposCliente as $opcion)
+                <option value="{{ $opcion['id'] }}" data-tipo-cliente-label="{{ \Illuminate\Support\Str::lower($opcion['label']) }}" @selected($selectedTipoCliente === (string) $opcion['id'] || $selectedTipoCliente === $opcion['label'])>{{ $opcion['label'] }}</option>
+            @endforeach
+        </select>
+        @error('tipo_cliente_id')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
+    </div>
+
+    <div>
+        <label class="mb-1 block text-sm font-medium" for="llego">Como llego</label>
         <select id="llego" name="llego" @disabled($fieldUnavailable($mapping['llego']) || $llegos === [])
                 class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
-            <option value="">Selecciona una opción</option>
+            <option value="">Selecciona una opcion</option>
             @foreach($llegos as $opcion)
                 <option value="{{ $opcion['id'] }}" @selected($selectedLlego === (string) $opcion['id'] || $selectedLlego === $opcion['label'])>{{ $opcion['label'] }}</option>
             @endforeach

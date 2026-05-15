@@ -51,6 +51,8 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/proformas/{id}/volver', [ProformasController::class, 'backToIndex'])->name('proformas.back-to-index');
 
     Route::get('/proformas/dashboard', [ProformasController::class, 'dashboard'])->name('proformas.dashboard');
+    Route::post('/proformas/dashboard/export', [ProformasController::class, 'exportDashboard'])->name('proformas.dashboard.export');
+    Route::get('/proformas/dashboard/export/download/{token}', [ProformasController::class, 'downloadDashboardExport'])->name('proformas.dashboard.export.download');
 
     Route::middleware('role.admin')->group(function (): void {
         Route::get('/proformas/envio-masivo/{grupo}/confirmar', [ProformasController::class, 'confirmarEnvioMasivo'])->name('proformas.envio-masivo.confirmar');

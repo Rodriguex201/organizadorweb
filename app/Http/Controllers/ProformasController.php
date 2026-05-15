@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ProformaEmailService;
+use App\Services\ProformaDashboardExportService;
 use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,7 @@ class ProformasController extends Controller
         private readonly ProformasService $proformasService,
         private readonly ProformaPdfService $proformaPdfService,
         private readonly ProformaEmailService $proformaEmailService,
+        private readonly ProformaDashboardExportService $proformaDashboardExportService,
     ) {
     }
 
@@ -202,24 +204,114 @@ class ProformasController extends Controller
         $validated = $request->validate([
             'mes' => ['nullable', 'string', 'max:20'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+            'estado' => ['nullable', 'integer'],
         ]);
 
         $periodo = $this->proformasService->normalizePeriodoFilters(
             $validated['mes'] ?? null,
             $validated['anio'] ?? null,
         );
+        $estado = array_key_exists('estado', $validated)
+            ? $this->normalizarEntero($validated['estado'])
+            : null;
 
         $dashboard = $this->proformasService->getDashboardData(
             $periodo['mes'],
             $periodo['anio'],
+            $estado,
         );
 
         return view('proformas.dashboard', [
             'dashboard' => $dashboard,
-            'filters' => $periodo,
+            'filters' => array_merge($periodo, ['estado' => $estado]),
             'meses' => ProformasService::MESES,
+            'estados' => ProformasService::ESTADOS,
+            'exportOptions' => $this->proformaDashboardExportService->getModalOptions(array_merge($periodo, ['estado' => $estado])),
             'proformasService' => $this->proformasService,
         ]);
+    }
+
+    public function exportDashboard(Request $request): BinaryFileResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'dashboard_mes' => ['nullable', 'string', 'max:20'],
+            'dashboard_anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+            'dashboard_estado' => ['nullable', 'integer'],
+            'scope' => ['required', 'in:current_filters,current_month,full_year,monthly_range'],
+            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+            'mes_desde' => ['nullable', 'integer', 'min:1', 'max:12'],
+            'mes_hasta' => ['nullable', 'integer', 'min:1', 'max:12'],
+            'estado' => ['nullable', 'integer'],
+            'mode' => ['required', 'in:summary,detailed'],
+            'format' => ['required', 'in:xlsx'],
+            'columns' => ['required', 'array', 'min:1'],
+            'columns.*' => ['string'],
+        ]);
+
+        $dashboardFilters = [
+            'mes' => $validated['dashboard_mes'] ?? null,
+            'anio' => $validated['dashboard_anio'] ?? null,
+            'estado' => $validated['dashboard_estado'] ?? null,
+        ];
+
+        try {
+            $filters = $this->proformaDashboardExportService->resolveFilters($validated, $dashboardFilters);
+
+            if ($request->expectsJson()) {
+                $prepared = $this->proformaDashboardExportService->prepareTemporaryDownload(
+                    $filters,
+                    $validated['columns'] ?? [],
+                    $validated['mode'] ?? ProformaDashboardExportService::EXPORT_MODE_DETAILED,
+                    $validated['format'] ?? ProformaDashboardExportService::FORMAT_XLSX,
+                );
+
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Excel generado correctamente.',
+                    'download_url' => route('proformas.dashboard.export.download', ['token' => $prepared['token']]),
+                    'filename' => $prepared['filename'],
+                    'record_count' => $prepared['record_count'],
+                    'duration_ms' => $prepared['duration_ms'],
+                ]);
+            }
+
+            return $this->proformaDashboardExportService->download(
+                $filters,
+                $validated['columns'] ?? [],
+                $validated['mode'] ?? ProformaDashboardExportService::EXPORT_MODE_DETAILED,
+                $validated['format'] ?? ProformaDashboardExportService::FORMAT_XLSX,
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'No se pudo generar el archivo Excel. Verifica los filtros e inténtalo nuevamente.',
+                ], 422);
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function downloadDashboardExport(string $token): BinaryFileResponse|JsonResponse
+    {
+        try {
+            return $this->proformaDashboardExportService->downloadTemporaryFile($token);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'message' => 'No se encontró el archivo exportado o ya expiró.',
+                ], 404);
+            }
+
+            return redirect()
+                ->route('proformas.dashboard')
+                ->with('status', 'No se encontró el archivo exportado o ya expiró.')
+                ->with('status_type', 'error');
+        }
     }
 
     public function showPdf(Request $request, int $id): BinaryFileResponse
@@ -424,5 +516,20 @@ class ProformasController extends Controller
         }
 
         return $sanitized;
+    }
+
+    private function normalizarEntero(null|string|int $value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $string = trim((string) $value);
+
+        if ($string === '' || !ctype_digit($string)) {
+            return null;
+        }
+
+        return (int) $string;
     }
 }
