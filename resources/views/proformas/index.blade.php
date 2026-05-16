@@ -39,7 +39,7 @@
     @endif
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
-        <form id="proformas-filter-form" method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-10">
+        <form id="proformas-filter-form" method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-11">
             <div>
                 <label for="nro_prof" class="mb-1 block text-sm font-medium">Número</label>
                 <input id="nro_prof" name="nro_prof" value="{{ $filters['nro_prof'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -92,6 +92,14 @@
                     <option value="0" @selected((string) ($filters['envio'] ?? '') === '0')>No enviada</option>
                 </select>
             </div>
+            <div>
+                <label for="filtro_nota" class="mb-1 block text-sm font-medium">Nota</label>
+                <select id="filtro_nota" name="filtro_nota" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Todas</option>
+                    <option value="con" @selected((string) ($filters['filtro_nota'] ?? '') === 'con')>Con nota</option>
+                    <option value="sin" @selected((string) ($filters['filtro_nota'] ?? '') === 'sin')>Sin nota</option>
+                </select>
+            </div>
             <div class="flex items-end gap-2">
                 <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Filtrar</button>
                 <a href="{{ route('proformas.clear-filters') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Limpiar</a>
@@ -109,6 +117,7 @@
                     <th class="px-3 py-2">Empresa</th>
                     <th class="px-3 py-2">Periodo</th>
                     <th class="px-3 py-2 text-right">Valor total</th>
+                    <th class="px-3 py-2 text-center">Nota</th>
                     <th class="px-3 py-2">Estado</th>
                     <th class="px-3 py-2">Envío</th>
                     <th class="px-3 py-2 text-right">Acción</th>
@@ -121,6 +130,9 @@
                         $estado = $proformasService->estadoLabel($proforma->estado);
                         $envioEstado = $proformasService->envioLabel($proforma->enviado ?? 0);
                         $envioClasses = $proformasService->envioBadgeClass($proforma->enviado ?? 0);
+                        $notaCobro = trim((string) ($proforma->nota_cobro ?? ''));
+                        $notaResumen = $notaCobro !== '' ? \Illuminate\Support\Str::limit($notaCobro, 50) : 'Sin nota de cobro';
+                        $clientePotencialId = (int) ($proforma->cliente_potencial_id ?? 0);
                     @endphp
                     <tr
                         class="hover:bg-slate-50"
@@ -144,6 +156,21 @@
                         </td>
                         <td class="px-3 py-2 text-slate-700">{{ $proformasService->monthLabel($proforma->mes) }} {{ $proforma->anio ?: 'N/D' }}</td>
                         <td class="px-3 py-2 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
+                        <td class="px-3 py-2 text-center">
+                            @if($clientePotencialId > 0)
+                                <button
+                                    type="button"
+                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-base transition hover:bg-slate-100 {{ $notaCobro !== '' ? 'text-amber-600' : 'text-slate-400' }}"
+                                    data-cliente-id="{{ $clientePotencialId }}"
+                                    data-cliente-nombre="{{ $proforma->emp ?: 'Sin nombre' }}"
+                                    data-nota="{{ $notaCobro }}"
+                                    title="{{ $notaResumen }}"
+                                    aria-label="Editar nota de cobro"
+                                >&#128221;</button>
+                            @else
+                                <span class="text-slate-300" title="Cliente no disponible">&#128221;</span>
+                            @endif
+                        </td>
                         <td class="px-3 py-2">
                             <span
                                 class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
@@ -174,7 +201,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
+                        <td colspan="9" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>
@@ -186,6 +213,8 @@
         </div>
     </div>
 </div>
+
+@include('partials.nota-cobro-modal')
 
 <div
     id="proforma-context-menu"
@@ -693,3 +722,5 @@
     })();
 </script>
 @endpush
+
+@include('partials.nota-cobro-script')

@@ -17,7 +17,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ProformasController extends Controller
 {
-    private const FILTER_KEYS = ['nro_prof', 'codigo', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio'];
+    private const FILTER_KEYS = ['nro_prof', 'codigo', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio', 'filtro_nota'];
 
     public function __construct(
         private readonly ProformasService $proformasService,
@@ -47,6 +47,7 @@ class ProformasController extends Controller
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'estado' => ['nullable', 'integer', 'min:0'],
             'envio' => ['nullable', 'in:0,1'],
+            'filtro_nota' => ['nullable', 'in:con,sin'],
         ])->validate();
 
         $periodo = $this->proformasService->normalizePeriodoFilters(
@@ -64,6 +65,7 @@ class ProformasController extends Controller
             'anio' => $periodo['anio'],
             'estado' => $validated['estado'] ?? null,
             'envio' => isset($validated['envio']) ? (string) $validated['envio'] : null,
+            'filtro_nota' => $validated['filtro_nota'] ?? null,
         ];
 
         $this->storeFilterSession($filters);
@@ -466,6 +468,7 @@ class ProformasController extends Controller
             'proformas.anio' => $filters['anio'],
             'proformas.estado' => $filters['estado'],
             'proformas.envio' => $filters['envio'],
+            'proformas.filtro_nota' => $filters['filtro_nota'],
         ]);
     }
 
@@ -487,6 +490,7 @@ class ProformasController extends Controller
             'anio' => session('proformas.anio'),
             'estado' => session('proformas.estado'),
             'envio' => session('proformas.envio'),
+            'filtro_nota' => session('proformas.filtro_nota'),
         ]);
     }
 

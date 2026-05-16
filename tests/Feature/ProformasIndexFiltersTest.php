@@ -29,6 +29,7 @@ class ProformasIndexFiltersTest extends TestCase
             'anio' => (int) now()->format('Y'),
             'estado' => null,
             'envio' => null,
+            'filtro_nota' => null,
         ];
 
         $service->shouldReceive('normalizePeriodoFilters')
@@ -72,6 +73,7 @@ class ProformasIndexFiltersTest extends TestCase
             'anio' => 2024,
             'estado' => null,
             'envio' => null,
+            'filtro_nota' => null,
         ];
 
         $service->shouldReceive('normalizePeriodoFilters')
@@ -186,6 +188,7 @@ class ProformasIndexFiltersTest extends TestCase
             'anio' => 2024,
             'estado' => null,
             'envio' => '0',
+            'filtro_nota' => null,
         ];
 
         $service->shouldReceive('normalizePeriodoFilters')
@@ -230,6 +233,7 @@ class ProformasIndexFiltersTest extends TestCase
             'anio' => (int) now()->format('Y'),
             'estado' => null,
             'envio' => null,
+            'filtro_nota' => null,
         ];
 
         $service->shouldReceive('normalizePeriodoFilters')
@@ -254,6 +258,7 @@ class ProformasIndexFiltersTest extends TestCase
             'proformas.empresa' => 'Empresa vieja',
             'proformas.estado' => 3,
             'proformas.envio' => '1',
+            'proformas.filtro_nota' => 'con',
         ]);
 
         $response = $this->get(route('proformas.index'));
@@ -264,10 +269,57 @@ class ProformasIndexFiltersTest extends TestCase
         $this->assertTrue(session()->exists('proformas.empresa'));
         $this->assertTrue(session()->exists('proformas.estado'));
         $this->assertTrue(session()->exists('proformas.envio'));
+        $this->assertTrue(session()->exists('proformas.filtro_nota'));
         $this->assertNull(session('proformas.numero'));
         $this->assertNull(session('proformas.empresa'));
         $this->assertNull(session('proformas.estado'));
         $this->assertNull(session('proformas.envio'));
+        $this->assertNull(session('proformas.filtro_nota'));
+    }
+
+    public function test_aplica_filtro_nota_cuando_llega_en_request(): void
+    {
+        $this->withoutMiddleware();
+
+        $service = Mockery::mock(ProformasService::class);
+        $pdfService = Mockery::mock(ProformaPdfService::class);
+        $emailService = Mockery::mock(ProformaEmailService::class);
+
+        $expectedFilters = [
+            'nro_prof' => null,
+            'codigo' => null,
+            'nit' => null,
+            'empresa' => null,
+            'emisora' => null,
+            'mes' => 5,
+            'anio' => 2024,
+            'estado' => null,
+            'envio' => null,
+            'filtro_nota' => 'con',
+        ];
+
+        $service->shouldReceive('normalizePeriodoFilters')
+            ->once()
+            ->with('5', 2024)
+            ->andReturn([
+                'mes' => $expectedFilters['mes'],
+                'anio' => $expectedFilters['anio'],
+            ]);
+
+        $service->shouldReceive('paginateProformas')
+            ->once()
+            ->with($expectedFilters)
+            ->andReturn(new LengthAwarePaginator([], 0, 15));
+
+        $this->app->instance(ProformasService::class, $service);
+        $this->app->instance(ProformaPdfService::class, $pdfService);
+        $this->app->instance(ProformaEmailService::class, $emailService);
+
+        $response = $this->get(route('proformas.index', ['mes' => '5', 'anio' => 2024, 'filtro_nota' => 'con']));
+
+        $response->assertOk();
+        $response->assertViewHas('filters', $expectedFilters);
+        $response->assertSessionHas('proformas.filtro_nota', 'con');
     }
 
     public function test_volver_al_listado_reutiliza_filtros_originales_validos(): void

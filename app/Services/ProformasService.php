@@ -62,7 +62,8 @@ class ProformasService
             ])
             ->selectSub($this->buildClienteCodigoSubquery(), 'codigo')
             ->selectSub($this->buildClienteIdSubquery(), 'id_cliente')
-            ->selectSub($this->buildClientePotencialIdSubquery(), 'cliente_potencial_id');
+            ->selectSub($this->buildClientePotencialIdSubquery(), 'cliente_potencial_id')
+            ->selectSub($this->buildClienteNotaSubquery(), 'nota_cobro');
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
         $codigo = trim((string) ($filters['codigo'] ?? ''));
@@ -73,6 +74,7 @@ class ProformasService
         $envio = $this->normalizarEntero($filters['envio'] ?? null);
         $anio = $this->normalizarEntero($filters['anio'] ?? null);
         $mes = $this->normalizarMes($filters['mes'] ?? null);
+        $filtroNota = trim((string) ($filters['filtro_nota'] ?? ''));
 
         $paginator = $query
             ->when($nroProf !== '', fn ($q) => $q->where('p.nro_prof', 'like', "%{$nroProf}%"))
@@ -108,6 +110,25 @@ class ProformasService
             ->when($envio !== null, fn ($q) => $q->where('p.enviado', $envio))
             ->when($anio !== null, fn ($q) => $q->where('p.anio', $anio))
             ->when($mes !== null, fn ($q) => $q->where('p.mes', $mes))
+            ->when($filtroNota !== '', function ($q) use ($filtroNota) {
+                if ($filtroNota === 'con') {
+                    $q->whereExists(
+                        $this->buildClienteRelacionSubquery()
+                            ->select(DB::raw(1))
+                            ->whereNotNull('cp.nota_cobro')
+                    );
+
+                    return;
+                }
+
+                if ($filtroNota === 'sin') {
+                    $q->whereNotExists(
+                        $this->buildClienteRelacionSubquery()
+                            ->select(DB::raw(1))
+                            ->whereNotNull('cp.nota_cobro')
+                    );
+                }
+            })
             ->orderByDesc('p.anio')->orderByDesc('p.mes')->orderByDesc('p.id')
             ->paginate($perPage)->withQueryString();
 
@@ -162,6 +183,7 @@ class ProformasService
             ->selectSub($this->buildClienteCodigoSubquery(), 'codigo')
             ->selectSub($this->buildClienteIdSubquery(), 'id_cliente')
             ->selectSub($this->buildClientePotencialIdSubquery(), 'cliente_potencial_id')
+            ->selectSub($this->buildClienteNotaSubquery(), 'nota_cobro')
             ->where('p.id', $id)
             ->first();
     }
@@ -491,6 +513,13 @@ class ProformasService
     {
         return $this->buildClienteRelacionSubquery()
             ->select('cp.idclientes_potenciales')
+            ->limit(1);
+    }
+
+    private function buildClienteNotaSubquery()
+    {
+        return $this->buildClienteRelacionSubquery()
+            ->select('cp.nota_cobro')
             ->limit(1);
     }
 
