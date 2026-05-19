@@ -370,8 +370,15 @@ class ProformaDashboardExportService
     private function sanitizeSelectedColumns(array $columns, string $mode): array
     {
         $allowed = $this->supportedColumnKeys();
+        $aliases = [
+            'fecha_arriendo' => 'cliente_fecha_arriendo',
+        ];
         $selected = collect($columns)
-            ->map(fn ($value) => (string) $value)
+            ->map(function ($value) use ($aliases) {
+                $key = (string) $value;
+
+                return $aliases[$key] ?? $key;
+            })
             ->filter(fn (string $value) => in_array($value, $allowed, true))
             ->unique()
             ->values()

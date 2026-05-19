@@ -119,7 +119,7 @@ class ProformasController extends Controller
                         'empresa' => (string) ($proforma->emp ?? ''),
                         'nit' => (string) ($proforma->nit ?? ''),
                         'email' => (string) ($proforma->cliente_email ?? ''),
-                        'fecha_arriendo' => (string) ($proforma->cliente_fecha_arriendo ?? ''),
+                        'fecha_arriendo' => \Illuminate\Support\Carbon::make($proforma->cliente_fecha_arriendo)?->format('d/m/Y') ?: 'N/D',
                     ])->values(),
                 ],
             ]);

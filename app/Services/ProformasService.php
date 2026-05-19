@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Database\Query\Builder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -42,28 +43,30 @@ class ProformasService
 
     public function paginateProformas(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = DB::table('sg_proform as p')
-            ->select([
-                'p.id',
-                'p.nro_prof',
-                'p.emp',
-                'p.nit',
-                'p.emisora',
-                'p.mes',
-                'p.anio',
-                'p.vtotal',
-                'p.estado',
-                'p.rpdf',
-                'p.npdf',
-                'p.hpdf',
-                'p.enviado',
-                'p.fecha_envio',
-                'p.intentos_envio',
-            ])
-            ->selectSub($this->buildClienteCodigoSubquery(), 'codigo')
-            ->selectSub($this->buildClienteIdSubquery(), 'id_cliente')
-            ->selectSub($this->buildClientePotencialIdSubquery(), 'cliente_potencial_id')
-            ->selectSub($this->buildClienteNotaSubquery(), 'nota_cobro');
+        $query = DB::table('sg_proform as p');
+        $this->applyClienteJoins($query);
+
+        $query->select([
+            'p.id',
+            'p.nro_prof',
+            'p.emp',
+            'p.nit',
+            'p.emisora',
+            'p.mes',
+            'p.anio',
+            'p.vtotal',
+            'p.estado',
+            'p.rpdf',
+            'p.npdf',
+            'p.hpdf',
+            'p.enviado',
+            'p.fecha_envio',
+            'p.intentos_envio',
+        ])->selectRaw($this->joinedClienteFieldExpression('codigo').' as codigo')
+            ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as id_cliente')
+            ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as cliente_potencial_id')
+            ->selectRaw($this->joinedClienteFieldExpression('nota_cobro').' as nota_cobro')
+            ->selectRaw($this->joinedClienteFieldExpression('fecha_arriendo').' as cliente_fecha_arriendo');
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
         $codigo = trim((string) ($filters['codigo'] ?? ''));
@@ -80,10 +83,11 @@ class ProformasService
             ->when($nroProf !== '', fn ($q) => $q->where('p.nro_prof', 'like', "%{$nroProf}%"))
 
             ->when($codigo !== '', function ($q) use ($codigo) {
-                $q->whereExists(
-                    $this->buildClienteRelacionSubquery()
-                        ->select(DB::raw(1))
-                        ->where('cp.codigo', 'like', "%{$codigo}%")
+                $codigoLike = '%'.mb_strtolower($codigo).'%';
+
+                $q->whereRaw(
+                    $this->normalizedSqlExpression($this->joinedClienteFieldExpression('codigo')).' LIKE ?',
+                    [$codigoLike]
                 );
             })
 
@@ -94,15 +98,8 @@ class ProformasService
                 $q->where(function ($empresaQuery) use ($empresaLike) {
                     $empresaQuery
                         ->whereRaw($this->normalizedSqlExpression('p.emp').' LIKE ?', [$empresaLike])
-                        ->orWhereExists(
-                            $this->buildClienteRelacionSubquery()
-                                ->select(DB::raw(1))
-                                ->where(function ($clienteQuery) use ($empresaLike) {
-                                    $clienteQuery
-                                        ->whereRaw($this->normalizedSqlExpression('cp.nombre').' LIKE ?', [$empresaLike])
-                                        ->orWhereRaw($this->normalizedSqlExpression('cp.empresa').' LIKE ?', [$empresaLike]);
-                                })
-                        );
+                        ->orWhereRaw($this->normalizedSqlExpression($this->joinedClienteFieldExpression('nombre')).' LIKE ?', [$empresaLike])
+                        ->orWhereRaw($this->normalizedSqlExpression($this->joinedClienteFieldExpression('empresa')).' LIKE ?', [$empresaLike]);
                 });
             })
             ->when($emisora !== '', fn ($q) => $q->where('p.emisora', $emisora))
@@ -111,22 +108,16 @@ class ProformasService
             ->when($anio !== null, fn ($q) => $q->where('p.anio', $anio))
             ->when($mes !== null, fn ($q) => $q->where('p.mes', $mes))
             ->when($filtroNota !== '', function ($q) use ($filtroNota) {
+                $notaExpression = "TRIM(COALESCE(".$this->joinedClienteFieldExpression('nota_cobro').", ''))";
+
                 if ($filtroNota === 'con') {
-                    $q->whereExists(
-                        $this->buildClienteRelacionSubquery()
-                            ->select(DB::raw(1))
-                            ->whereNotNull('cp.nota_cobro')
-                    );
+                    $q->whereRaw($notaExpression." <> ''");
 
                     return;
                 }
 
                 if ($filtroNota === 'sin') {
-                    $q->whereNotExists(
-                        $this->buildClienteRelacionSubquery()
-                            ->select(DB::raw(1))
-                            ->whereNotNull('cp.nota_cobro')
-                    );
+                    $q->whereRaw($notaExpression." = ''");
                 }
             })
             ->orderByDesc('p.anio')->orderByDesc('p.mes')->orderByDesc('p.id')
@@ -178,12 +169,16 @@ class ProformasService
 
     public function findProformaById(int $id): ?object
     {
-        return DB::table('sg_proform as p')
+        $query = DB::table('sg_proform as p');
+        $this->applyClienteJoins($query);
+
+        return $query
             ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])
-            ->selectSub($this->buildClienteCodigoSubquery(), 'codigo')
-            ->selectSub($this->buildClienteIdSubquery(), 'id_cliente')
-            ->selectSub($this->buildClientePotencialIdSubquery(), 'cliente_potencial_id')
-            ->selectSub($this->buildClienteNotaSubquery(), 'nota_cobro')
+            ->selectRaw($this->joinedClienteFieldExpression('codigo').' as codigo')
+            ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as id_cliente')
+            ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as cliente_potencial_id')
+            ->selectRaw($this->joinedClienteFieldExpression('nota_cobro').' as nota_cobro')
+            ->selectRaw($this->joinedClienteFieldExpression('fecha_arriendo').' as cliente_fecha_arriendo')
             ->where('p.id', $id)
             ->first();
     }
@@ -570,6 +565,83 @@ class ProformasService
                      END = BINARY UPPER(TRIM(COALESCE(p.emisora, 'SAS')))");
             })
             ->orderByDesc('ve.id_cobro');
+    }
+
+    private function applyClienteJoins(Builder $query): void
+    {
+        if ($this->hasSgProformIdCobroColumn()) {
+            $query->leftJoinSub($this->buildClienteJoinByCobroSubquery(), 've_cobro_match', function ($join): void {
+                $join->on('ve_cobro_match.id_cobro', '=', 'p.id_cobro');
+            });
+        } else {
+            $query->leftJoinSub($this->buildEmptyClienteJoinSubquery(), 've_cobro_match', function ($join): void {
+                $join->whereRaw('1 = 0');
+            });
+        }
+
+        $query->leftJoin('clientes_potenciales as cp_cobro', 'cp_cobro.idclientes_potenciales', '=', 've_cobro_match.id_cliente');
+
+        $query->leftJoinSub($this->buildClienteJoinFallbackSubquery(), 've_fallback_match', function ($join): void {
+            if ($this->hasSgProformIdCobroColumn()) {
+                $join->whereRaw('(p.id_cobro IS NULL OR p.id_cobro = 0)');
+            }
+
+            $join->whereRaw('BINARY ve_fallback_match.nit_normalized = BINARY TRIM(p.nit)')
+                ->whereRaw('BINARY ve_fallback_match.mes_normalized = BINARY '.$this->proformaMesTextoSql('p.mes'))
+                ->whereRaw('ve_fallback_match.anio = p.anio')
+                ->whereRaw('BINARY ve_fallback_match.emisora_normalized = BINARY '.$this->normalizedEmisoraSql('p.emisora'));
+        });
+
+        $query->leftJoin('clientes_potenciales as cp_fallback', 'cp_fallback.idclientes_potenciales', '=', 've_fallback_match.id_cliente');
+    }
+
+    private function buildClienteJoinByCobroSubquery(): Builder
+    {
+        return DB::table('valores_externos as ve')
+            ->selectRaw('ve.id_cobro, MAX(CAST(TRIM(ve.id_cliente) AS UNSIGNED)) as id_cliente')
+            ->whereNotNull('ve.id_cobro')
+            ->whereRaw('ve.id_cobro > 0')
+            ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
+            ->groupBy('ve.id_cobro');
+    }
+
+    private function buildEmptyClienteJoinSubquery(): Builder
+    {
+        return DB::query()
+            ->selectRaw('NULL as id_cobro, NULL as id_cliente')
+            ->whereRaw('1 = 0');
+    }
+
+    private function buildClienteJoinFallbackSubquery(): Builder
+    {
+        return DB::table('valores_externos as ve')
+            ->join('clientes_potenciales as cp_lookup', 'cp_lookup.idclientes_potenciales', '=', DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)'))
+            ->selectRaw('TRIM(cp_lookup.nit) as nit_normalized')
+            ->selectRaw('LOWER(TRIM(ve.mes)) as mes_normalized')
+            ->selectRaw('ve.`año` as anio')
+            ->selectRaw($this->normalizedRegimenSql('cp_lookup.regimen').' as emisora_normalized')
+            ->selectRaw('MAX(cp_lookup.idclientes_potenciales) as id_cliente')
+            ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
+            ->groupByRaw('TRIM(cp_lookup.nit), LOWER(TRIM(ve.mes)), ve.`año`, '.$this->normalizedRegimenSql('cp_lookup.regimen'));
+    }
+
+    private function joinedClienteFieldExpression(string $field): string
+    {
+        return "COALESCE(cp_cobro.{$field}, cp_fallback.{$field})";
+    }
+
+    private function normalizedRegimenSql(string $regimenColumn): string
+    {
+        return "CASE UPPER(TRIM(COALESCE({$regimenColumn}, '')))
+            WHEN 'PCS' THEN 'PCS'
+            WHEN 'SMP' THEN 'SMP'
+            ELSE 'SAS'
+        END";
+    }
+
+    private function normalizedEmisoraSql(string $emisoraColumn): string
+    {
+        return "UPPER(TRIM(COALESCE({$emisoraColumn}, 'SAS')))";
     }
 
     private function hasSgProformIdCobroColumn(): bool

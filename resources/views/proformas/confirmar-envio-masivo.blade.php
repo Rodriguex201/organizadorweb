@@ -79,7 +79,7 @@
                                 </td>
                                 <td class="px-4 py-3 text-slate-700">{{ $proforma->emp ?: 'N/D' }}</td>
                                 <td class="px-4 py-3 text-slate-700">{{ $proforma->cliente_email ?: 'Sin correo' }}</td>
-                                <td class="px-4 py-3 text-slate-700">{{ $proforma->cliente_fecha_arriendo ?: 'N/D' }}</td>
+                                <td class="px-4 py-3 text-slate-700">{{ \Illuminate\Support\Carbon::make($proforma->cliente_fecha_arriendo)?->format('d/m/Y') ?: 'N/D' }}</td>
                             </tr>
                         @endforeach
                         </tbody>

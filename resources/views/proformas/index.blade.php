@@ -39,28 +39,28 @@
     @endif
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
-        <form id="proformas-filter-form" method="GET" action="{{ route('proformas.index') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-11">
-            <div>
+        <form id="proformas-filter-form" method="GET" action="{{ route('proformas.index') }}" class="grid items-end gap-4 md:grid-cols-5 lg:grid-cols-7">
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="nro_prof" class="mb-1 block text-sm font-medium">Número</label>
                 <input id="nro_prof" name="nro_prof" value="{{ $filters['nro_prof'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="codigo" class="mb-1 block text-sm font-medium">Código</label>
                 <input id="codigo" name="codigo" value="{{ $filters['codigo'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="nit" class="mb-1 block text-sm font-medium">NIT</label>
                 <input id="nit" name="nit" value="{{ $filters['nit'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="empresa" class="mb-1 block text-sm font-medium">Empresa</label>
                 <input id="empresa" name="empresa" value="{{ $filters['empresa'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="emisora" class="mb-1 block text-sm font-medium">Emisora</label>
                 <input id="emisora" name="emisora" value="{{ $filters['emisora'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="mes" class="mb-1 block text-sm font-medium">Mes</label>
                 <select id="mes" name="mes" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
@@ -71,11 +71,11 @@
                     @endforeach
                 </select>
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="anio" class="mb-1 block text-sm font-medium">Año</label>
                 <input id="anio" name="anio" type="number" min="1900" max="9999" value="{{ $filters['anio'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="estado" class="mb-1 block text-sm font-medium">Estado</label>
                 <select id="estado" name="estado" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
@@ -84,7 +84,7 @@
                     @endforeach
                 </select>
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="envio" class="mb-1 block text-sm font-medium">Envío</label>
                 <select id="envio" name="envio" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
@@ -92,7 +92,7 @@
                     <option value="0" @selected((string) ($filters['envio'] ?? '') === '0')>No enviada</option>
                 </select>
             </div>
-            <div>
+            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="filtro_nota" class="mb-1 block text-sm font-medium">Nota</label>
                 <select id="filtro_nota" name="filtro_nota" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todas</option>
@@ -100,7 +100,7 @@
                     <option value="sin" @selected((string) ($filters['filtro_nota'] ?? '') === 'sin')>Sin nota</option>
                 </select>
             </div>
-            <div class="flex items-end gap-2">
+            <div class="acciones-filtros flex items-end gap-[10px] self-end">
                 <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Filtrar</button>
                 <a href="{{ route('proformas.clear-filters') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Limpiar</a>
             </div>
@@ -112,6 +112,7 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-slate-50 text-left text-xs uppercase text-slate-600">
                 <tr>
+                    <th class="px-3 py-2">Fecha arriendo</th>
                     <th class="px-3 py-2">Número</th>
                     <th class="px-3 py-2">Código</th>
                     <th class="px-3 py-2">Empresa</th>
@@ -133,6 +134,7 @@
                         $notaCobro = trim((string) ($proforma->nota_cobro ?? ''));
                         $notaResumen = $notaCobro !== '' ? \Illuminate\Support\Str::limit($notaCobro, 50) : 'Sin nota de cobro';
                         $clientePotencialId = (int) ($proforma->cliente_potencial_id ?? 0);
+                        $fechaArriendo = \Illuminate\Support\Carbon::make($proforma->cliente_fecha_arriendo)?->format('d/m/Y') ?: 'N/D';
                     @endphp
                     <tr
                         class="hover:bg-slate-50"
@@ -144,6 +146,7 @@
                         data-pdf-url="{{ route('proformas.pdf.show', $proforma->id) }}"
 
                     >
+                        <td class="px-3 py-2 whitespace-nowrap text-slate-700">{{ $fechaArriendo }}</td>
                         <td class="px-3 py-2">
                             <p class="font-medium text-slate-800">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</p>
                             <p class="text-xs text-slate-500">ID {{ $proforma->id }}</p>
@@ -201,7 +204,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="9" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
+                        <td colspan="10" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>
