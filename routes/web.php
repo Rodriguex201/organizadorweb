@@ -66,6 +66,12 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/proformas/{id}/pdf', [ProformasController::class, 'showPdf'])->name('proformas.pdf.show');
     Route::get('/proformas/{id}/pdf/download', [ProformasController::class, 'downloadPdf'])->name('proformas.pdf.download');
     Route::post('/proformas/{id}/enviar', [ProformasController::class, 'enviarCorreo'])->name('proformas.enviar');
+    Route::post('/proformas/{id}/marcar-enviada', [ProformasController::class, 'marcarEnviada'])
+        ->middleware('role:admin,user')
+        ->name('proformas.marcar-enviada');
+    Route::post('/proformas/{id}/marcar-no-enviada', [ProformasController::class, 'marcarNoEnviada'])
+        ->middleware('role:admin,user')
+        ->name('proformas.marcar-no-enviada');
 
     Route::patch('/proformas/{id}/estado', [ProformasController::class, 'updateEstado'])
         ->middleware('role:admin,user')

@@ -138,10 +138,11 @@
                         data-proforma-row
                         data-proforma-id="{{ $proforma->id }}"
                         data-estado="{{ $estadoCodigo }}"
+                        data-enviado="{{ (int) ($proforma->enviado ?? 0) }}"
                         data-update-url="{{ route('proformas.estado.update', $proforma->id) }}"
-
                         data-pdf-url="{{ route('proformas.pdf.show', $proforma->id) }}"
-
+                        data-marcar-enviada-url="{{ route('proformas.marcar-enviada', $proforma->id) }}"
+                        data-marcar-no-enviada-url="{{ route('proformas.marcar-no-enviada', $proforma->id) }}"
                     >
                         <td class="px-3 py-2 whitespace-nowrap text-slate-700">{{ $fechaArriendo }}</td>
                         <td class="px-3 py-2">
@@ -185,7 +186,14 @@
                             >{{ $estado }}</span>
                         </td>
                         <td class="px-3 py-2">
-                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $envioClasses }}">{{ $envioEstado }}</span>
+                            <span
+                                class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $envioClasses }}"
+                                data-envio-badge
+                                data-label-enviada="{{ $proformasService->envioLabel(1) }}"
+                                data-label-no-enviada="{{ $proformasService->envioLabel(0) }}"
+                                data-class-enviada="{{ $proformasService->envioBadgeClass(1) }}"
+                                data-class-no-enviada="{{ $proformasService->envioBadgeClass(0) }}"
+                            >{{ $envioEstado }}</span>
                         </td>
                         <td class="px-3 py-2 text-right">
                             <div class="inline-flex items-center gap-2">
@@ -304,6 +312,9 @@
         const ESTADO_FACTURADA = {{ \App\Services\ProformasService::ESTADO_FACTURADA }};
         const csrfToken = @json(csrf_token());
         const activeEstadoFilter = @json($filters['estado'] ?? null);
+        const activeEnvioFilter = @json($filters['envio'] ?? null);
+        const confirmManualEnvioMessage = '¿Marcar esta proforma como enviada manualmente?\nÚselo para WhatsApp u otros medios externos.';
+        const confirmManualNoEnvioMessage = '¿Marcar esta proforma como NO enviada manualmente?';
 
         const tableRows = Array.from(document.querySelectorAll('[data-proforma-row]'));
         const menu = document.getElementById('proforma-context-menu');
@@ -355,8 +366,11 @@
         };
 
         const showMenu = (x, y, row) => {
-
-            const acciones = getActionsForState(Number(row.dataset.estado || 0), row.dataset.pdfUrl || '');
+            const acciones = getActionsForState(
+                Number(row.dataset.estado || 0),
+                Number(row.dataset.enviado || 0),
+                row.dataset.pdfUrl || '',
+            );
 
             if (acciones.length === 0) {
                 hideMenu();
@@ -374,7 +388,7 @@
                 }
 
                 return `<li>
-                    <button type="button" class="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" data-target-state="${accion.estado}">
+                    <button type="button" class="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" ${accion.estado !== undefined ? `data-target-state="${accion.estado}"` : ''} ${accion.envioAction ? `data-envio-action="${accion.envioAction}"` : ''}>
                         ${accion.label}
                     </button>
                 </li>`;
@@ -389,10 +403,16 @@
         };
 
 
-        const getActionsForState = (estadoActual, pdfUrl) => {
+        const getActionsForState = (estadoActual, enviadoActual, pdfUrl) => {
             const acciones = [];
             if (pdfUrl) {
                 acciones.push({ type: 'link', label: 'Ver PDF', url: pdfUrl });
+            }
+
+             if (enviadoActual === 1) {
+                acciones.push({ type: 'envio', envioAction: 'desmarcar', label: 'Marcar NO enviada' });
+            } else {
+                acciones.push({ type: 'envio', envioAction: 'marcar', label: '&#128241; Marcar enviada' });
             }
 
             if (estadoActual === ESTADO_GENERADA || estadoActual === ESTADO_ENVIADA) {
@@ -405,6 +425,28 @@
 
             return acciones;
 
+        };
+
+        const updateRowEnvio = (row, enviado, fechaEnvio = null) => {
+            row.dataset.enviado = String(enviado);
+
+            const badge = row.querySelector('[data-envio-badge]');
+            if (badge) {
+                const isEnviado = Number(enviado) === 1;
+                badge.textContent = isEnviado ? badge.dataset.labelEnviada : badge.dataset.labelNoEnviada;
+                badge.classList.remove(...(badge.dataset.classEnviada || '').split(' ').filter(Boolean));
+                badge.classList.remove(...(badge.dataset.classNoEnviada || '').split(' ').filter(Boolean));
+                badge.classList.add(...((isEnviado ? badge.dataset.classEnviada : badge.dataset.classNoEnviada) || '').split(' ').filter(Boolean));
+            }
+
+            if (fechaEnvio !== undefined) {
+                row.dataset.fechaEnvio = fechaEnvio || '';
+            }
+
+            const hasEnvioFilter = activeEnvioFilter !== null && activeEnvioFilter !== '';
+            if (hasEnvioFilter && String(activeEnvioFilter) !== String(enviado)) {
+                row.remove();
+            }
         };
 
         const updateRowState = (row, nuevoEstado) => {
@@ -444,6 +486,52 @@
 
             if (String(activeEstadoFilter) !== String(nuevoEstado)) {
                 row.remove();
+            }
+        };
+
+        const runEnvioAction = async (row, action) => {
+            const isMarking = action === 'marcar';
+            const url = isMarking ? row.dataset.marcarEnviadaUrl : row.dataset.marcarNoEnviadaUrl;
+
+            if (!url) {
+                return;
+            }
+
+            if (isMarking && !window.confirm(confirmManualEnvioMessage)) {
+                return;
+            }
+
+            if (!isMarking && !window.confirm(confirmManualNoEnvioMessage)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({}),
+                });
+
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || 'No se pudo actualizar el envío.');
+                }
+
+                updateRowEnvio(
+                    row,
+                    Number(payload.proforma?.enviado ?? (isMarking ? 1 : 0)),
+                    payload.proforma?.fecha_envio ?? null,
+                );
+
+                showFeedback(payload.message || 'Envío actualizado correctamente.', 'success');
+            } catch (error) {
+                console.error(error);
+                showFeedback(error.message || 'No se pudo actualizar el envío.', 'error');
             }
         };
 
@@ -498,15 +586,20 @@
         });
 
         menu.addEventListener('click', async (event) => {
-            const targetButton = event.target.closest('button[data-target-state]');
+            const targetButton = event.target.closest('button[data-target-state], button[data-envio-action]');
             if (!targetButton || !currentRow) {
                 return;
             }
 
-            const estadoDestino = Number(targetButton.dataset.targetState);
-
             const row = currentRow;
             hideMenu();
+
+            if (targetButton.dataset.envioAction) {
+                await runEnvioAction(row, targetButton.dataset.envioAction);
+                return;
+            }
+
+            const estadoDestino = Number(targetButton.dataset.targetState);
             await runAction(row, estadoDestino);
 
         });

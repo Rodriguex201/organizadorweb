@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -456,6 +457,40 @@ class ProformasController extends Controller
             : $redirect->with('status', $resultado['message'])->with('status_type', 'error');
     }
 
+    public function marcarEnviada(Request $request, int $id): RedirectResponse|JsonResponse
+    {
+        $resultado = $this->proformasService->marcarEnvioManual($id);
+
+        if ($resultado['ok']) {
+            $this->registrarLogEnvioManual($id, 'marcar_enviada_manual');
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json($resultado, $resultado['ok'] ? 200 : 422);
+        }
+
+        return $resultado['ok']
+            ? redirect()->back()->with('status', $resultado['message'])->with('status_type', 'success')
+            : redirect()->back()->with('status', $resultado['message'])->with('status_type', 'error');
+    }
+
+    public function marcarNoEnviada(Request $request, int $id): RedirectResponse|JsonResponse
+    {
+        $resultado = $this->proformasService->marcarNoEnviada($id);
+
+        if ($resultado['ok']) {
+            $this->registrarLogEnvioManual($id, 'marcar_no_enviada_manual');
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json($resultado, $resultado['ok'] ? 200 : 422);
+        }
+
+        return $resultado['ok']
+            ? redirect()->back()->with('status', $resultado['message'])->with('status_type', 'success')
+            : redirect()->back()->with('status', $resultado['message'])->with('status_type', 'error');
+    }
+
     private function storeFilterSession(array $filters): void
     {
         session([
@@ -521,6 +556,16 @@ class ProformasController extends Controller
         }
 
         return $sanitized;
+    }
+
+    private function registrarLogEnvioManual(int $proformaId, string $accion): void
+    {
+        Log::info('Proforma envio manual actualizado.', [
+            'accion' => $accion,
+            'proforma_id' => $proformaId,
+            'user_id' => Auth::id(),
+            'ip' => request()->ip(),
+        ]);
     }
 
     private function normalizarEntero(null|string|int $value): ?int

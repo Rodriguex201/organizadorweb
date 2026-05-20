@@ -202,6 +202,76 @@ class ProformasService
             ->update(['intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1')]);
     }
 
+    public function marcarEnvioManual(int $proformaId): array
+    {
+        $proforma = DB::table('sg_proform')
+            ->select(['id', 'enviado', 'fecha_envio'])
+            ->where('id', $proformaId)
+            ->first();
+
+        if (!$proforma) {
+            return ['ok' => false, 'message' => 'La proforma no existe.'];
+        }
+
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update([
+                'enviado' => 1,
+                'fecha_envio' => now(),
+            ]);
+
+        $actualizada = DB::table('sg_proform')
+            ->select(['id', 'enviado', 'fecha_envio', 'estado'])
+            ->where('id', $proformaId)
+            ->first();
+
+        return [
+            'ok' => true,
+            'message' => 'Proforma marcada como enviada manualmente.',
+            'proforma' => [
+                'id' => $proformaId,
+                'enviado' => (int) ($actualizada->enviado ?? 1),
+                'fecha_envio' => $actualizada->fecha_envio ?? null,
+                'estado' => (int) ($actualizada->estado ?? 0),
+            ],
+        ];
+    }
+
+    public function marcarNoEnviada(int $proformaId): array
+    {
+        $proforma = DB::table('sg_proform')
+            ->select(['id', 'enviado', 'fecha_envio'])
+            ->where('id', $proformaId)
+            ->first();
+
+        if (!$proforma) {
+            return ['ok' => false, 'message' => 'La proforma no existe.'];
+        }
+
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update([
+                'enviado' => 0,
+                'fecha_envio' => null,
+            ]);
+
+        $actualizada = DB::table('sg_proform')
+            ->select(['id', 'enviado', 'fecha_envio', 'estado'])
+            ->where('id', $proformaId)
+            ->first();
+
+        return [
+            'ok' => true,
+            'message' => 'Proforma marcada como no enviada.',
+            'proforma' => [
+                'id' => $proformaId,
+                'enviado' => (int) ($actualizada->enviado ?? 0),
+                'fecha_envio' => $actualizada->fecha_envio ?? null,
+                'estado' => (int) ($actualizada->estado ?? 0),
+            ],
+        ];
+    }
+
     public function buildBatchEnvioResumen(int $grupoFecha, array $periodo = []): array
     {
         $mes = $this->normalizarMes($periodo['mes'] ?? null);
