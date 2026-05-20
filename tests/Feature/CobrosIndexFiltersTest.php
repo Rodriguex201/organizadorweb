@@ -25,6 +25,7 @@ class CobrosIndexFiltersTest extends TestCase
             'mes' => 'mayo',
             'anio' => 2026,
             'proforma' => null,
+            'codigo' => null,
             'buscar' => null,
             'orden_fecha' => null,
             'grupo_fecha' => null,
@@ -64,6 +65,7 @@ class CobrosIndexFiltersTest extends TestCase
             'mes' => '5',
             'anio' => 2024,
             'proforma' => null,
+            'codigo' => null,
             'buscar' => null,
             'orden_fecha' => null,
             'grupo_fecha' => null,
@@ -86,6 +88,49 @@ class CobrosIndexFiltersTest extends TestCase
             'idusuario' => 1,
             'rol_nombre' => 'admin',
         ])->get(route('cobros.index', ['mes' => '5', 'anio' => 2024]));
+
+        $response->assertOk();
+        $response->assertViewHas('filters', $expectedFilters);
+    }
+
+    public function test_propaga_filtro_codigo_y_buscar_hacia_el_servicio(): void
+    {
+        $cobrosService = Mockery::mock(CobrosService::class);
+        $previewService = Mockery::mock(ProformaPreviewService::class);
+        $storeService = Mockery::mock(ProformaStoreService::class);
+        $pdfService = Mockery::mock(ProformaPdfService::class);
+        $calculatorService = Mockery::mock(RevisarProformaCalculator::class);
+
+        $expectedFilters = [
+            'mes' => null,
+            'anio' => null,
+            'proforma' => null,
+            'codigo' => 'B340',
+            'buscar' => 'Martha TF',
+            'orden_fecha' => null,
+            'grupo_fecha' => null,
+            'filtro_nota' => null,
+            'filtro_envio' => null,
+        ];
+
+        $cobrosService->shouldReceive('paginateCobros')
+            ->once()
+            ->with($expectedFilters)
+            ->andReturn(new LengthAwarePaginator([], 0, 15));
+
+        $this->app->instance(CobrosService::class, $cobrosService);
+        $this->app->instance(ProformaPreviewService::class, $previewService);
+        $this->app->instance(ProformaStoreService::class, $storeService);
+        $this->app->instance(ProformaPdfService::class, $pdfService);
+        $this->app->instance(RevisarProformaCalculator::class, $calculatorService);
+
+        $response = $this->withSession([
+            'idusuario' => 1,
+            'rol_nombre' => 'admin',
+        ])->get(route('cobros.index', [
+            'codigo' => 'B340',
+            'buscar' => 'Martha TF',
+        ]));
 
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);

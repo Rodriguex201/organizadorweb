@@ -309,6 +309,8 @@ private function buildCobrosQuery(array $filters)
     $filters = array_map(function ($value) {
         return $value === '' ? null : $value;
     }, $filters);
+    $codigo = $this->normalizeTextFilter($filters['codigo'] ?? '');
+    $buscar = $this->normalizeTextFilter($filters['buscar'] ?? '');
     $grupoFecha = $this->normalizarGrupoFecha($filters['grupo_fecha'] ?? null);
 
     $query = DB::table('valores_externos as ve')
@@ -347,13 +349,24 @@ if (!empty($filters['anio'])) {
     }
 
     // 🔥 BUSCAR
-    if (!empty($filters['buscar'])) {
-        $buscar = '%' . strtolower($filters['buscar']) . '%';
+    if ($codigo !== '') {
+        $query->whereRaw(
+            $this->normalizedSqlExpression('cp.codigo').' LIKE ?',
+            ['%'.$codigo.'%']
+        );
+    }
 
-        $query->where(function ($q) use ($buscar) {
-            $q->whereRaw('LOWER(cp.nombre) LIKE ?', [$buscar])
-              ->orWhereRaw('LOWER(cp.codigo) LIKE ?', [$buscar]);
-        });
+    if ($buscar !== '') {
+        foreach ($this->splitSearchTerms($buscar) as $term) {
+            $like = '%'.$term.'%';
+
+            $query->where(function ($q) use ($like) {
+                $q->whereRaw($this->normalizedSqlExpression('cp.nombre').' LIKE ?', [$like])
+                    ->orWhereRaw($this->normalizedSqlExpression('cp.empresa').' LIKE ?', [$like])
+                    ->orWhereRaw($this->normalizedSqlExpression('cp.email').' LIKE ?', [$like])
+                    ->orWhereRaw($this->normalizedSqlExpression('cp.codigo').' LIKE ?', [$like]);
+            });
+        }
     }
 
     // 🔥 GRUPO FECHA
@@ -491,6 +504,38 @@ if (!empty($filters['anio'])) {
         $valor = trim($buscar);
 
         return $valor === '' ? null : $valor;
+    }
+
+    private function normalizeTextFilter(null|string|int $value): string
+    {
+        $normalized = preg_replace('/\s+/u', ' ', trim((string) $value));
+
+        return mb_strtolower($normalized ?? '');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function splitSearchTerms(string $value): array
+    {
+        $parts = preg_split('/\s+/u', trim($value)) ?: [];
+
+        return array_values(array_filter(array_map(
+            fn ($part) => $this->normalizeTextFilter($part),
+            $parts
+        ), fn ($part) => $part !== ''));
+    }
+
+    private function normalizedSqlExpression(string $column): string
+    {
+        $trimmed = "TRIM(COALESCE({$column}, ''))";
+        $collapsed = $trimmed;
+
+        for ($i = 0; $i < 5; $i++) {
+            $collapsed = "REPLACE({$collapsed}, '  ', ' ')";
+        }
+
+        return "LOWER({$collapsed})";
     }
 
     private function normalizarOrdenFecha(null|string $orden): ?string

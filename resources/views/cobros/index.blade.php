@@ -21,6 +21,7 @@
                 <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">
                 <input type="hidden" name="anio" value="{{ $filters['anio'] ?? '' }}">
                 <input type="hidden" name="proforma" value="{{ $filters['proforma'] ?? '' }}">
+                <input type="hidden" name="codigo" value="{{ $filters['codigo'] ?? '' }}">
                 <input type="hidden" name="buscar" value="{{ $filters['buscar'] ?? '' }}">
                 <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
                 <input type="hidden" name="grupo_fecha" value="{{ $filters['grupo_fecha'] ?? '' }}">
@@ -36,6 +37,7 @@
                 <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">
                 <input type="hidden" name="anio" value="{{ $filters['anio'] ?? '' }}">
                 <input type="hidden" name="proforma" value="{{ $filters['proforma'] ?? '' }}">
+                <input type="hidden" name="codigo" value="{{ $filters['codigo'] ?? '' }}">
                 <input type="hidden" name="buscar" value="{{ $filters['buscar'] ?? '' }}">
                 <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
                 <input type="hidden" name="grupo_fecha" value="{{ $filters['grupo_fecha'] ?? '' }}">
@@ -89,7 +91,7 @@
     @endif
 
     <div class="bg-white rounded-lg shadow p-4 mb-6">
-        <form id="cobros-filter-form" method="GET" action="{{ route('cobros.index') }}" class="grid grid-cols-1 md:grid-cols-8 gap-4 items-end">
+        <form id="cobros-filter-form" method="GET" action="{{ route('cobros.index') }}" class="grid grid-cols-1 md:grid-cols-9 gap-4 items-end">
             <div>
                 <label for="mes" class="block text-sm font-medium mb-1">Mes</label>
 
@@ -113,6 +115,13 @@
             <div>
                 <label for="proforma" class="block text-sm font-medium mb-1">Proforma</label>
                 <input id="proforma" name="proforma" type="text" value="{{ $filters['proforma'] ?? '' }}"
+                       class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label for="codigo" class="block text-sm font-medium mb-1">Codigo</label>
+                <input id="codigo" name="codigo" type="text" value="{{ $filters['codigo'] ?? '' }}"
+                       placeholder="Ej: B340"
                        class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
             </div>
 
