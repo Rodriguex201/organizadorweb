@@ -479,7 +479,7 @@ class ClientesController extends Controller
             return;
         }
 
-        $selectedId = $validated[$inputKey];
+        $selectedId = $this->normalizeCatalogSelection($validated[$inputKey], $catalogo);
         if ($selectedId === null || $selectedId === '') {
             $payload[$targetColumn] = null;
 
@@ -492,8 +492,31 @@ class ClientesController extends Controller
         }
 
         $payload[$targetColumn] = $this->storesForeignId($targetColumn)
-            ? $option['id']
+            ? (int) $option['id']
             : $this->toUppercase($option['label']);
+    }
+
+    private function normalizeCatalogSelection(mixed $value, array $catalogo): mixed
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        if (isset($catalogo['by_id'][(string) $value])) {
+            return $value;
+        }
+
+        $normalizedValue = trim($this->toUppercase((string) $value));
+
+        foreach ($catalogo['options'] ?? [] as $option) {
+            $normalizedLabel = trim($this->toUppercase((string) ($option['label'] ?? '')));
+
+            if ($normalizedLabel === $normalizedValue) {
+                return $option['id'];
+            }
+        }
+
+        return $value;
     }
 
     private function rules(array $catalogos, array $mapping, bool $withUnique = false): array
@@ -797,13 +820,17 @@ class ClientesController extends Controller
 
     private function storesForeignId(string $targetColumn): bool
     {
+        if ($targetColumn === 'tipo_cliente_id') {
+            return true;
+        }
+
         try {
             $type = Schema::getColumnType('clientes_potenciales', $targetColumn);
         } catch (\Throwable) {
             return false;
         }
 
-        return in_array($type, ['integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true);
+        return in_array($type, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint'], true);
     }
 
     private function isClienteRetirado(object $cliente, array $mapping): bool

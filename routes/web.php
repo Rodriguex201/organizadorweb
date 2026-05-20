@@ -7,6 +7,7 @@ use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
 use App\Http\Controllers\ConfiguracionTarifaController;
+use App\Http\Controllers\ProformaCarteraController;
 use App\Http\Controllers\ProformasController;
 use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
@@ -53,6 +54,8 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/proformas/dashboard', [ProformasController::class, 'dashboard'])->name('proformas.dashboard');
     Route::post('/proformas/dashboard/export', [ProformasController::class, 'exportDashboard'])->name('proformas.dashboard.export');
     Route::get('/proformas/dashboard/export/download/{token}', [ProformasController::class, 'downloadDashboardExport'])->name('proformas.dashboard.export.download');
+    Route::get('/proformas/cartera', [ProformaCarteraController::class, 'index'])->name('proformas.cartera.index');
+    Route::post('/proformas/cartera/export', [ProformaCarteraController::class, 'export'])->name('proformas.cartera.export');
 
     Route::middleware('role.admin')->group(function (): void {
         Route::get('/proformas/envio-masivo/{grupo}/confirmar', [ProformasController::class, 'confirmarEnvioMasivo'])->name('proformas.envio-masivo.confirmar');
