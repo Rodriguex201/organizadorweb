@@ -67,7 +67,19 @@
                 <div>
                     <dt class="text-slate-500">Estado</dt>
                     <dd>
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}">{{ $proformasService->estadoLabel($proforma->estado) }}</span>
+                        <span
+                            id="proforma-estado-badge"
+                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                            data-label-generada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_GENERADA) }}"
+                            data-label-enviada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_ENVIADA) }}"
+                            data-label-pagada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_PAGADA) }}"
+                            data-label-facturada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_FACTURADA) }}"
+                            data-style-generada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_GENERADA) }}"
+                            data-style-enviada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_ENVIADA) }}"
+                            data-style-pagada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_PAGADA) }}"
+                            data-style-facturada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_FACTURADA) }}"
+                            style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}"
+                        >{{ $proformasService->estadoLabel($proforma->estado) }}</span>
                     </dd>
                 </div>
                 <div>
@@ -177,13 +189,19 @@
         const fechaEnvioTexto = document.getElementById('proforma-fecha-envio-texto');
         const intentosEnvioTexto = document.getElementById('proforma-intentos-envio-texto');
         const envioBadge = document.getElementById('proforma-envio-badge');
+        const estadoBadge = document.getElementById('proforma-estado-badge');
 
-        if (!form || !button || !feedback || !envioTexto || !fechaEnvioTexto || !intentosEnvioTexto || !envioBadge) {
+        if (!form || !button || !feedback || !envioTexto || !fechaEnvioTexto || !intentosEnvioTexto || !envioBadge || !estadoBadge) {
             return;
         }
 
         const csrfToken = @json(csrf_token());
         const initialButtonText = button.textContent;
+        const initialIsReenvio = initialButtonText.toLowerCase().includes('reenviar');
+        const ESTADO_GENERADA = {{ \App\Services\ProformasService::ESTADO_GENERADA }};
+        const ESTADO_ENVIADA = {{ \App\Services\ProformasService::ESTADO_ENVIADA }};
+        const ESTADO_PAGADA = {{ \App\Services\ProformasService::ESTADO_PAGADA }};
+        const ESTADO_FACTURADA = {{ \App\Services\ProformasService::ESTADO_FACTURADA }};
 
         const showFeedback = (message, type = 'success') => {
             feedback.textContent = message;
@@ -213,8 +231,45 @@
             return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
         };
 
+        const updateEstadoBadge = (estado) => {
+            const map = {
+                [ESTADO_GENERADA]: {
+                    label: estadoBadge.dataset.labelGenerada,
+                    style: estadoBadge.dataset.styleGenerada,
+                },
+                [ESTADO_ENVIADA]: {
+                    label: estadoBadge.dataset.labelEnviada,
+                    style: estadoBadge.dataset.styleEnviada,
+                },
+                [ESTADO_PAGADA]: {
+                    label: estadoBadge.dataset.labelPagada,
+                    style: estadoBadge.dataset.stylePagada,
+                },
+                [ESTADO_FACTURADA]: {
+                    label: estadoBadge.dataset.labelFacturada,
+                    style: estadoBadge.dataset.styleFacturada,
+                },
+            };
+
+            const estadoInfo = map[estado];
+            if (!estadoInfo) {
+                return;
+            }
+
+            estadoBadge.textContent = estadoInfo.label;
+            estadoBadge.setAttribute('style', estadoInfo.style);
+        };
+
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
+
+            const isReenvio = button.textContent.toLowerCase().includes('reenviar') || initialIsReenvio;
+            const successMessage = isReenvio
+                ? 'Proforma reenviada por correo correctamente.'
+                : 'Proforma enviada por correo correctamente.';
+            const errorMessage = isReenvio
+                ? 'No se pudo reenviar el correo.'
+                : 'No se pudo enviar el correo.';
 
             button.disabled = true;
             button.classList.add('opacity-60', 'cursor-not-allowed');
@@ -233,7 +288,7 @@
                 const payload = await response.json();
 
                 if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || 'No se pudo enviar el correo.');
+                    throw new Error(payload.message || errorMessage);
                 }
 
                 envioTexto.textContent = 'Si';
@@ -243,10 +298,16 @@
                 envioBadge.className = `inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${envioBadge.dataset.classEnviado}`;
                 button.textContent = 'Reenviar por correo';
 
-                showFeedback(payload.message || 'Proforma enviada por correo correctamente.', 'success');
+                if (payload.proforma?.estado !== undefined) {
+                    updateEstadoBadge(Number(payload.proforma.estado));
+                }
+
+                showFeedback(payload.message || successMessage, 'success');
+                feedback.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } catch (error) {
                 button.textContent = initialButtonText;
-                showFeedback(error.message || 'No se pudo enviar el correo.', 'error');
+                showFeedback(error.message || errorMessage, 'error');
+                feedback.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } finally {
                 button.disabled = false;
                 button.classList.remove('opacity-60', 'cursor-not-allowed');

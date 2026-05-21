@@ -123,7 +123,7 @@
                 <input id="codigo" name="codigo" type="text" value="{{ $filters['codigo'] ?? '' }}"
                        placeholder="Ej: B340"
                        class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-            </div>
+            </div> 
 
             <div>
                 <label for="buscar" class="block text-sm font-medium mb-1">Buscar</label>

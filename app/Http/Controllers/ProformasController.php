@@ -397,9 +397,33 @@ class ProformasController extends Controller
                 ->with('status_type', 'error');
         }
 
+        $isReenvio = (int) ($proforma->enviado ?? 0) === 1;
+        $logPrefix = $isReenvio ? '[REENVIO PROFORMA]' : '[ENVIO MANUAL PROFORMA]';
+        $destinatarios = null;
+
+        Log::info($logPrefix.' ANTES DE OBTENER PROFORMA', [
+            'proforma_id' => $id,
+        ]);
+
+        $destinatarios = $this->proformaEmailService->resolveDestinatarios($proforma, $logPrefix);
+
+        Log::info($logPrefix.' DATOS PREVIOS', [
+            'proforma_id' => $id,
+            'email_original_cliente' => $destinatarios['original'],
+            'correo_final_a_enviar' => $destinatarios['emails'],
+            'cantidad_correos' => $destinatarios['count'],
+        ]);
+
         try {
-            $this->proformaEmailService->sendProforma($proforma);
+            $this->proformaEmailService->sendProforma($proforma, [
+                'destinatarios' => $destinatarios,
+                'log_prefix' => $logPrefix,
+            ]);
             $this->proformasService->registrarEnvioExitoso($id);
+            Log::info($logPrefix.' REENVIO EXITOSO', [
+                'proforma_id' => $id,
+            ]);
+
             $proformaActualizada = $this->proformasService->findProformaById($id);
 
             if (request()->expectsJson()) {
@@ -411,12 +435,24 @@ class ProformasController extends Controller
                         'enviado' => (int) ($proformaActualizada->enviado ?? 1),
                         'fecha_envio' => $proformaActualizada->fecha_envio ?? null,
                         'intentos_envio' => (int) ($proformaActualizada->intentos_envio ?? 0),
+                        'estado' => (int) ($proformaActualizada->estado ?? 0),
                     ],
                 ]);
             }
 
             return redirect()->back()->with('status', 'Proforma enviada por correo correctamente.')->with('status_type', 'success');
         } catch (\Throwable $exception) {
+            Log::error($logPrefix.' CATCH', [
+                'proforma_id' => $id,
+                'mensaje_error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+                'payload' => [
+                    'email_original_cliente' => $destinatarios['original'] ?? null,
+                    'correo_final_a_enviar' => $destinatarios['emails'] ?? [],
+                    'cantidad_correos' => $destinatarios['count'] ?? 0,
+                ],
+            ]);
+
             report($exception);
 
             if (request()->expectsJson()) {

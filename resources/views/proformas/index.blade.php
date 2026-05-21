@@ -132,6 +132,7 @@
                         $notaResumen = $notaCobro !== '' ? \Illuminate\Support\Str::limit($notaCobro, 50) : 'Sin nota de cobro';
                         $clientePotencialId = (int) ($proforma->cliente_potencial_id ?? 0);
                         $fechaArriendo = \Illuminate\Support\Carbon::make($proforma->cliente_fecha_arriendo)?->format('d/m/Y') ?: 'N/D';
+                        $canSendProforma = $proformasService->canSendProforma($proforma);
                     @endphp
                     <tr
                         class="hover:bg-slate-50"
@@ -141,6 +142,7 @@
                         data-enviado="{{ (int) ($proforma->enviado ?? 0) }}"
                         data-update-url="{{ route('proformas.estado.update', $proforma->id) }}"
                         data-pdf-url="{{ route('proformas.pdf.show', $proforma->id) }}"
+                        data-enviar-url="{{ $canSendProforma ? route('proformas.enviar', $proforma->id) : '' }}"
                         data-marcar-enviada-url="{{ route('proformas.marcar-enviada', $proforma->id) }}"
                         data-marcar-no-enviada-url="{{ route('proformas.marcar-no-enviada', $proforma->id) }}"
                     >
@@ -177,9 +179,11 @@
                                 class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
                                 data-estado-badge
                                 data-label-generada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_GENERADA) }}"
+                                data-label-enviada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_ENVIADA) }}"
                                 data-label-pagada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_PAGADA) }}"
                                 data-label-facturada="{{ $proformasService->estadoLabel(\App\Services\ProformasService::ESTADO_FACTURADA) }}"
                                 data-style-generada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_GENERADA) }}"
+                                data-style-enviada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_ENVIADA) }}"
                                 data-style-pagada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_PAGADA) }}"
                                 data-style-facturada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_FACTURADA) }}"
                                 style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}"
@@ -370,6 +374,7 @@
                 Number(row.dataset.estado || 0),
                 Number(row.dataset.enviado || 0),
                 row.dataset.pdfUrl || '',
+                row.dataset.enviarUrl || '',
             );
 
             if (acciones.length === 0) {
@@ -388,7 +393,7 @@
                 }
 
                 return `<li>
-                    <button type="button" class="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" ${accion.estado !== undefined ? `data-target-state="${accion.estado}"` : ''} ${accion.envioAction ? `data-envio-action="${accion.envioAction}"` : ''}>
+                    <button type="button" class="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" ${accion.estado !== undefined ? `data-target-state="${accion.estado}"` : ''} ${accion.envioAction ? `data-envio-action="${accion.envioAction}"` : ''} ${accion.correoAction ? `data-correo-action="${accion.correoAction}"` : ''}>
                         ${accion.label}
                     </button>
                 </li>`;
@@ -403,13 +408,21 @@
         };
 
 
-        const getActionsForState = (estadoActual, enviadoActual, pdfUrl) => {
+        const getActionsForState = (estadoActual, enviadoActual, pdfUrl, enviarUrl) => {
             const acciones = [];
             if (pdfUrl) {
                 acciones.push({ type: 'link', label: 'Ver PDF', url: pdfUrl });
             }
 
-             if (enviadoActual === 1) {
+            if (enviarUrl) {
+                acciones.push({
+                    type: 'correo',
+                    correoAction: 'enviar',
+                    label: enviadoActual === 1 ? 'Reenviar correo' : 'Enviar correo ahora',
+                });
+            }
+
+            if (enviadoActual === 1) {
                 acciones.push({ type: 'envio', envioAction: 'desmarcar', label: 'Marcar NO enviada' });
             } else {
                 acciones.push({ type: 'envio', envioAction: 'marcar', label: '&#128241; Marcar enviada' });
@@ -461,6 +474,10 @@
                     label: badge.dataset.labelGenerada,
                     style: badge.dataset.styleGenerada,
                 },
+                [ESTADO_ENVIADA]: {
+                    label: badge.dataset.labelEnviada,
+                    style: badge.dataset.styleEnviada,
+                },
                 [ESTADO_PAGADA]: {
                     label: badge.dataset.labelPagada,
                     style: badge.dataset.stylePagada,
@@ -486,6 +503,52 @@
 
             if (String(activeEstadoFilter) !== String(nuevoEstado)) {
                 row.remove();
+            }
+        };
+
+        const runCorreoAction = async (row) => {
+            const url = row.dataset.enviarUrl;
+            if (!url) {
+                return;
+            }
+
+            const isReenvio = Number(row.dataset.enviado || 0) === 1;
+            const successMessage = isReenvio
+                ? 'Proforma reenviada por correo correctamente.'
+                : 'Proforma enviada por correo correctamente.';
+            const errorMessage = isReenvio
+                ? 'No se pudo reenviar el correo.'
+                : 'No se pudo enviar el correo.';
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || errorMessage);
+                }
+
+                updateRowEnvio(
+                    row,
+                    Number(payload.proforma?.enviado ?? 1),
+                    payload.proforma?.fecha_envio ?? null,
+                );
+
+                if (payload.proforma?.estado !== undefined) {
+                    updateRowState(row, Number(payload.proforma.estado));
+                }
+
+                showFeedback(payload.message || successMessage, 'success');
+            } catch (error) {
+                console.error(error);
+                showFeedback(error.message || errorMessage, 'error');
             }
         };
 
@@ -586,7 +649,7 @@
         });
 
         menu.addEventListener('click', async (event) => {
-            const targetButton = event.target.closest('button[data-target-state], button[data-envio-action]');
+            const targetButton = event.target.closest('button[data-target-state], button[data-envio-action], button[data-correo-action]');
             if (!targetButton || !currentRow) {
                 return;
             }
@@ -596,6 +659,11 @@
 
             if (targetButton.dataset.envioAction) {
                 await runEnvioAction(row, targetButton.dataset.envioAction);
+                return;
+            }
+
+            if (targetButton.dataset.correoAction) {
+                await runCorreoAction(row);
                 return;
             }
 

@@ -191,8 +191,30 @@ class ProformasService
 
     public function registrarEnvioExitoso(int $proformaId): void
     {
-        DB::table('sg_proform')->where('id', $proformaId)->update(['enviado' => 1, 'fecha_envio' => now(), 'estado' => self::ESTADO_ENVIADA, 'intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1')]);
-        $this->syncEstadoEnValoresExternos($proformaId, self::ESTADO_ENVIADA);
+        $proforma = DB::table('sg_proform')
+            ->select(['id', 'estado'])
+            ->where('id', $proformaId)
+            ->first();
+
+        if (!$proforma) {
+            return;
+        }
+
+        $estadoActual = (int) ($proforma->estado ?? 0);
+        $estadoFinal = $estadoActual >= self::ESTADO_ENVIADA
+            ? $estadoActual
+            : self::ESTADO_ENVIADA;
+
+        DB::table('sg_proform')
+            ->where('id', $proformaId)
+            ->update([
+                'enviado' => 1,
+                'fecha_envio' => now(),
+                'estado' => $estadoFinal,
+                'intentos_envio' => DB::raw('COALESCE(intentos_envio, 0) + 1'),
+            ]);
+
+        $this->syncEstadoEnValoresExternos($proformaId, $estadoFinal);
     }
 
     public function registrarIntentoFallido(int $proformaId): void

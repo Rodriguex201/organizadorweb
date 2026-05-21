@@ -10,13 +10,11 @@ use RuntimeException;
 
 class ProformaEmailService
 {
-    public function sendProforma(object $proforma): void
+    public function sendProforma(object $proforma, array $options = []): void
     {
-        $clienteEmail = $this->resolveClienteEmail($proforma);
-
-        if ($clienteEmail === null) {
-            throw new RuntimeException('El cliente no tiene un correo registrado en clientes_potenciales.email.');
-        }
+        $logPrefix = $this->normalizeLogPrefix($options['log_prefix'] ?? null);
+        $destinatariosData = $options['destinatarios'] ?? $this->resolveDestinatarios($proforma, $logPrefix);
+        $destinatarios = $destinatariosData['emails'];
 
         $pdf = $this->resolvePdfPath($proforma);
         $apiKey = trim((string) config('services.resend.key'));
@@ -25,26 +23,14 @@ class ProformaEmailService
         $replyTo = trim((string) config('services.resend.reply_to'));
         $missingConfig = $this->resolveMissingConfig($apiKey, $fromAddress, $replyTo);
 
-        Log::info('Proforma email debug: preparando envio', [
-            'proforma_id' => $proforma->id ?? null,
-            'proforma_numero' => $proforma->nro_prof ?? null,
-            'cliente_email' => $clienteEmail,
-            'from_address' => $fromAddress,
-            'from_name' => $fromName,
-            'reply_to' => $replyTo,
-            'resend_api_key_masked' => $this->maskSecret($apiKey),
-            'pdf_filename' => $pdf['filename'],
-            'pdf_bytes' => strlen($pdf['contents']),
-            'missing_config' => $missingConfig,
-            'mail_mailer' => config('mail.default'),
-            'mail_host' => config('mail.mailers.smtp.host'),
-            'mail_port' => config('mail.mailers.smtp.port'),
-            'mail_username' => (string) config('mail.mailers.smtp.username'),
-            'mail_password_masked' => $this->maskSecret((string) config('mail.mailers.smtp.password')),
-            'mail_from_address' => config('mail.from.address'),
-            'mail_from_name' => config('mail.from.name'),
-            'notice' => 'El envio de proformas usa services.resend.*; MAIL_* solo se registra como referencia.',
-        ]);
+        if ($logPrefix !== null) {
+            Log::info($logPrefix.' REENVIO INICIADO', [
+                'proforma_id' => $proforma->id ?? null,
+                'proforma_numero' => $proforma->nro_prof ?? null,
+                'destinatarios' => $destinatarios,
+                'payload_resend' => $this->buildResendPayload($proforma, $destinatarios, $pdf, $fromAddress, $fromName, $replyTo),
+            ]);
+        }
 
         if ($missingConfig !== []) {
             throw new RuntimeException(
@@ -57,43 +43,85 @@ class ProformaEmailService
             throw new RuntimeException('RESEND_FROM_ADDRESS no puede ser gmail.com. Use un dominio remitente valido.');
         }
 
+        $payload = $this->buildResendPayload($proforma, $destinatarios, $pdf, $fromAddress, $fromName, $replyTo);
         $response = Http::withToken($apiKey)
             ->acceptJson()
-            ->post('https://api.resend.com/emails', [
-                'from' => $fromName !== '' ? sprintf('%s <%s>', $fromName, $fromAddress) : $fromAddress,
-                'reply_to' => [$replyTo],
-                'to' => [$clienteEmail],
-                'subject' => sprintf('Proforma #%s', (string) ($proforma->nro_prof ?: $proforma->id)),
-                'text' => "Cordial saludo,\n\nBuen dia,\n\nNos permitimos adjuntar la proforma correspondiente a los servicios contratados.\n\n*** RECUERDE HACER EL PAGO DE LA PROFORMA EN SU TOTALIDAD, NO PARCIALMENTE ***\n\nEnviar soporte de pago al correo cartera.rmsoft1@gmail.com o la linea telefonica de cartera por WhatsApp 3128133868, con sus datos y factura que se abona.\n\nCordialmente,\nRM Soft",
-                'attachments' => [
-                    [
-                        'filename' => $pdf['filename'],
-                        'content' => base64_encode($pdf['contents']),
-                    ],
-                ],
-            ]);
+            ->post('https://api.resend.com/emails', $payload);
 
         if ($response->failed()) {
             $message = (string) data_get($response->json(), 'message', $response->body());
 
-            Log::error('Proforma email debug: Resend respondio con error', [
-                'proforma_id' => $proforma->id ?? null,
-                'status' => $response->status(),
-                'response_body' => $response->body(),
-                'response_json' => $response->json(),
-            ]);
+            if ($logPrefix !== null) {
+                Log::error($logPrefix.' ERROR RESPUESTA RESEND', [
+                    'proforma_id' => $proforma->id ?? null,
+                    'payload' => $payload,
+                    'status' => $response->status(),
+                    'response_body' => $response->body(),
+                    'response_json' => $response->json(),
+                ]);
+            }
 
             throw new RuntimeException('Resend no pudo enviar el correo: '.$message);
         }
 
-        Log::info('Proforma email debug: envio exitoso', [
-            'proforma_id' => $proforma->id ?? null,
-            'status' => $response->status(),
-            'response_json' => $response->json(),
-        ]);
+        if ($logPrefix !== null) {
+            Log::info($logPrefix.' REENVIO OK', [
+                'proforma_id' => $proforma->id ?? null,
+                'response_resend' => $response->json(),
+                'message_id' => data_get($response->json(), 'id'),
+            ]);
+        }
     }
 
-    private function resolveClienteEmail(object $proforma): ?string
+    /**
+     * @return array{original:string,emails:array<int,string>,count:int,invalidos:array<int,string>}
+     */
+    public function resolveDestinatarios(object $proforma, ?string $logPrefix = null): array
+    {
+        $original = $this->resolveClienteEmailRaw($proforma);
+        $emails = [];
+        $invalidos = [];
+        $logPrefix = $this->normalizeLogPrefix($logPrefix);
+
+        foreach (explode(',', $original) as $email) {
+            $email = trim($email);
+
+            if ($email === '') {
+                continue;
+            }
+
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $invalidos[] = $email;
+                continue;
+            }
+
+            $emails[] = $email;
+        }
+
+        $emails = array_values(array_unique($emails));
+
+        if ($logPrefix !== null) {
+            foreach ($invalidos as $emailInvalido) {
+                Log::warning($logPrefix.' EMAIL INVALIDO', [
+                    'proforma_id' => $proforma->id ?? null,
+                    'email' => $emailInvalido,
+                ]);
+            }
+        }
+
+        if ($emails === []) {
+            throw new RuntimeException('El cliente no tiene correos validos registrados en clientes_potenciales.email.');
+        }
+
+        return [
+            'original' => $original,
+            'emails' => $emails,
+            'count' => count($emails),
+            'invalidos' => $invalidos,
+        ];
+    }
+
+    private function resolveClienteEmailRaw(object $proforma): string
     {
         if (!empty($proforma->id_cliente)) {
             $email = DB::table('clientes_potenciales')
@@ -121,7 +149,7 @@ class ProformaEmailService
             }
         }
 
-        return null;
+        return '';
     }
 
     /**
@@ -177,18 +205,38 @@ class ProformaEmailService
         return $missing;
     }
 
-    private function maskSecret(string $value): string
+    /**
+     * @param  array<int,string>  $destinatarios
+     * @param  array{filename:string,contents:string}  $pdf
+     * @return array<string,mixed>
+     */
+    private function buildResendPayload(
+        object $proforma,
+        array $destinatarios,
+        array $pdf,
+        string $fromAddress,
+        string $fromName,
+        string $replyTo
+    ): array {
+        return [
+            'from' => $fromName !== '' ? sprintf('%s <%s>', $fromName, $fromAddress) : $fromAddress,
+            'reply_to' => [$replyTo],
+            'to' => $destinatarios,
+            'subject' => sprintf('Proforma #%s', (string) ($proforma->nro_prof ?: $proforma->id)),
+            'text' => "Cordial saludo,\n\nBuen dia,\n\nNos permitimos adjuntar la proforma correspondiente a los servicios contratados.\n\n*** RECUERDE HACER EL PAGO DE LA PROFORMA EN SU TOTALIDAD, NO PARCIALMENTE ***\n\nEnviar soporte de pago al correo cartera.rmsoft1@gmail.com o la linea telefonica de cartera por WhatsApp 3128133868, con sus datos y factura que se abona.\n\nCordialmente,\nRM Soft",
+            'attachments' => [
+                [
+                    'filename' => $pdf['filename'],
+                    'content' => base64_encode($pdf['contents']),
+                ],
+            ],
+        ];
+    }
+
+    private function normalizeLogPrefix(mixed $logPrefix): ?string
     {
-        $value = trim($value);
+        $logPrefix = trim((string) $logPrefix);
 
-        if ($value === '') {
-            return '(empty)';
-        }
-
-        if (strlen($value) <= 8) {
-            return str_repeat('*', strlen($value));
-        }
-
-        return substr($value, 0, 4).'...'.substr($value, -4);
+        return $logPrefix !== '' ? $logPrefix : null;
     }
 }
