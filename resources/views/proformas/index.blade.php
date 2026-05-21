@@ -414,6 +414,11 @@
                 acciones.push({ type: 'link', label: 'Ver PDF', url: pdfUrl });
             }
 
+            if (estadoActual === ESTADO_PAGADA) {
+                acciones.push({ type: 'estado', estado: ESTADO_FACTURADA, label: 'Marcar facturada' });
+                return acciones;
+            }
+
             if (enviarUrl) {
                 acciones.push({
                     type: 'correo',
@@ -430,10 +435,6 @@
 
             if (estadoActual === ESTADO_GENERADA || estadoActual === ESTADO_ENVIADA) {
                 acciones.push({ type: 'estado', estado: ESTADO_PAGADA, label: 'Marcar pagada' });
-            }
-
-            if (estadoActual === ESTADO_PAGADA) {
-                acciones.push({ type: 'estado', estado: ESTADO_FACTURADA, label: 'Marcar facturada' });
             }
 
             return acciones;

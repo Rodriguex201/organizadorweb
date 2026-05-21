@@ -299,10 +299,15 @@ $filters = [
         }
 
         $proformaPersistidaId = $this->proformaStoreService->findExistingProformaIdFromCobro($cobro);
+        $proformaPersistida = $proformaPersistidaId !== null
+            ? $this->proformasService->findProformaById($proformaPersistidaId)
+            : null;
 
         return view('cobros.show', [
             'cobro' => $cobro,
             'proformaPersistidaId' => $proformaPersistidaId,
+            'proformaPersistida' => $proformaPersistida,
+            'canSendPersistedProforma' => $this->proformasService->canSendProforma($proformaPersistida),
         ]);
     }
 
