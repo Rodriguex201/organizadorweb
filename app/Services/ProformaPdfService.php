@@ -5,6 +5,7 @@ namespace App\Services;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ProformaPdfService
@@ -111,6 +112,45 @@ class ProformaPdfService
         ];
     }
 
+    public function buildBrowserFilename(int $proformaId): string
+    {
+        $cabecera = DB::table('sg_proform')
+            ->select(['id', 'nit', 'mes', 'anio'])
+            ->where('id', $proformaId)
+            ->first();
+
+        if (!$cabecera) {
+            throw new NotFoundHttpException('Proforma no encontrada.');
+        }
+
+        $clientePotencial = DB::table('clientes_potenciales')
+            ->select(['empresa', 'codigo'])
+            ->where('nit', trim((string) ($cabecera->nit ?? '')))
+            ->first();
+
+        $empresa = $this->sanitizeBrowserFilenameSegment((string) ($clientePotencial->empresa ?? ''));
+        $mes = $this->sanitizeBrowserFilenameSegment($this->resolverNombreMes((int) ($cabecera->mes ?? 0)));
+        $anio = $this->sanitizeBrowserFilenameSegment((string) ($cabecera->anio ?? ''));
+
+        if ($empresa === '') {
+            $empresa = 'SIN_EMPRESA';
+        }
+
+        if ($mes === '') {
+            $mes = 'SIN_MES';
+        }
+
+        if ($anio === '') {
+            $anio = 'SIN_ANIO';
+        }
+
+        $filename = 'PROFORMA_'.$empresa.'_'.$mes.'_'.$anio;
+        $filename = Str::limit($filename, 146, '');
+        $filename = rtrim($filename, '._ ');
+
+        return $filename.'.pdf';
+    }
+
     private function construirNombreArchivo(object $cabecera, int $proformaId): string
     {
         $nroProforma = preg_replace('/[^0-9A-Za-z_-]/', '', (string) ($cabecera->nro_prof ?? $proformaId));
@@ -171,5 +211,16 @@ class ProformaPdfService
         $valorNormalizado = trim((string) ($valor ?? ''));
 
         return $valorNormalizado !== '' ? $valorNormalizado : 'N/D';
+    }
+
+    private function sanitizeBrowserFilenameSegment(string $value): string
+    {
+        $value = trim(Str::ascii($value));
+        $value = preg_replace('/[\\\\\/:*?"<>|]+/', ' ', $value) ?? $value;
+        $value = preg_replace('/[^A-Za-z0-9\s_-]+/', ' ', $value) ?? $value;
+        $value = preg_replace('/\s+/', '_', $value) ?? $value;
+        $value = preg_replace('/_+/', '_', $value) ?? $value;
+
+        return trim(mb_strtoupper($value), '_');
     }
 }

@@ -293,6 +293,8 @@
                         const valorTerminal = getValue('vlrterminal');
                         const numeroEquiposExtra = getValue('numextra');
                         const valorEquipoExtra = getValue('vlrextrae');
+                        const valorExtra = getValue('vlrextra');
+                        const valorExtra2 = getValue('vlrextra2');
                         const valorNomina = getValue('vlrnomina');
                         const numeroMoviles = getValue('numeromoviles');
                         const valorMovil = getValue('vlrmovil');
@@ -302,6 +304,8 @@
                         return valorPrincipal
                             + (valorTerminal * equiposAdicionales)
                             + (valorEquipoExtra * numeroEquiposExtra)
+                            + valorExtra
+                            + valorExtra2
                             + valorNomina
                             + (valorMovil * numeroMoviles);
                     };

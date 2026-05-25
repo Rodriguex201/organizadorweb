@@ -278,6 +278,7 @@ class ProformaDashboardExportService
             'cliente_valor_nomina' => 0.0,
             'cliente_valor_factura' => 0.0,
             'cliente_valor_soporte' => 0.0,
+            'cliente_otro_valor_extra_2' => 0.0,
             'proforma_valor_total' => 0.0,
         ];
         $currencyColumnIndexes = [];
@@ -435,6 +436,7 @@ class ProformaDashboardExportService
             'cliente_valor_terminal' => $this->subqueryCurrencyColumn('cliente_valor_terminal', 'cliente_valores', 'vlrterminal', 'Valor terminal'),
             'cliente_numero_equipos_extra' => $this->subqueryNumericColumn('cliente_numero_equipos_extra', 'cliente_valores', 'numextra', 'Número equipos extra'),
             'cliente_valor_equipo_extra' => $this->subqueryCurrencyColumn('cliente_valor_equipo_extra', 'cliente_valores', 'vlrextrae', 'Valor equipo extra'),
+            'cliente_otro_valor_extra_2' => $this->subqueryCurrencyColumn('cliente_otro_valor_extra_2', 'cliente_valores', 'vlrextra2', 'Otro valor extra 2'),
             'cliente_valor_nomina' => $this->subqueryCurrencyColumn('cliente_valor_nomina', 'cliente_valores', 'vlrnomina', 'Valor nómina'),
             'cliente_valor_recepcion' => $this->subqueryCurrencyColumn('cliente_valor_recepcion', 'cliente_valores', 'vlrecepcion', 'Valor recepción'),
             'cliente_valor_factura' => $this->subqueryCurrencyColumn('cliente_valor_factura', 'cliente_valores', 'vlrfactura', 'Valor factura'),

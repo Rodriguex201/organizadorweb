@@ -324,19 +324,22 @@ class ProformasController extends Controller
             $id,
             $request->boolean('regenerar'),
         );
+        $browserFilename = $this->proformaPdfService->buildBrowserFilename($id);
 
         return response()->file($resultado['absolute_path'], [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$resultado['filename'].'"',
+            'Content-Disposition' => 'inline; filename="'.$browserFilename.'"; filename*=UTF-8\'\''.rawurlencode($browserFilename),
         ]);
     }
 
     public function downloadPdf(int $id): BinaryFileResponse
     {
         $resultado = $this->proformaPdfService->generateForProformaId($id);
+        $browserFilename = $this->proformaPdfService->buildBrowserFilename($id);
 
-        return response()->download($resultado['absolute_path'], $resultado['filename'], [
+        return response()->download($resultado['absolute_path'], $browserFilename, [
             'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$browserFilename.'"; filename*=UTF-8\'\''.rawurlencode($browserFilename),
         ]);
     }
 

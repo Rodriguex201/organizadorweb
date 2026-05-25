@@ -193,6 +193,20 @@ class ProformaPreviewService
             );
         }
 
+        $valorExtra2 = $this->toFloat($cobro->valor_extra2 ?? $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? $cobro->cliente_vlrextra2 ?? null);
+        if ($valorExtra2 > 0) {
+            $concepto = $this->resolverConceptoDesdeCatalogo(self::CODIGO_EXTRA_MANUAL, $catalogoConceptos, 'Cargo extra manual 2', [
+                'origen' => 'preview_extra_manual_2',
+                'id_cobro' => (int) ($cobro->id_cobro ?? 0),
+            ]);
+            $lineas[] = new LineaProforma(
+                codigo: $concepto['codigo'],
+                concepto: $concepto['nombre'],
+                cantidad: 1,
+                valorUnitario: $valorExtra2,
+            );
+        }
+
         return $lineas;
     }
 
@@ -227,7 +241,8 @@ class ProformaPreviewService
             + $this->toFloat($cobro->valor_facturas ?? null)
             + $this->toFloat($cobro->valor_documentos ?? null)
             + $this->toFloat($cobro->valor_acuse ?? null)
-            + $this->toFloat($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? null);
+            + $this->toFloat($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? null)
+            + $this->toFloat($cobro->valor_extra2 ?? $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? $cobro->cliente_vlrextra2 ?? null);
     }
 
     private function mapCobroToCalculationData(object $cobro): array
@@ -251,7 +266,7 @@ class ProformaPreviewService
             'nota_ajuste' => (float) ($cobro->numero_nota_ajuste ?? 0),
             'acuse' => (float) ($cobro->numero_acuse ?? 0),
             'otro_valor_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra ?? null, $cobro->cliente_vlrextra ?? null),
-            'valor_terminal_recepcion' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
+            'otro_valor_extra_2' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
             'precio_factura' => (float) ($cobro->cliente_vlrfactura ?? 0),
             'precio_soporte' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_soporte ?? null, $cobro->cliente_vlrsoporte ?? null),
             'precio_acuse' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_acuse ?? null, $cobro->cliente_vlrecepcion ?? null),
@@ -265,7 +280,7 @@ class ProformaPreviewService
             $cobro->precio_acuse ?? null,
             $cobro->total_facturas ?? null,
             $cobro->total_documentos ?? null,
-            $cobro->valor_terminal_recepcion ?? null,
+            $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? null,
             $cobro->otro_valor_extra ?? null,
             $cobro->numextra ?? null,
             $cobro->vlrextrae ?? null,

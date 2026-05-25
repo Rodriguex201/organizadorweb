@@ -192,6 +192,7 @@ class ProformaStoreService
             ->update([
                 'Proforma' => 2,
                 'valor_extra' => 0,
+                'valor_extra2' => 0,
             ]);
     }
 
@@ -551,7 +552,7 @@ class ProformaStoreService
             'nota_ajuste' => (float) ($cobro->numero_nota_ajuste ?? 0),
             'acuse' => (float) ($cobro->numero_acuse ?? 0),
             'otro_valor_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra ?? null, $cobro->cliente_vlrextra ?? null),
-            'valor_terminal_recepcion' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
+            'otro_valor_extra_2' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
             'precio_factura' => (float) ($cobro->cliente_vlrfactura ?? 0),
             'precio_soporte' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_soporte ?? null, $cobro->cliente_vlrsoporte ?? null),
             'precio_acuse' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_acuse ?? null, $cobro->cliente_vlrecepcion ?? null),
@@ -565,7 +566,7 @@ class ProformaStoreService
             $cobro->precio_acuse ?? null,
             $cobro->total_facturas ?? null,
             $cobro->total_documentos ?? null,
-            $cobro->valor_terminal_recepcion ?? null,
+            $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? null,
             $cobro->otro_valor_extra ?? null,
             $cobro->numextra ?? null,
             $cobro->vlrextrae ?? null,

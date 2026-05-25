@@ -21,7 +21,7 @@
             'title' => 'Equipos extra',
             'description' => 'Valores adicionales para extras y equipos complementarios.',
             'accent' => 'from-amber-500 to-orange-500',
-            'fields' => ['numextra', 'vlrextrae', 'vlrextra'],
+            'fields' => ['numextra', 'vlrextrae', 'vlrextra', 'vlrextra2'],
         ],
         'nomina' => [
             'title' => 'Nomina',
@@ -53,7 +53,7 @@
     ];
 
     $categoryConfig['principal']['formula'] = 'Valor principal + (valor terminal x equipos adicionales).';
-    $categoryConfig['equipos_extra']['formula'] = '(Valor equipo extra x numero extra) + otro valor extra.';
+    $categoryConfig['equipos_extra']['formula'] = '(Valor equipo extra x numero extra) + otro valor extra + otro valor extra 2.';
     $categoryConfig['nomina']['formula'] = 'Valor nomina + (valor terminal nomina x equipos nomina adicionales).';
 
     $friendlyLabels = [
@@ -63,6 +63,7 @@
         'numextra' => 'Numero equipos extra',
         'vlrextrae' => 'Valor equipo extra',
         'vlrextra' => 'Otro valor extra',
+        'vlrextra2' => 'Otro valor extra 2',
         'vlrnomina' => 'Valor nomina',
         'nominaterminal' => 'Numero equipos nomina',
         'vlrterminal_nomina' => 'Valor terminal nomina',
@@ -303,8 +304,9 @@
                     const numeroExtra = valueOf('numextra');
                     const valorEquipoExtra = valueOf('vlrextrae');
                     const otroValorExtra = valueOf('vlrextra');
+                    const otroValorExtra2 = valueOf('vlrextra2');
 
-                    return (valorEquipoExtra * numeroExtra) + otroValorExtra;
+                    return (valorEquipoExtra * numeroExtra) + otroValorExtra + otroValorExtra2;
                 },
                 nomina: () => {
                     const valorNomina = valueOf('vlrnomina');

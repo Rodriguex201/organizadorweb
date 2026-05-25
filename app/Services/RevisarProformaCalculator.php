@@ -28,7 +28,7 @@ class RevisarProformaCalculator
             + $data['valor_documentos']
             + $data['valor_acuse']
             + $data['otro_valor_extra']
-            + $data['valor_terminal_recepcion'];
+            + $data['otro_valor_extra_2'];
 
         return $data;
     }
@@ -52,7 +52,7 @@ class RevisarProformaCalculator
             'nota_ajuste',
             'acuse',
             'otro_valor_extra',
-            'valor_terminal_recepcion',
+            'otro_valor_extra_2',
             'precio_factura',
             'precio_soporte',
             'precio_acuse',

@@ -25,10 +25,11 @@ class TarifaConfigService
         ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'vlrfactura', 'descripcion' => 'Valor factura por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 90],
         ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'vlrsoporte', 'descripcion' => 'Valor soporte por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 100],
         ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'vlrextra', 'descripcion' => 'Otro valor extra por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 110],
-        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'numeromoviles', 'descripcion' => 'Numero de moviles por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 120],
-        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'vlrmovil', 'descripcion' => 'Valor movil por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 130],
-        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'numextra', 'descripcion' => 'Numero de equipos extra por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 140],
-        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'vlrextrae', 'descripcion' => 'Valor de equipo extra por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 150],
+        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'vlrextra2', 'descripcion' => 'Otro valor extra 2 por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 120],
+        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'numeromoviles', 'descripcion' => 'Numero de moviles por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 130],
+        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'vlrmovil', 'descripcion' => 'Valor movil por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 140],
+        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'numextra', 'descripcion' => 'Numero de equipos extra por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 150],
+        ['categoria' => self::GLOBAL_CATEGORY, 'clave' => 'vlrextrae', 'descripcion' => 'Valor de equipo extra por defecto.', 'valor' => 0, 'activo' => true, 'orden' => 160],
     ];
 
     public function syncDefaults(): void

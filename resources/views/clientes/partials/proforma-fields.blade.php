@@ -31,6 +31,7 @@
         ['name' => 'vlrfactura', 'label' => 'Valor factura', 'column' => $mapping['vlrfactura'] ?? null, 'step' => '0.01'],
         ['name' => 'vlrsoporte', 'label' => 'Valor soporte', 'column' => $mapping['vlrsoporte'] ?? null, 'step' => '0.01'],
         ['name' => 'vlrextra', 'label' => 'Otro valor (Extra)', 'column' => $mapping['vlrextra'] ?? null, 'step' => '0.01'],
+        ['name' => 'vlrextra2', 'label' => 'Otro valor 2 (Extra)', 'column' => $mapping['vlrextra2'] ?? null, 'step' => '0.01'],
         ['name' => 'numeromoviles', 'label' => 'Número móviles', 'column' => $mapping['numeromoviles'] ?? null, 'step' => '1'],
         ['name' => 'vlrmovil', 'label' => 'Valor móvil', 'column' => $mapping['vlrmovil'] ?? null, 'step' => '0.01'],
         ['name' => 'numextra', 'label' => 'Número equipos extra', 'column' => $mapping['numextra'] ?? null, 'step' => '1'],

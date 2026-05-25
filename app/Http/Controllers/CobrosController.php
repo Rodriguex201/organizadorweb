@@ -358,7 +358,7 @@ $validated = $request->validate([
     'nota_ajuste' => ['nullable', 'numeric', 'min:0'],
     'acuse' => ['nullable', 'numeric', 'min:0'],
     'otro_valor_extra' => ['nullable', 'numeric', 'min:0'],
-    'valor_terminal_recepcion' => ['nullable', 'numeric', 'min:0'],
+    'otro_valor_extra_2' => ['nullable', 'numeric', 'min:0'],
     'precio_factura' => ['nullable', 'numeric', 'min:0'],
     'precio_soporte' => ['nullable', 'numeric', 'min:0'],
     'precio_acuse' => ['nullable', 'numeric', 'min:0'],
@@ -430,7 +430,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 'nota_ajuste' => 'numero_nota_ajuste',
                 'acuse' => 'numero_acuse',
                 'otro_valor_extra' => 'valor_extra',
-                'valor_terminal_recepcion' => 'valor_extra2',
+                'otro_valor_extra_2' => 'valor_extra2',
                 'valor_facturas' => 'valor_facturas',
                 'valor_documentos' => 'valor_documentos',
                 'valor_acuse' => 'valor_acuse',
@@ -453,7 +453,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 'numero_moviles' => 'numeromoviles',
                 'valor_movil' => 'vlrmovil',
                 'otro_valor_extra' => 'vlrextra',
-                'valor_terminal_recepcion' => 'vlrextra2',
+                'otro_valor_extra_2' => 'vlrextra2',
                 'precio_factura' => 'vlrfactura',
                 'precio_soporte' => 'vlrsoporte',
                 'precio_acuse' => 'vlrecepcion',
@@ -610,7 +610,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             $cobro->precio_acuse ?? null,
             $cobro->total_facturas ?? null,
             $cobro->total_documentos ?? null,
-            $cobro->valor_terminal_recepcion ?? null,
+            $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? null,
             $cobro->otro_valor_extra ?? null,
             $cobro->numextra ?? null,
             $cobro->vlrextrae ?? null,
@@ -690,10 +690,11 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             $id,
             $request->boolean('regenerar'),
         );
+        $browserFilename = $this->proformaPdfService->buildBrowserFilename($id);
 
         return response()->file($resultado['absolute_path'], [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$resultado['filename'].'"',
+            'Content-Disposition' => 'inline; filename="'.$browserFilename.'"; filename*=UTF-8\'\''.rawurlencode($browserFilename),
         ]);
     }
 

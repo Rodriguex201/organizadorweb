@@ -85,7 +85,7 @@
                     'nota_ajuste' => 'Nota ajuste',
                     'acuse' => 'Acuse',
                     'otro_valor_extra' => 'Otro valor extra',
-                    'valor_terminal_recepcion' => 'Valor terminal recepcion',
+                    'otro_valor_extra_2' => 'Otro valor extra 2',
                     'precio_factura' => 'Precio factura (configuracion cliente)',
                     'precio_soporte' => 'Precio soporte',
                     'precio_acuse' => 'Precio acuse',
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
         'nota_ajuste',
         'acuse',
         'otro_valor_extra',
-        'valor_terminal_recepcion',
+        'otro_valor_extra_2',
         'precio_factura',
         'precio_soporte',
         'precio_acuse',
@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const notaAjuste = parseNumber('nota_ajuste');
         const acuse = parseNumber('acuse');
         const otroValorExtra = parseNumber('otro_valor_extra');
-        const valorTerminalRecepcion = parseNumber('valor_terminal_recepcion');
+        const otroValorExtra2 = parseNumber('otro_valor_extra_2');
         const precioFactura = parseNumber('precio_factura');
         const precioSoporte = parseNumber('precio_soporte');
         const precioAcuse = parseNumber('precio_acuse');
@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function () {
             + valorDocumentos
             + valorAcuse
             + otroValorExtra
-            + valorTerminalRecepcion;
+            + otroValorExtra2;
 
         setCalculated('total_facturas', totalFacturas);
         setCalculated('valor_facturas', valorFacturas);

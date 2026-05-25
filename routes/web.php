@@ -6,6 +6,7 @@ use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
+use App\Http\Controllers\ImportacionesController;
 use App\Http\Controllers\ConfiguracionTarifaController;
 use App\Http\Controllers\ProformaCarteraController;
 use App\Http\Controllers\ProformasController;
@@ -92,5 +93,10 @@ Route::middleware('auth.custom')->group(function (): void {
 
         Route::get('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'index'])->name('configuracion.tarifas.index');
         Route::put('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'update'])->name('configuracion.tarifas.update');
+
+        Route::get('/configuracion/importaciones', [ImportacionesController::class, 'index'])->name('configuracion.importaciones.index');
+        Route::post('/configuracion/importaciones/preview', [ImportacionesController::class, 'preview'])->name('configuracion.importaciones.preview');
+        Route::post('/configuracion/importaciones/extract', [ImportacionesController::class, 'extract'])->name('configuracion.importaciones.extract');
+        Route::post('/configuracion/importaciones/clear', [ImportacionesController::class, 'clear'])->name('configuracion.importaciones.clear');
     });
 });
