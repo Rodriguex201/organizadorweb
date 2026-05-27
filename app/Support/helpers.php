@@ -44,3 +44,11 @@ if (!function_exists('esUsuario')) {
         return tieneRol('user');
     }
 }
+
+if (!function_exists('obtenerBaseEmpresa')) {
+    // PREPARADO PARA MODULO DE ACTIVACIONES.
+    function obtenerBaseEmpresa(string $codigo): string
+    {
+        return strtolower(trim($codigo));
+    }
+}

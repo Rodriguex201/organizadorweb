@@ -63,6 +63,46 @@ return [
             ]) : [],
         ],
 
+        // PREPARADO PARA MODULO DE ACTIVACIONES.
+        'mysql_213' => [
+            'driver' => 'mysql',
+            'host' => env('DB_HOST_213', '127.0.0.1'),
+            'port' => env('DB_PORT_213', '3306'),
+            'database' => env('DB_DATABASE_213', ''),
+            'username' => env('DB_USERNAME_213', 'root'),
+            'password' => env('DB_PASSWORD_213', ''),
+            'unix_socket' => env('DB_SOCKET_213', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA_213', env('MYSQL_ATTR_SSL_CA')),
+            ]) : [],
+        ],
+
+        // PREPARADO PARA MODULO DE ACTIVACIONES.
+        'mysql_167' => [
+            'driver' => 'mysql',
+            'host' => env('DB_HOST_167', '127.0.0.1'),
+            'port' => env('DB_PORT_167', '3306'),
+            'database' => env('DB_DATABASE_167', ''),
+            'username' => env('DB_USERNAME_167', 'root'),
+            'password' => env('DB_PASSWORD_167', ''),
+            'unix_socket' => env('DB_SOCKET_167', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA_167', env('MYSQL_ATTR_SSL_CA')),
+            ]) : [],
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),
