@@ -4,6 +4,7 @@ use App\Http\Controllers\CiudadesController;
 use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
+use App\Http\Controllers\DebugEmpresaServidorController;
 use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
 use App\Http\Controllers\ImportacionesController;
@@ -22,6 +23,9 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::redirect('/', '/clientes')->name('home');
 
     Route::get('/ciudades/buscar', [CiudadesController::class, 'buscar'])->name('ciudades.buscar');
+    Route::get('/debug/empresa-servidor/{codigo}', [DebugEmpresaServidorController::class, 'show'])
+        ->middleware('role.admin')
+        ->name('debug.empresa-servidor.show');
 
     Route::get('/clientes', [ClientesController::class, 'index'])->name('clientes.index');
     Route::get('/clientes/create', [ClientesController::class, 'create'])->name('clientes.create');
@@ -61,6 +65,8 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::middleware('role.admin')->group(function (): void {
         Route::get('/proformas/envio-masivo/{grupo}/confirmar', [ProformasController::class, 'confirmarEnvioMasivo'])->name('proformas.envio-masivo.confirmar');
         Route::post('/proformas/envio-masivo/{grupo}', [ProformasController::class, 'enviarMasivo'])->name('proformas.envio-masivo.enviar');
+        Route::get('/proformas/{id}/activacion', [ProformasController::class, 'obtenerActivacion'])->name('proformas.activacion.show');
+        Route::post('/proformas/{id}/activacion', [ProformasController::class, 'guardarActivacion'])->name('proformas.activacion.update');
     });
 
     Route::get('/proformas/{id}', [ProformasController::class, 'show'])->name('proformas.show');

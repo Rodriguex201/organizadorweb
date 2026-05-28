@@ -35,6 +35,10 @@
         </div>
     @endif
 
+    @php
+        $canManageActivation = esAdmin();
+    @endphp
+
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
         <form id="proformas-filter-form" method="GET" action="{{ route('proformas.index') }}" class="grid items-end gap-4 md:grid-cols-5 lg:grid-cols-7">
             <div class="min-w-[120px] max-w-[180px] w-full">
@@ -138,6 +142,9 @@
                         class="hover:bg-slate-50"
                         data-proforma-row
                         data-proforma-id="{{ $proforma->id }}"
+                        data-codigo="{{ $proforma->codigo ?? '' }}"
+                        data-nit="{{ $proforma->nit ?? '' }}"
+                        data-cliente-id="{{ $proforma->id_cliente ?? '' }}"
                         data-estado="{{ $estadoCodigo }}"
                         data-enviado="{{ (int) ($proforma->enviado ?? 0) }}"
                         data-update-url="{{ route('proformas.estado.update', $proforma->id) }}"
@@ -145,6 +152,8 @@
                         data-enviar-url="{{ $canSendProforma ? route('proformas.enviar', $proforma->id) : '' }}"
                         data-marcar-enviada-url="{{ route('proformas.marcar-enviada', $proforma->id) }}"
                         data-marcar-no-enviada-url="{{ route('proformas.marcar-no-enviada', $proforma->id) }}"
+                        data-activacion-show-url="{{ $canManageActivation ? route('proformas.activacion.show', $proforma->id) : '' }}"
+                        data-activacion-update-url="{{ $canManageActivation ? route('proformas.activacion.update', $proforma->id) : '' }}"
                     >
                         <td class="px-3 py-2 whitespace-nowrap text-slate-700">{{ $fechaArriendo }}</td>
                         <td class="px-3 py-2">
@@ -235,6 +244,70 @@
     <ul id="proforma-context-menu-items" class="space-y-1"></ul>
 </div>
 
+<div id="activacion-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
+    <div class="w-full max-w-3xl rounded-lg bg-white shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <div>
+                <h2 class="text-base font-semibold text-slate-900">Activación</h2>
+                <p class="text-sm text-slate-500">Consulta y actualización de fechas de licencia de la empresa.</p>
+            </div>
+            <button id="activacion-cerrar-superior" type="button" class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Cerrar modal">X</button>
+        </div>
+
+        <form id="activacion-form" class="space-y-5 px-5 py-5">
+            <div id="activacion-feedback" class="hidden rounded border px-4 py-3 text-sm"></div>
+
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p class="text-xs uppercase tracking-wide text-slate-500">Código empresa</p>
+                    <p id="activacion-codigo" class="mt-1 text-sm font-semibold text-slate-900">-</p>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-slate-500">Servidor detectado</p>
+                            <p id="activacion-servidor" class="mt-1 text-sm font-semibold text-slate-900">-</p>
+                        </div>
+                        <span id="activacion-servidor-badge" class="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">-</span>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p class="text-xs uppercase tracking-wide text-slate-500">Base detectada</p>
+                    <p id="activacion-base" class="mt-1 text-sm font-semibold text-slate-900">-</p>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p class="text-xs uppercase tracking-wide text-slate-500">Sincronización actual</p>
+                    <p id="activacion-sincronizacion" class="mt-1 text-sm font-semibold text-slate-900">-</p>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+                    <p class="text-xs uppercase tracking-wide text-slate-500">Fecha inicio actual</p>
+                    <p id="activacion-fecha-inicio-actual" class="mt-1 text-sm font-semibold text-slate-900">-</p>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+                    <p class="text-xs uppercase tracking-wide text-slate-500">Fecha fin actual</p>
+                    <p id="activacion-fecha-fin-actual" class="mt-1 text-sm font-semibold text-slate-900">-</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <label for="activacion-fecha-inicio" class="mb-1 block text-sm font-medium text-slate-700">Fecha inicio</label>
+                    <input id="activacion-fecha-inicio" name="fecha_inicio" type="date" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label for="activacion-fecha-fin" class="mb-1 block text-sm font-medium text-slate-700">Fecha fin</label>
+                    <input id="activacion-fecha-fin" name="fecha_fin" type="date" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
+                <button id="activacion-cerrar" type="button" class="rounded bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Cancelar</button>
+                <button id="activacion-guardar" type="submit" class="rounded bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700">Guardar activación</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="envio-masivo-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
     <div class="w-full max-w-5xl rounded-lg bg-white shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -323,6 +396,21 @@
         const tableRows = Array.from(document.querySelectorAll('[data-proforma-row]'));
         const menu = document.getElementById('proforma-context-menu');
         const menuItems = document.getElementById('proforma-context-menu-items');
+        const activationModal = document.getElementById('activacion-modal');
+        const activationForm = document.getElementById('activacion-form');
+        const activationCloseTopButton = document.getElementById('activacion-cerrar-superior');
+        const activationCloseButton = document.getElementById('activacion-cerrar');
+        const activationSubmitButton = document.getElementById('activacion-guardar');
+        const activationFeedback = document.getElementById('activacion-feedback');
+        const activationCodigo = document.getElementById('activacion-codigo');
+        const activationServidor = document.getElementById('activacion-servidor');
+        const activationServidorBadge = document.getElementById('activacion-servidor-badge');
+        const activationBase = document.getElementById('activacion-base');
+        const activationSync = document.getElementById('activacion-sincronizacion');
+        const activationFechaInicioActual = document.getElementById('activacion-fecha-inicio-actual');
+        const activationFechaFinActual = document.getElementById('activacion-fecha-fin-actual');
+        const activationFechaInicioInput = document.getElementById('activacion-fecha-inicio');
+        const activationFechaFinInput = document.getElementById('activacion-fecha-fin');
 
         if (!menu || !menuItems || tableRows.length === 0) {
             return;
@@ -375,6 +463,7 @@
                 Number(row.dataset.enviado || 0),
                 row.dataset.pdfUrl || '',
                 row.dataset.enviarUrl || '',
+                row.dataset.activacionShowUrl || '',
             );
 
             if (acciones.length === 0) {
@@ -393,7 +482,7 @@
                 }
 
                 return `<li>
-                    <button type="button" class="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" ${accion.estado !== undefined ? `data-target-state="${accion.estado}"` : ''} ${accion.envioAction ? `data-envio-action="${accion.envioAction}"` : ''} ${accion.correoAction ? `data-correo-action="${accion.correoAction}"` : ''}>
+                    <button type="button" class="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100" ${accion.estado !== undefined ? `data-target-state="${accion.estado}"` : ''} ${accion.envioAction ? `data-envio-action="${accion.envioAction}"` : ''} ${accion.correoAction ? `data-correo-action="${accion.correoAction}"` : ''} ${accion.activacionAction ? `data-activacion-action="${accion.activacionAction}"` : ''}>
                         ${accion.label}
                     </button>
                 </li>`;
@@ -408,10 +497,14 @@
         };
 
 
-        const getActionsForState = (estadoActual, enviadoActual, pdfUrl, enviarUrl) => {
+        const getActionsForState = (estadoActual, enviadoActual, pdfUrl, enviarUrl, activationShowUrl) => {
             const acciones = [];
             if (pdfUrl) {
                 acciones.push({ type: 'link', label: 'Ver PDF', url: pdfUrl });
+            }
+
+            if (activationShowUrl) {
+                acciones.push({ type: 'activacion', activacionAction: 'abrir', label: 'Activación' });
             }
 
             if (estadoActual === ESTADO_PAGADA) {
@@ -439,6 +532,242 @@
 
             return acciones;
 
+        };
+
+        const setActivationFeedback = (message, type = 'warning') => {
+            if (!activationFeedback) {
+                return;
+            }
+
+            activationFeedback.textContent = message;
+            activationFeedback.classList.remove(
+                'hidden',
+                'border-emerald-200', 'bg-emerald-50', 'text-emerald-700',
+                'border-rose-200', 'bg-rose-50', 'text-rose-700',
+                'border-amber-200', 'bg-amber-50', 'text-amber-700',
+            );
+            activationFeedback.classList.add(...(type === 'success'
+                ? ['border-emerald-200', 'bg-emerald-50', 'text-emerald-700']
+                : (type === 'error'
+                    ? ['border-rose-200', 'bg-rose-50', 'text-rose-700']
+                    : ['border-amber-200', 'bg-amber-50', 'text-amber-700'])));
+        };
+
+        const clearActivationFeedback = () => {
+            if (!activationFeedback) {
+                return;
+            }
+
+            activationFeedback.classList.add('hidden');
+            activationFeedback.textContent = '';
+            activationFeedback.classList.remove(
+                'border-emerald-200', 'bg-emerald-50', 'text-emerald-700',
+                'border-rose-200', 'bg-rose-50', 'text-rose-700',
+                'border-amber-200', 'bg-amber-50', 'text-amber-700',
+            );
+        };
+
+        const activationHasDifferences = (data) => data?.hay_diferencias_final === true;
+
+        const fillActivationModal = (data) => {
+            if (!activationCodigo || !activationServidor || !activationServidorBadge || !activationBase || !activationSync || !activationFechaInicioActual || !activationFechaFinActual || !activationFechaInicioInput || !activationFechaFinInput) {
+                return;
+            }
+
+            activationCodigo.textContent = data.codigo || 'N/D';
+            activationServidor.textContent = data.servidor || 'Servidor detectado';
+            activationServidorBadge.textContent = data.servidor || data.servidor_badge || 'N/D';
+            activationBase.textContent = data.base || 'N/D';
+            activationSync.textContent = activationHasDifferences(data)
+                ? 'Hay diferencias entre la base individual y la tabla global'
+                : 'Base individual y tabla global sincronizadas';
+            activationFechaInicioActual.textContent = data.fecha_inicio_actual || 'Sin fecha';
+            activationFechaFinActual.textContent = data.fecha_fin_actual || 'Sin fecha';
+            activationFechaInicioInput.value = data.fecha_inicio_actual || '';
+            activationFechaFinInput.value = data.fecha_fin_actual || '';
+        };
+
+        const fillActivationModalHeaderFromRow = (row) => {
+            if (!activationCodigo) {
+                return;
+            }
+
+            const codigo = row.dataset.codigo || '';
+            const nit = row.dataset.nit || '';
+            const proforma = row.dataset.proformaId || '';
+
+            activationCodigo.textContent = codigo || 'N/D';
+
+            if (activationServidor) {
+                activationServidor.textContent = 'Consultando...';
+            }
+
+            if (activationServidorBadge) {
+                activationServidorBadge.textContent = '...';
+            }
+
+            if (activationBase) {
+                activationBase.textContent = 'Consultando...';
+            }
+
+            if (activationSync) {
+                activationSync.textContent = nit
+                    ? `Proforma ${proforma || 'N/D'} · NIT ${nit}`
+                    : `Proforma ${proforma || 'N/D'}`;
+            }
+
+            if (activationFechaInicioActual) {
+                activationFechaInicioActual.textContent = 'Consultando...';
+            }
+
+            if (activationFechaFinActual) {
+                activationFechaFinActual.textContent = 'Consultando...';
+            }
+        };
+
+        const openActivationModal = () => {
+            if (!activationModal) {
+                return;
+            }
+
+            activationModal.classList.remove('hidden');
+            activationModal.classList.add('flex');
+        };
+
+        const closeActivationModal = () => {
+            if (!activationModal || !activationForm || !activationSubmitButton) {
+                return;
+            }
+
+            activationModal.classList.add('hidden');
+            activationModal.classList.remove('flex');
+            activationForm.dataset.updateUrl = '';
+            clearActivationFeedback();
+            activationSubmitButton.disabled = false;
+            activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
+        };
+
+        const loadActivationData = async (row) => {
+            const showUrl = row.dataset.activacionShowUrl;
+            const updateUrl = row.dataset.activacionUpdateUrl;
+            const codigo = row.dataset.codigo || '';
+            const proforma = row.dataset.proformaId || '';
+            const nit = row.dataset.nit || '';
+            const clienteId = row.dataset.clienteId || '';
+
+            if (!showUrl || !updateUrl || !activationForm || !activationSubmitButton) {
+                return;
+            }
+
+            console.info('[ACTIVACION MODAL]', {
+                codigo,
+                proforma,
+                nit,
+                id_cliente: clienteId,
+            });
+
+            openActivationModal();
+            clearActivationFeedback();
+            activationForm.dataset.updateUrl = updateUrl;
+            activationForm.dataset.codigo = codigo;
+            activationForm.dataset.proformaId = proforma;
+            activationForm.dataset.nit = nit;
+            activationForm.dataset.clienteId = clienteId;
+            fillActivationModalHeaderFromRow(row);
+            activationSubmitButton.disabled = true;
+            activationSubmitButton.classList.add('opacity-60', 'cursor-not-allowed');
+            setActivationFeedback('Consultando valores actuales de activación...', 'warning');
+
+            try {
+                const searchParams = new URLSearchParams({
+                    codigo,
+                    id_proforma: proforma,
+                    nit,
+                    id_cliente: clienteId,
+                });
+
+                const response = await fetch(`${showUrl}?${searchParams.toString()}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const payload = await response.json();
+
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || 'No fue posible consultar la activación.');
+                }
+
+                fillActivationModal(payload.data || {});
+
+                if (activationHasDifferences(payload.data)) {
+                    setActivationFeedback('Se detectó una diferencia entre la base individual y la tabla global. Al guardar quedarán sincronizadas.', 'warning');
+                } else {
+                    clearActivationFeedback();
+                }
+            } catch (error) {
+                console.error(error);
+                setActivationFeedback(error.message || 'No fue posible consultar la activación.', 'error');
+            } finally {
+                activationSubmitButton.disabled = false;
+                activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
+        };
+
+        const saveActivationData = async () => {
+            if (!activationForm || !activationSubmitButton || !activationFechaInicioInput || !activationFechaFinInput) {
+                return;
+            }
+
+            const updateUrl = activationForm.dataset.updateUrl || '';
+            const codigo = activationForm.dataset.codigo || '';
+            const idProforma = activationForm.dataset.proformaId || '';
+            const nit = activationForm.dataset.nit || '';
+            const clienteId = activationForm.dataset.clienteId || '';
+            if (!updateUrl) {
+                setActivationFeedback('No se encontró la ruta para guardar la activación.', 'error');
+                return;
+            }
+
+            activationSubmitButton.disabled = true;
+            activationSubmitButton.classList.add('opacity-60', 'cursor-not-allowed');
+            clearActivationFeedback();
+
+            try {
+                const response = await fetch(updateUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        codigo,
+                        id_proforma: idProforma,
+                        nit,
+                        id_cliente: clienteId,
+                        fecha_inicio: activationFechaInicioInput.value,
+                        fecha_fin: activationFechaFinInput.value,
+                    }),
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || 'No fue posible guardar la activación.');
+                }
+
+                fillActivationModal(payload.data || {});
+                setActivationFeedback(payload.message || 'Activación actualizada correctamente.', 'success');
+                showFeedback(payload.message || 'Activación actualizada correctamente.', 'success');
+            } catch (error) {
+                console.error(error);
+                setActivationFeedback(error.message || 'No fue posible guardar la activación.', 'error');
+            } finally {
+                activationSubmitButton.disabled = false;
+                activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
         };
 
         const updateRowEnvio = (row, enviado, fechaEnvio = null) => {
@@ -650,7 +979,7 @@
         });
 
         menu.addEventListener('click', async (event) => {
-            const targetButton = event.target.closest('button[data-target-state], button[data-envio-action], button[data-correo-action]');
+            const targetButton = event.target.closest('button[data-target-state], button[data-envio-action], button[data-correo-action], button[data-activacion-action]');
             if (!targetButton || !currentRow) {
                 return;
             }
@@ -668,6 +997,11 @@
                 return;
             }
 
+            if (targetButton.dataset.activacionAction) {
+                await loadActivationData(row);
+                return;
+            }
+
             const estadoDestino = Number(targetButton.dataset.targetState);
             await runAction(row, estadoDestino);
 
@@ -681,6 +1015,21 @@
 
         window.addEventListener('scroll', hideMenu, true);
         window.addEventListener('resize', hideMenu);
+
+        [activationCloseTopButton, activationCloseButton].forEach((button) => {
+            button?.addEventListener('click', closeActivationModal);
+        });
+
+        activationModal?.addEventListener('click', (event) => {
+            if (event.target === activationModal) {
+                closeActivationModal();
+            }
+        });
+
+        activationForm?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await saveActivationData();
+        });
     })();
 </script>
 <script>

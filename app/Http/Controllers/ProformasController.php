@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\EmpresaActivacionService;
 use App\Services\ProformaEmailService;
 use App\Services\ProformaDashboardExportService;
 use App\Services\ProformaPdfService;
@@ -10,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
@@ -25,6 +27,7 @@ class ProformasController extends Controller
         private readonly ProformaPdfService $proformaPdfService,
         private readonly ProformaEmailService $proformaEmailService,
         private readonly ProformaDashboardExportService $proformaDashboardExportService,
+        private readonly EmpresaActivacionService $empresaActivacionService,
     ) {
     }
 
@@ -530,6 +533,80 @@ class ProformasController extends Controller
             : redirect()->back()->with('status', $resultado['message'])->with('status_type', 'error');
     }
 
+    public function obtenerActivacion(Request $request, int $id): JsonResponse
+    {
+        $proforma = $this->proformasService->findProformaById($id);
+
+        if (!$proforma) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'La proforma seleccionada no existe.',
+            ], 404);
+        }
+
+        Log::info('[ACTIVACION REQUEST]', $request->all());
+
+        try {
+            $codigoEmpresa = $this->resolverCodigoEmpresaActivacion($request, $id, $proforma);
+            $detalle = $this->empresaActivacionService->obtenerDetalle($codigoEmpresa);
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Datos de activación cargados correctamente.',
+                'data' => $detalle,
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'ok' => false,
+                'message' => $exception->getMessage() ?: 'No fue posible consultar la activación de la empresa.',
+            ], 422);
+        }
+    }
+
+    public function guardarActivacion(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'fecha_inicio' => ['required', 'date_format:Y-m-d', 'before_or_equal:fecha_fin'],
+            'fecha_fin' => ['required', 'date_format:Y-m-d', 'after_or_equal:fecha_inicio'],
+        ]);
+
+        $proforma = $this->proformasService->findProformaById($id);
+
+        if (!$proforma) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'La proforma seleccionada no existe.',
+            ], 404);
+        }
+
+        Log::info('[ACTIVACION REQUEST]', $request->all());
+
+        try {
+            $codigoEmpresa = $this->resolverCodigoEmpresaActivacion($request, $id, $proforma);
+            $detalle = $this->empresaActivacionService->guardarActivacion(
+                $codigoEmpresa,
+                $validated['fecha_inicio'],
+                $validated['fecha_fin'],
+                $this->resolverUsuarioLog(),
+            );
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'La activación de la empresa se actualizó correctamente.',
+                'data' => $detalle,
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'ok' => false,
+                'message' => $exception->getMessage() ?: 'No fue posible guardar la activación de la empresa.',
+            ], 422);
+        }
+    }
+
     private function storeFilterSession(array $filters): void
     {
         session([
@@ -605,6 +682,38 @@ class ProformasController extends Controller
             'user_id' => Auth::id(),
             'ip' => request()->ip(),
         ]);
+    }
+
+    private function resolverUsuarioLog(): string
+    {
+        $usuario = trim((string) session('usuario', 'usuario'));
+        $idUsuario = session()->has('idusuario') ? (string) session('idusuario') : null;
+
+        return $idUsuario ? "{$usuario} ({$idUsuario})" : $usuario;
+    }
+
+    private function resolverCodigoEmpresaActivacion(Request $request, int $id, ?object $proforma): string
+    {
+        $codigoRequest = trim((string) $request->input('codigo', ''));
+        if ($codigoRequest !== '') {
+            return $codigoRequest;
+        }
+
+        $codigoProforma = trim((string) ($proforma->codigo ?? ''));
+        if ($codigoProforma !== '') {
+            return $codigoProforma;
+        }
+
+        $idProforma = (int) ($request->input('id_proforma', $id) ?: $id);
+        $codigoDirecto = trim((string) (DB::table('sg_proform')
+            ->where('id', $idProforma)
+            ->value('codigo') ?? ''));
+
+        if ($codigoDirecto !== '') {
+            return $codigoDirecto;
+        }
+
+        throw new \RuntimeException('No fue posible determinar el código de la empresa desde la proforma seleccionada.');
     }
 
     private function normalizarEntero(null|string|int $value): ?int
