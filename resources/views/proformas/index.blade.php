@@ -568,6 +568,7 @@
         };
 
         const activationHasDifferences = (data) => data?.hay_diferencias_final === true;
+        const activationHasMissingIndividualRecord = (data) => data?.registro_individual_existe === false;
 
         const fillActivationModal = (data) => {
             if (!activationCodigo || !activationServidor || !activationServidorBadge || !activationBase || !activationSync || !activationFechaInicioActual || !activationFechaFinActual || !activationFechaInicioInput || !activationFechaFinInput) {
@@ -578,9 +579,11 @@
             activationServidor.textContent = data.servidor || 'Servidor detectado';
             activationServidorBadge.textContent = data.servidor || data.servidor_badge || 'N/D';
             activationBase.textContent = data.base || 'N/D';
-            activationSync.textContent = activationHasDifferences(data)
-                ? 'Hay diferencias entre la base individual y la tabla global'
-                : 'Base individual y tabla global sincronizadas';
+            activationSync.textContent = activationHasMissingIndividualRecord(data)
+                ? 'No existe registro individual de activación. Se utilizarán las fechas globales como referencia. Al guardar se creará el registro individual.'
+                : (activationHasDifferences(data)
+                    ? 'Hay diferencias entre la base individual y la tabla global'
+                    : 'Base individual y tabla global sincronizadas');
             activationFechaInicioActual.textContent = data.fecha_inicio_actual || 'Sin fecha';
             activationFechaFinActual.textContent = data.fecha_fin_actual || 'Sin fecha';
             activationFechaInicioInput.value = data.fecha_inicio_actual || '';

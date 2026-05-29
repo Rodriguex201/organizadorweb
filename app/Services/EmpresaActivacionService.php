@@ -11,6 +11,8 @@ use Throwable;
 class EmpresaActivacionService
 {
     private const TABLA_INDIVIDUAL = 'xxxxsegx';
+    private const SEG_CLAVE_TEMPORAL = 'dropzxz';
+    private const ADVERTENCIA_REGISTRO_INDIVIDUAL = 'No existe registro individual de activación. Se utilizarán las fechas globales como referencia. Al guardar se creará el registro individual.';
 
     public function obtenerDetalle(string $codigo): array
     {
@@ -64,11 +66,21 @@ class EmpresaActivacionService
 
             DB::connection($contexto['conexion'])->transaction(function () use ($contexto, $fechaInicio, $fechaFin): void {
                 $tablaIndividual = $this->tablaCalificada($contexto['base'], self::TABLA_INDIVIDUAL);
+                $registroIndividualExiste = DB::connection($contexto['conexion'])->selectOne(
+                    "SELECT seg_clave FROM {$tablaIndividual} LIMIT 1"
+                ) !== null;
 
-                DB::connection($contexto['conexion'])->update(
-                    "UPDATE {$tablaIndividual} SET seg_fecha = ?, seg_maxima = ? LIMIT 1",
-                    [$fechaInicio, $fechaFin],
-                );
+                if ($registroIndividualExiste) {
+                    DB::connection($contexto['conexion'])->update(
+                        "UPDATE {$tablaIndividual} SET seg_fecha = ?, seg_maxima = ? LIMIT 1",
+                        [$fechaInicio, $fechaFin],
+                    );
+                } else {
+                    DB::connection($contexto['conexion'])->insert(
+                        "INSERT INTO {$tablaIndividual} (seg_clave, seg_fecha, seg_maxima) VALUES (?, ?, ?)",
+                        [self::SEG_CLAVE_TEMPORAL, $fechaInicio, $fechaFin],
+                    );
+                }
 
                 $filasGlobales = DB::connection($contexto['conexion'])->update(
                     'UPDATE `empresas`.`empresas` SET emprfinit = ?, emprfpago = ? WHERE emprobra = ?',
@@ -88,6 +100,10 @@ class EmpresaActivacionService
                 'fecha_inicio_global_actual' => $fechaInicio,
                 'fecha_fin_global_actual' => $fechaFin,
                 'sincronizado' => true,
+                'registro_individual_existe' => true,
+                'registro_individual_creado' => !$actuales['registro_individual_existe'],
+                'warning_message' => null,
+                'hay_diferencias_final' => false,
             ]);
         } catch (Throwable $exception) {
             $payloadLog['errores'] = $exception->getMessage();
@@ -133,10 +149,6 @@ class EmpresaActivacionService
             "SELECT seg_fecha, seg_maxima FROM {$tablaIndividual} LIMIT 1"
         );
 
-        if ($individual === null) {
-            throw new RuntimeException('No se encontraron fechas de activación en la base individual de la empresa.');
-        }
-
         $global = DB::connection($conexion)->selectOne(
             'SELECT emprfpago, emprfinit FROM `empresas`.`empresas` WHERE emprobra = ? LIMIT 1',
             [$codigo],
@@ -152,15 +164,19 @@ class EmpresaActivacionService
             'base' => $base,
         ]);
 
+        $registroIndividualExiste = $individual !== null;
         $fechaInicioIndividual = $this->normalizarFecha($individual->seg_fecha ?? null);
         $fechaFinIndividual = $this->normalizarFecha($individual->seg_maxima ?? null);
         $fechaInicioGlobal = $this->normalizarFecha($global->emprfinit ?? null);
         $fechaFinGlobal = $this->normalizarFecha($global->emprfpago ?? null);
+        $fechaInicioReferencia = $registroIndividualExiste ? $fechaInicioIndividual : $fechaFinGlobal;
+        $fechaFinReferencia = $registroIndividualExiste ? $fechaFinIndividual : $fechaInicioGlobal;
         $comparacion1 = $fechaInicioIndividual === $fechaFinGlobal;
         $comparacion2 = $fechaFinIndividual === $fechaInicioGlobal;
-        $hayDiferencias = !$comparacion1 || !$comparacion2;
+        $hayDiferencias = $registroIndividualExiste && (!$comparacion1 || !$comparacion2);
 
         Log::info('[ACTIVACION FECHAS DEBUG]', [
+            'registro_individual_existe' => $registroIndividualExiste,
             'seg_fecha_raw' => $individual->seg_fecha ?? null,
             'seg_maxima_raw' => $individual->seg_maxima ?? null,
             'emprfpago_raw' => $global->emprfpago ?? null,
@@ -181,12 +197,18 @@ class EmpresaActivacionService
         ]);
 
         return [
-            'fecha_inicio_actual' => $fechaInicioIndividual ?? $fechaInicioGlobal,
-            'fecha_fin_actual' => $fechaFinIndividual ?? $fechaFinGlobal,
+            'fecha_inicio_actual' => $fechaInicioReferencia,
+            'fecha_fin_actual' => $fechaFinReferencia,
             'fecha_inicio_global_actual' => $fechaInicioGlobal,
             'fecha_fin_global_actual' => $fechaFinGlobal,
-            'sincronizado' => $fechaInicioIndividual === $fechaInicioGlobal
-                && $fechaFinIndividual === $fechaFinGlobal,
+            'sincronizado' => $registroIndividualExiste
+                ? ($fechaInicioIndividual === $fechaInicioGlobal
+                    && $fechaFinIndividual === $fechaFinGlobal)
+                : false,
+            'registro_individual_existe' => $registroIndividualExiste,
+            'registro_individual_creado' => false,
+            'warning_message' => $registroIndividualExiste ? null : self::ADVERTENCIA_REGISTRO_INDIVIDUAL,
+            'hay_diferencias_final' => $hayDiferencias,
         ];
     }
 
