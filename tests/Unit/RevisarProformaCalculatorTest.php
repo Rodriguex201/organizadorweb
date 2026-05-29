@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\ClienteValorTotalCalculator;
 use App\Services\RevisarProformaCalculator;
 use PHPUnit\Framework\TestCase;
 
@@ -9,7 +10,7 @@ class RevisarProformaCalculatorTest extends TestCase
 {
     public function test_calcula_totales_de_revision_manual(): void
     {
-        $service = new RevisarProformaCalculator();
+        $service = new RevisarProformaCalculator(new ClienteValorTotalCalculator());
 
         $resultado = $service->calculate([
             'numero_equipos' => 3,
@@ -39,13 +40,13 @@ class RevisarProformaCalculatorTest extends TestCase
         $this->assertSame(5.0, $resultado['total_documentos']);
         $this->assertSame(12.0, $resultado['valor_documentos']);
         $this->assertSame(12.0, $resultado['valor_acuse']);
-        $this->assertSame(270.0, $resultado['total_mensualidad']);
-        $this->assertSame(319.0, $resultado['valor_total_proforma']);
+        $this->assertSame(297.0, $resultado['total_mensualidad']);
+        $this->assertSame(331.0, $resultado['valor_total_proforma']);
     }
 
     public function test_no_agrega_extra_si_numero_equipos_extra_es_cero(): void
     {
-        $service = new RevisarProformaCalculator();
+        $service = new RevisarProformaCalculator(new ClienteValorTotalCalculator());
 
         $resultado = $service->calculate([
             'numero_equipos' => 1,

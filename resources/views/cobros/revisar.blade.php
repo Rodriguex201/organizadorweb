@@ -260,6 +260,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const numeroEquiposExtra = parseNumber('numero_equipos_extra');
         const valorEquipoExtra = parseNumber('valor_equipo_extra');
         const valorNomina = parseNumber('valor_nomina');
+        const numeroMoviles = parseNumber('numero_moviles');
+        const valorMovil = parseNumber('valor_movil');
         const facturas = parseNumber('facturas');
         const notaDebito = parseNumber('nota_debito');
         const notaCredito = parseNumber('nota_credito');
@@ -278,16 +280,18 @@ document.addEventListener('DOMContentLoaded', function () {
         const totalDocumentos = soporte + notaAjuste;
         const valorDocumentos = soporte * precioSoporte;
         const valorAcuse = acuse * precioAcuse;
+        const subtotalMoviles = numeroMoviles * valorMovil;
         const totalMensualidad = valorPrincipal
             + (valorTerminal * equiposAdicionales)
             + (valorEquipoExtra * numeroEquiposExtra)
-            + valorNomina;
+            + otroValorExtra
+            + otroValorExtra2
+            + valorNomina
+            + subtotalMoviles;
         const valorTotalProforma = totalMensualidad
             + valorFacturas
             + valorDocumentos
-            + valorAcuse
-            + otroValorExtra
-            + otroValorExtra2;
+            + valorAcuse;
 
         setCalculated('total_facturas', totalFacturas);
         setCalculated('valor_facturas', valorFacturas);

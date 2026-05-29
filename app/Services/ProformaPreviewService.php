@@ -83,7 +83,12 @@ class ProformaPreviewService
         $valorNomina = $this->toFloat($revision['valor_nomina'] ?? ($cobro->vlrnomina ?? null));
         $numeroEquiposExtra = $this->toFloat($revision['numero_equipos_extra'] ?? null);
         $valorEquipoExtra = $this->toFloat($revision['valor_equipo_extra'] ?? null);
-        $valorMensualidadBase = max($valorMensualidad - $valorNomina - ($numeroEquiposExtra * $valorEquipoExtra), 0);
+        $valorExtra = $this->toFloat($revision['otro_valor_extra'] ?? null);
+        $valorExtra2 = $this->toFloat($revision['otro_valor_extra_2'] ?? null);
+        $valorMensualidadBase = max(
+            $valorMensualidad - $valorNomina - ($numeroEquiposExtra * $valorEquipoExtra) - $valorExtra - $valorExtra2,
+            0,
+        );
 
         if ($valorMensualidadBase > 0) {
             $concepto = $this->resolverConceptoDesdeCatalogo(self::CODIGO_MENSUALIDAD, $catalogoConceptos, 'Mensualidad SaaS', [
@@ -179,7 +184,6 @@ class ProformaPreviewService
             );
         }
 
-        $valorExtra = $this->toFloat($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? null);
         if ($valorExtra > 0) {
             $concepto = $this->resolverConceptoDesdeCatalogo(self::CODIGO_EXTRA_MANUAL, $catalogoConceptos, 'Cargo extra manual', [
                 'origen' => 'preview_extra_manual',
@@ -193,7 +197,6 @@ class ProformaPreviewService
             );
         }
 
-        $valorExtra2 = $this->toFloat($cobro->valor_extra2 ?? $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? $cobro->cliente_vlrextra2 ?? null);
         if ($valorExtra2 > 0) {
             $concepto = $this->resolverConceptoDesdeCatalogo(self::CODIGO_EXTRA_MANUAL, $catalogoConceptos, 'Cargo extra manual 2', [
                 'origen' => 'preview_extra_manual_2',
@@ -240,9 +243,7 @@ class ProformaPreviewService
         return $this->toFloat($revision['total_mensualidad'] ?? null)
             + $this->toFloat($cobro->valor_facturas ?? null)
             + $this->toFloat($cobro->valor_documentos ?? null)
-            + $this->toFloat($cobro->valor_acuse ?? null)
-            + $this->toFloat($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? null)
-            + $this->toFloat($cobro->valor_extra2 ?? $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? $cobro->cliente_vlrextra2 ?? null);
+            + $this->toFloat($cobro->valor_acuse ?? null);
     }
 
     private function mapCobroToCalculationData(object $cobro): array
@@ -265,8 +266,8 @@ class ProformaPreviewService
             'soporte' => (float) ($cobro->numero_documento_soporte ?? 0),
             'nota_ajuste' => (float) ($cobro->numero_nota_ajuste ?? 0),
             'acuse' => (float) ($cobro->numero_acuse ?? 0),
-            'otro_valor_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra ?? null, $cobro->cliente_vlrextra ?? null),
-            'otro_valor_extra_2' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
+            'otro_valor_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra ?? $cobro->valor_extra ?? null, $cobro->cliente_vlrextra ?? null),
+            'otro_valor_extra_2' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->otro_valor_extra_2 ?? $cobro->valor_extra2 ?? $cobro->valor_terminal_recepcion ?? null, $cobro->cliente_vlrextra2 ?? null),
             'precio_factura' => (float) ($cobro->cliente_vlrfactura ?? 0),
             'precio_soporte' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_soporte ?? null, $cobro->cliente_vlrsoporte ?? null),
             'precio_acuse' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->precio_acuse ?? null, $cobro->cliente_vlrecepcion ?? null),
@@ -280,8 +281,8 @@ class ProformaPreviewService
             $cobro->precio_acuse ?? null,
             $cobro->total_facturas ?? null,
             $cobro->total_documentos ?? null,
-            $cobro->otro_valor_extra_2 ?? $cobro->valor_terminal_recepcion ?? null,
-            $cobro->otro_valor_extra ?? null,
+            $cobro->otro_valor_extra_2 ?? $cobro->valor_extra2 ?? $cobro->valor_terminal_recepcion ?? null,
+            $cobro->otro_valor_extra ?? $cobro->valor_extra ?? null,
             $cobro->numextra ?? null,
             $cobro->vlrextrae ?? null,
         ];

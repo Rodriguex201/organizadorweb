@@ -4,6 +4,11 @@ namespace App\Services;
 
 class RevisarProformaCalculator
 {
+    public function __construct(
+        private readonly ClienteValorTotalCalculator $clienteValorTotalCalculator,
+    ) {
+    }
+
     public function calculate(array $input): array
     {
         $data = $this->normalize($input);
@@ -16,19 +21,18 @@ class RevisarProformaCalculator
 
         $data['valor_acuse'] = $data['acuse'] * $data['precio_acuse'];
 
-        $equiposAdicionales = max($data['numero_equipos'] - 1, 0);
+        $mensualidad = $this->clienteValorTotalCalculator->breakdown($data);
 
-        $data['total_mensualidad'] = $data['valor_principal']
-            + ($data['valor_terminal'] * $equiposAdicionales)
-            + ($data['valor_equipo_extra'] * $data['numero_equipos_extra'])
-            + $data['valor_nomina'];
+        $data['equipos_adicionales'] = $mensualidad['equipos_adicionales'];
+        $data['subtotal_terminales'] = $mensualidad['subtotal_terminales'];
+        $data['subtotal_equipos_extra'] = $mensualidad['subtotal_equipos_extra'];
+        $data['subtotal_moviles'] = $mensualidad['subtotal_moviles'];
+        $data['total_mensualidad'] = $mensualidad['total_mensualidad'];
 
         $data['valor_total_proforma'] = $data['total_mensualidad']
             + $data['valor_facturas']
             + $data['valor_documentos']
-            + $data['valor_acuse']
-            + $data['otro_valor_extra']
-            + $data['otro_valor_extra_2'];
+            + $data['valor_acuse'];
 
         return $data;
     }

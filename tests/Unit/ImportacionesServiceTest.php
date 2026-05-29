@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Services\CobrosService;
+use App\Services\ClienteValorTotalCalculator;
 use App\Services\ImportacionesService;
 use App\Services\RevisarProformaCalculator;
 use Illuminate\Http\UploadedFile;
@@ -81,7 +82,7 @@ class ImportacionesServiceTest extends TestCase
     {
         return new ImportacionesService(
             Mockery::mock(CobrosService::class),
-            new RevisarProformaCalculator(),
+            new RevisarProformaCalculator(new ClienteValorTotalCalculator()),
         );
     }
 }

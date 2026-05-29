@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\ClienteValorTotalCalculator;
 use App\Services\ConceptosCatalogService;
 use App\Services\ProformaPreviewService;
 use App\Services\RevisarProformaCalculator;
@@ -24,7 +25,7 @@ class ProformaPreviewServiceTest extends TestCase
             ]);
 
         $service = new ProformaPreviewService(
-            new RevisarProformaCalculator(),
+            new RevisarProformaCalculator(new ClienteValorTotalCalculator()),
             $catalogo,
         );
 
@@ -97,7 +98,7 @@ class ProformaPreviewServiceTest extends TestCase
             ]);
 
         $service = new ProformaPreviewService(
-            new RevisarProformaCalculator(),
+            new RevisarProformaCalculator(new ClienteValorTotalCalculator()),
             $catalogo,
         );
 
