@@ -13,7 +13,7 @@ class RoleAdminMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (session('rol_nombre') !== 'admin') {
+        if ((int) session('rol_id', session('roles_idroles')) !== 1) {
             abort(403, 'Esta sección es solo para administradores.');
         }
 

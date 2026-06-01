@@ -36,7 +36,7 @@
     @endif
 
     @php
-        $canManageActivation = esAdmin();
+        $canManageActivation = (int) session('rol_id', session('roles_idroles')) === 1;
     @endphp
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
@@ -244,6 +244,7 @@
     <ul id="proforma-context-menu-items" class="space-y-1"></ul>
 </div>
 
+@if($canManageActivation)
 <div id="activacion-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
     <div class="w-full max-w-3xl rounded-lg bg-white shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -307,6 +308,7 @@
         </form>
     </div>
 </div>
+@endif
 
 <div id="envio-masivo-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
     <div class="w-full max-w-5xl rounded-lg bg-white shadow-xl">

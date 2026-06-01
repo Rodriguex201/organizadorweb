@@ -7,6 +7,7 @@ use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\DebugEmpresaServidorController;
 use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
+use App\Http\Controllers\ConfiguracionUsuarioController;
 use App\Http\Controllers\ImportacionesController;
 use App\Http\Controllers\ConfiguracionTarifaController;
 use App\Http\Controllers\ProformaCarteraController;
@@ -106,5 +107,11 @@ Route::middleware('auth.custom')->group(function (): void {
         Route::post('/configuracion/importaciones/preview', [ImportacionesController::class, 'preview'])->name('configuracion.importaciones.preview');
         Route::post('/configuracion/importaciones/extract', [ImportacionesController::class, 'extract'])->name('configuracion.importaciones.extract');
         Route::post('/configuracion/importaciones/clear', [ImportacionesController::class, 'clear'])->name('configuracion.importaciones.clear');
+
+        Route::get('/configuracion/usuarios', [ConfiguracionUsuarioController::class, 'index'])->name('configuracion.usuarios.index');
+        Route::get('/configuracion/usuarios/crear', [ConfiguracionUsuarioController::class, 'create'])->name('configuracion.usuarios.create');
+        Route::post('/configuracion/usuarios', [ConfiguracionUsuarioController::class, 'store'])->name('configuracion.usuarios.store');
+        Route::get('/configuracion/usuarios/{usuario}/editar', [ConfiguracionUsuarioController::class, 'edit'])->name('configuracion.usuarios.edit');
+        Route::put('/configuracion/usuarios/{usuario}', [ConfiguracionUsuarioController::class, 'update'])->name('configuracion.usuarios.update');
     });
 });

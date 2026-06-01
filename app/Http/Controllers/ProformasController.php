@@ -535,6 +535,10 @@ class ProformasController extends Controller
 
     public function obtenerActivacion(Request $request, int $id): JsonResponse
     {
+        if ($response = $this->denyIfNotActivationAdmin()) {
+            return $response;
+        }
+
         $proforma = $this->proformasService->findProformaById($id);
 
         if (!$proforma) {
@@ -567,6 +571,10 @@ class ProformasController extends Controller
 
     public function guardarActivacion(Request $request, int $id): JsonResponse
     {
+        if ($response = $this->denyIfNotActivationAdmin()) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'fecha_inicio' => ['required', 'date_format:Y-m-d', 'before_or_equal:fecha_fin'],
             'fecha_fin' => ['required', 'date_format:Y-m-d', 'after_or_equal:fecha_inicio'],
@@ -714,6 +722,20 @@ class ProformasController extends Controller
         }
 
         throw new \RuntimeException('No fue posible determinar el código de la empresa desde la proforma seleccionada.');
+    }
+
+    private function denyIfNotActivationAdmin(): ?JsonResponse
+    {
+        $roleId = session('rol_id', session('roles_idroles'));
+
+        if ((int) $roleId === 1) {
+            return null;
+        }
+
+        return response()->json([
+            'ok' => false,
+            'message' => 'No autorizado para gestionar activaciones.',
+        ], 403);
     }
 
     private function normalizarEntero(null|string|int $value): ?int

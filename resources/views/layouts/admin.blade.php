@@ -34,7 +34,6 @@
                         <span class="sidebar-label">Dashboard</span>
                     </a>
 
-                    @if(strtolower(trim(session('rol_nombre'))) === 'admin')
                         <div class="rounded px-3 py-2 {{ request()->routeIs('configuracion.*') ? 'bg-slate-800' : '' }}">
                             <div class="flex items-center gap-3 text-sm font-medium">
                                 <span class="text-base">⚙️</span>
@@ -46,9 +45,11 @@
                                 <a href="{{ route('configuracion.conceptos.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.conceptos.*') ? 'bg-slate-700' : '' }}">Conceptos</a>
                                 <a href="{{ route('configuracion.tarifas.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.tarifas.*') ? 'bg-slate-700' : '' }}">Tarifas</a>
                                 <a href="{{ route('configuracion.importaciones.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.importaciones.*') ? 'bg-slate-700' : '' }}">Importaciones</a>
+                                @if((int) session('rol_id', session('roles_idroles')) === 1)
+                                    <a href="{{ route('configuracion.usuarios.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.usuarios.*') ? 'bg-slate-700' : '' }}">Usuarios</a>
+                                @endif
                             </div>
                         </div>
-                    @endif
                 </nav>
             </div>
 

@@ -63,6 +63,7 @@ public function login(Request $request): RedirectResponse
         'idusuario' => $usuario->idusuario,
         'usuario' => $usuario->nombre,
         'rol_id' => $usuario->roles_idroles,
+        'roles_idroles' => $usuario->roles_idroles,
         'rol_nombre' => $rolNombre,
         'rol' => $rolNombre,
     ]);
