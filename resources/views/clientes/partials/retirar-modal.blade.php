@@ -2,7 +2,8 @@
     $motivosRetiro = $motivosRetiro ?? ['options' => []];
     $modalClienteId = old('cliente_retiro_id');
     $modalAction = $modalClienteId ? route('clientes.retirar', $modalClienteId) : route('clientes.retirar', 0);
-    $shouldOpenModal = $errors->has('motivo_retiro');
+    $defaultRetiroDate = now()->toDateString();
+    $shouldOpenModal = $errors->has('motivo_retiro') || $errors->has('fecha_retiro');
 @endphp
 
 <div
@@ -47,6 +48,21 @@
                         <p class="mt-1 text-xs text-amber-600">No hay motivos disponibles en la tabla <code>conceptos_r</code>.</p>
                     @endif
                 </div>
+
+                <div>
+                    <label for="fecha_retiro" class="mb-1 block text-sm font-medium text-slate-700">Fecha de retiro</label>
+                    <input
+                        type="date"
+                        id="fecha_retiro"
+                        name="fecha_retiro"
+                        value="{{ old('fecha_retiro', $defaultRetiroDate) }}"
+                        required
+                        class="w-full rounded border border-slate-300 px-3 py-2 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-200"
+                    >
+                    @error('fecha_retiro')
+                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+                    @enderror
+                </div>
             </div>
 
             <div class="mt-6 flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
@@ -73,14 +89,20 @@
                 const form = document.getElementById('retirar-modal-form');
                 const hiddenId = document.getElementById('cliente_retiro_id');
                 const subtitle = document.getElementById('retirar-modal-subtitle');
+                const retiroDateInput = document.getElementById('fecha_retiro');
+                const defaultRetiroDate = @js($defaultRetiroDate);
+                const hasOldRetiroDate = @js(old('fecha_retiro') !== null);
 
-                if (!modal || !form || !hiddenId || !subtitle) {
+                if (!modal || !form || !hiddenId || !subtitle || !retiroDateInput) {
                     return;
                 }
 
                 const openModal = ({ action, clienteId, clienteNombre }) => {
                     form.action = action;
                     hiddenId.value = clienteId ?? '';
+                    if (!hasOldRetiroDate) {
+                        retiroDateInput.value = defaultRetiroDate;
+                    }
                     subtitle.textContent = clienteNombre
                         ? `Selecciona el motivo y confirma el retiro de ${clienteNombre}.`
                         : 'Selecciona el motivo y confirma el retiro.';

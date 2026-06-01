@@ -290,15 +290,18 @@ class ClientesController extends Controller
 
         $validated = $request->validate([
             'motivo_retiro' => array_merge(['required'], $this->catalogRule($motivosRetiro)),
+            'fecha_retiro' => ['required', 'date'],
             'cliente_retiro_id' => ['nullable', 'integer'],
         ], [
             'motivo_retiro.required' => 'Selecciona un motivo de retiro.',
             'motivo_retiro.in' => 'Selecciona un motivo de retiro válido.',
+            'fecha_retiro.required' => 'Selecciona una fecha de retiro.',
+            'fecha_retiro.date' => 'Selecciona una fecha de retiro válida.',
         ]);
         $payload = [];
 
         if ($mapping['fecha_retiro']) {
-            $payload[$mapping['fecha_retiro']] = Carbon::now()->toDateString();
+            $payload[$mapping['fecha_retiro']] = $validated['fecha_retiro'];
         }
 
         if ($mapping['retiro_flag']) {
