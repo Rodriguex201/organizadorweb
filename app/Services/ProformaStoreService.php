@@ -60,9 +60,9 @@ class ProformaStoreService
         return $proforma ? (int) $proforma->id : null;
     }
 
-    public function storeFromCobro(object $cobro, array $extraConcepto = []): array
+    public function storeFromCobro(object $cobro, array $extraConcepto = [], bool $preserveExistingEstado = false): array
     {
-        return DB::transaction(function () use ($cobro, $extraConcepto) {
+        return DB::transaction(function () use ($cobro, $extraConcepto, $preserveExistingEstado) {
             $preview = $this->proformaPreviewService->buildFromCobro($cobro);
             $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
 
@@ -103,7 +103,10 @@ class ProformaStoreService
                 $this->actualizarTotalCabecera((int) $proformaExistente->id, $totalPreview);
                 $this->actualizarValoresExternosDesdeRevision($cobro, $revision);
                 $this->reemplazarDetalleProforma((int) $proformaExistente->id, $lineas);
-                $this->marcarCobroComoProformaGenerada((int) $cobro->id_cobro);
+                $estadoAConservar = $preserveExistingEstado
+                    ? (int) ($proformaExistente->estado ?? 2)
+                    : null;
+                $this->marcarCobroComoProformaGenerada((int) $cobro->id_cobro, $estadoAConservar);
 
                 return [
                     'created' => false,
@@ -176,7 +179,7 @@ class ProformaStoreService
 
     public function regenerateFromCobro(object $cobro, array $extraConcepto = []): array
     {
-        $resultado = $this->storeFromCobro($cobro, $extraConcepto);
+        $resultado = $this->storeFromCobro($cobro, $extraConcepto, true);
 
         return $resultado + [
             'regenerated' => true,
@@ -197,12 +200,12 @@ class ProformaStoreService
         return ((int) $max) + 1;
     }
 
-    private function marcarCobroComoProformaGenerada(int $idCobro): void
+    private function marcarCobroComoProformaGenerada(int $idCobro, ?int $estadoProforma = null): void
     {
         DB::table('valores_externos')
             ->where('id_cobro', $idCobro)
             ->update([
-                'Proforma' => 2,
+                'Proforma' => $estadoProforma ?? 2,
                 'valor_extra' => 0,
                 'valor_extra2' => 0,
             ]);

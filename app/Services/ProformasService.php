@@ -227,7 +227,7 @@ class ProformasService
     public function marcarEnvioManual(int $proformaId): array
     {
         $proforma = DB::table('sg_proform')
-            ->select(['id', 'enviado', 'fecha_envio'])
+            ->select(['id', 'enviado', 'fecha_envio', 'estado'])
             ->where('id', $proformaId)
             ->first();
 
@@ -235,12 +235,7 @@ class ProformasService
             return ['ok' => false, 'message' => 'La proforma no existe.'];
         }
 
-        DB::table('sg_proform')
-            ->where('id', $proformaId)
-            ->update([
-                'enviado' => 1,
-                'fecha_envio' => now(),
-            ]);
+        $this->registrarEnvioExitoso($proformaId);
 
         $actualizada = DB::table('sg_proform')
             ->select(['id', 'enviado', 'fecha_envio', 'estado'])

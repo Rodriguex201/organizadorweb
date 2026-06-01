@@ -522,9 +522,7 @@
                 });
             }
 
-            if (enviadoActual === 1) {
-                acciones.push({ type: 'envio', envioAction: 'desmarcar', label: 'Marcar NO enviada' });
-            } else {
+            if (estadoActual === ESTADO_GENERADA && enviadoActual !== 1) {
                 acciones.push({ type: 'envio', envioAction: 'marcar', label: '&#128241; Marcar enviada' });
             }
 
@@ -925,6 +923,9 @@
                     Number(payload.proforma?.enviado ?? (isMarking ? 1 : 0)),
                     payload.proforma?.fecha_envio ?? null,
                 );
+                if (payload.proforma?.estado !== undefined) {
+                    updateRowState(row, Number(payload.proforma.estado));
+                }
 
                 showFeedback(payload.message || 'Envío actualizado correctamente.', 'success');
             } catch (error) {
