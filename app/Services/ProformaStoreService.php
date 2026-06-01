@@ -42,14 +42,20 @@ class ProformaStoreService
         $mes = $this->normalizarMesParaProforma($mesTexto);
         $anio = (int) ($cobro->año ?? 0);
         $emisora = $this->resolverEmpresaEmisoraDesdeRegimen($cobro);
+        $idCobro = (int) ($cobro->id_cobro ?? 0);
 
-        $proforma = DB::table('sg_proform')
+        $query = DB::table('sg_proform')
             ->select('id')
             ->where('nit', $nit)
             ->where('mes', $mes)
             ->where('anio', $anio)
-            ->where('emisora', $emisora)
-            ->first();
+            ->where('emisora', $emisora);
+
+        if (Schema::hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
+            $query->where('id_cobro', $idCobro);
+        }
+
+        $proforma = $query->first();
 
         return $proforma ? (int) $proforma->id : null;
     }
@@ -65,13 +71,19 @@ class ProformaStoreService
             $mes = $this->normalizarMesParaProforma($mesTexto);
             $anio = (int) ($cobro->año ?? 0);
             $emisora = (string) ($preview['cabecera']['empresa_emisora'] ?? 'SAS');
+            $idCobro = (int) ($cobro->id_cobro ?? 0);
 
-            $proformaExistente = DB::table('sg_proform')
+            $proformaExistenteQuery = DB::table('sg_proform')
                 ->where('nit', $nit)
                 ->where('mes', $mes)
                 ->where('anio', $anio)
-                ->where('emisora', $emisora)
-                ->first();
+                ->where('emisora', $emisora);
+
+            if (Schema::hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
+                $proformaExistenteQuery->where('id_cobro', $idCobro);
+            }
+
+            $proformaExistente = $proformaExistenteQuery->first();
 
             if ($proformaExistente !== null) {
                 $extraConcepto = $this->completarConceptoExtraDesdeProformaExistente(

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CobrosService;
+use App\Services\CobroExtraordinarioService;
 use App\Services\ProformaEmailService;
 use App\Services\RevisarProformaCalculator;
 use App\Services\ProformaPdfService;
@@ -24,6 +25,7 @@ class CobrosController extends Controller
 {
     public function __construct(
         private readonly CobrosService $cobrosService,
+        private readonly CobroExtraordinarioService $cobroExtraordinarioService,
         private readonly ProformaPreviewService $proformaPreviewService,
         private readonly ProformaStoreService $proformaStoreService,
         private readonly ProformaPdfService $proformaPdfService,
@@ -79,6 +81,83 @@ $filters = [
         'meses' => $this->cobrosService::MESES,
     ]);
 }
+
+    public function createExtraordinary(Request $request): View
+    {
+        $validated = $request->validate([
+            'cliente_id' => ['nullable', 'integer'],
+            'mes' => ['nullable', 'string', 'max:20'],
+            'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+        ]);
+
+        $clientes = $this->cobroExtraordinarioService->getClientes();
+        $selectedClienteId = (int) old('cliente_id', $validated['cliente_id'] ?? 0);
+        $selectedCliente = $selectedClienteId > 0
+            ? $this->cobroExtraordinarioService->findCliente($selectedClienteId)
+            : null;
+
+        $mes = old('mes', isset($validated['mes']) ? mb_strtolower(trim((string) $validated['mes'])) : CobrosService::MESES[(int) now()->month]);
+        $anio = (int) old('anio', $validated['anio'] ?? (int) now()->year);
+
+        $input = [
+            'numero_facturas' => (float) old('numero_facturas', 0),
+            'numero_documento_soporte' => (float) old('numero_documento_soporte', 0),
+            'numero_acuse' => (float) old('numero_acuse', 0),
+            'valor_extra' => (float) old('valor_extra', $selectedCliente->vlrextra ?? 0),
+            'valor_extra2' => (float) old('valor_extra2', $selectedCliente->vlrextra2 ?? 0),
+        ];
+
+        $preview = $selectedCliente
+            ? $this->cobroExtraordinarioService->buildPreview($selectedCliente, $input)
+            : null;
+
+        return view('cobros.create-extraordinary', [
+            'clientes' => $clientes,
+            'selectedCliente' => $selectedCliente,
+            'selectedClienteId' => $selectedClienteId > 0 ? $selectedClienteId : null,
+            'meses' => CobrosService::MESES,
+            'selectedMes' => $mes,
+            'selectedAnio' => $anio,
+            'preview' => $preview,
+        ]);
+    }
+
+    public function storeExtraordinary(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'cliente_id' => ['required', 'integer'],
+            'mes' => ['required', 'string', 'in:'.implode(',', CobrosService::MESES)],
+            'anio' => ['required', 'integer', 'min:1900', 'max:9999'],
+            'numero_facturas' => ['nullable', 'numeric', 'min:0'],
+            'numero_documento_soporte' => ['nullable', 'numeric', 'min:0'],
+            'numero_acuse' => ['nullable', 'numeric', 'min:0'],
+            'valor_extra' => ['nullable', 'numeric', 'min:0'],
+            'valor_extra2' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $cliente = $this->cobroExtraordinarioService->findCliente((int) $validated['cliente_id']);
+
+        if (!$cliente) {
+            return back()
+                ->withInput()
+                ->with('status', 'El cliente seleccionado no existe.')
+                ->with('status_type', 'warning');
+        }
+
+        $resultado = $this->cobroExtraordinarioService->createCobro($cliente, $validated);
+
+        if (($resultado['duplicated'] ?? false) === true) {
+            return back()
+                ->withInput()
+                ->with('status', $resultado['message'].' Cobro existente #'.($resultado['id_cobro'] ?? 'N/D').'.')
+                ->with('status_type', 'warning');
+        }
+
+        return redirect()
+            ->route('cobros.show', ['id' => $resultado['id_cobro']])
+            ->with('status', $resultado['message'])
+            ->with('status_type', 'success');
+    }
 
     public function generarProformasMasivo(Request $request, int $grupo): RedirectResponse
     {

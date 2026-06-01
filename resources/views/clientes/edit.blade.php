@@ -17,6 +17,10 @@
             <p class="text-sm text-slate-600">Ajuste de datos en <code>clientes_potenciales</code>.</p>
         </div>
 
+        <a href="{{ route('cobros.extraordinario.create', ['cliente_id' => $clienteId]) }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
+            Generar cobro extraordinario
+        </a>
+
         @if($cliente->esta_retirado)
             <button
                 type="button"

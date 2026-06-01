@@ -39,6 +39,8 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::patch('/clientes/{id}/reactivar', [ClientesController::class, 'reactivar'])->name('clientes.reactivar');
 
     Route::get('/cobros', [CobrosController::class, 'index'])->name('cobros.index');
+    Route::get('/cobros/extraordinario/crear', [CobrosController::class, 'createExtraordinary'])->name('cobros.extraordinario.create');
+    Route::post('/cobros/extraordinario', [CobrosController::class, 'storeExtraordinary'])->name('cobros.extraordinario.store');
     Route::post('/cobros/proformas-masivo/{grupo}', [CobrosController::class, 'generarProformasMasivo'])->name('cobros.proformas-masivo');
     Route::post('/cobros/proformas-masivo/{grupo}/enviar', [CobrosController::class, 'enviarProformasMasivo'])->name('cobros.proformas-masivo.enviar');
 

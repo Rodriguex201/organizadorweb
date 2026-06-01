@@ -16,6 +16,9 @@
             <p class="text-sm text-slate-600">Listado inicial desde <code>valores_externos</code> con datos de clientes potenciales.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            <a href="{{ route('cobros.extraordinario.create') }}" class="inline-flex items-center rounded bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-200">
+                Generar cobro extraordinario
+            </a>
             <form method="POST" action="{{ route('cobros.proformas-masivo', ['grupo' => 7]) }}">
                 @csrf
                 <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">
