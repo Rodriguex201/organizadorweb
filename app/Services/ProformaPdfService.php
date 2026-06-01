@@ -115,7 +115,7 @@ class ProformaPdfService
     public function buildBrowserFilename(int $proformaId): string
     {
         $cabecera = DB::table('sg_proform')
-            ->select(['id', 'nit', 'mes', 'anio'])
+            ->select(['id', 'emp', 'nit', 'mes', 'anio'])
             ->where('id', $proformaId)
             ->first();
 
@@ -124,14 +124,32 @@ class ProformaPdfService
         }
 
         $clientePotencial = DB::table('clientes_potenciales')
-            ->select(['empresa', 'codigo'])
+            ->select(['nombre', 'empresa', 'codigo'])
             ->where('nit', trim((string) ($cabecera->nit ?? '')))
             ->first();
 
-        $empresa = $this->sanitizeBrowserFilenameSegment((string) ($clientePotencial->empresa ?? ''));
+        $sgProformEmp = trim((string) ($cabecera->emp ?? ''));
+        $clienteNombre = trim((string) ($clientePotencial->nombre ?? ''));
+        $clienteEmpresa = trim((string) ($clientePotencial->empresa ?? ''));
+
+        $empresaCandidates = [
+            'clientes_potenciales.empresa' => $clienteEmpresa,
+            'sg_proform.emp' => $sgProformEmp,
+            'clientes_potenciales.nombre' => $clienteNombre,
+        ];
+
+        $empresa = '';
+
+        foreach ($empresaCandidates as $value) {
+            $empresa = $this->sanitizeBrowserFilenameSegment($value);
+
+            if ($empresa !== '') {
+                break;
+            }
+        }
+
         $mes = $this->sanitizeBrowserFilenameSegment($this->resolverNombreMes((int) ($cabecera->mes ?? 0)));
         $anio = $this->sanitizeBrowserFilenameSegment((string) ($cabecera->anio ?? ''));
-
         if ($empresa === '') {
             $empresa = 'SIN_EMPRESA';
         }
@@ -144,9 +162,9 @@ class ProformaPdfService
             $anio = 'SIN_ANIO';
         }
 
-        $filename = 'PROFORMA_'.$empresa.'_'.$mes.'_'.$anio;
-        $filename = Str::limit($filename, 146, '');
-        $filename = rtrim($filename, '._ ');
+        $filenameBase = 'PROFORMA_'.$empresa.'_'.$mes.'_'.$anio;
+        $filenameLimited = Str::limit($filenameBase, 146, '');
+        $filename = rtrim($filenameLimited, '._ ');
 
         return $filename.'.pdf';
     }
