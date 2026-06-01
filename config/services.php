@@ -27,6 +27,8 @@ return [
 
     ],
 
+    'proforma_bulk_send_delay_seconds' => (int) env('PROFORMA_BULK_SEND_DELAY_SECONDS', 2),
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

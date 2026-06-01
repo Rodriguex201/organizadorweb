@@ -159,12 +159,14 @@ class ProformasController extends Controller
 
         $ids = array_values(array_unique(array_map('intval', $validated['proformas'] ?? [])));
         $candidatas = $this->proformasService->findBatchCandidatesByIdsForPeriodo($grupo, $ids, $periodo);
+        $delaySeconds = max(0, (int) config('services.proforma_bulk_send_delay_seconds', 2));
+        $totalCandidatas = $candidatas->count();
 
         $enviadas = 0;
         $fallidas = [];
         $omitidas = 0;
 
-        foreach ($candidatas as $proforma) {
+        foreach ($candidatas->values() as $index => $proforma) {
             if ($this->proformasService->invalidReasonForBatch($proforma) !== null) {
                 $omitidas++;
                 continue;
@@ -182,6 +184,11 @@ class ProformasController extends Controller
                     'error' => $exception->getMessage(),
                 ];
                 report($exception);
+            }
+
+            if ($delaySeconds > 0 && $index < ($totalCandidatas - 1)) {
+                Log::info(sprintf('Esperando %d segundos antes del siguiente envío', $delaySeconds));
+                sleep($delaySeconds);
             }
         }
 

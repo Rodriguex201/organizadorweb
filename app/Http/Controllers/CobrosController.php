@@ -304,12 +304,14 @@ $filters = [
 
         $filters = is_array($payload['filters'] ?? null) ? $payload['filters'] : [];
         $proformas = is_array($payload['proformas'] ?? null) ? $payload['proformas'] : [];
+        $delaySeconds = max(0, (int) config('services.proforma_bulk_send_delay_seconds', 2));
+        $totalProformas = count($proformas);
 
         $enviadas = [];
         $omitidas = [];
         $fallidas = [];
 
-        foreach ($proformas as $item) {
+        foreach (array_values($proformas) as $index => $item) {
             $proformaId = (int) ($item['id'] ?? 0);
             $empresa = trim((string) ($item['empresa'] ?? 'Sin nombre'));
 
@@ -359,6 +361,11 @@ $filters = [
                     'empresa' => $empresa,
                     'error' => $exception->getMessage(),
                 ];
+            }
+
+            if ($delaySeconds > 0 && $index < ($totalProformas - 1)) {
+                Log::info(sprintf('Esperando %d segundos antes del siguiente envío', $delaySeconds));
+                sleep($delaySeconds);
             }
         }
 
