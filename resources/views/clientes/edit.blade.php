@@ -15,11 +15,16 @@
                 @endif
             </div>
             <p class="text-sm text-slate-600">Ajuste de datos en <code>clientes_potenciales</code>.</p>
+            @if(!empty($cliente->motivo_retiro_nombre))
+                <p class="mt-2 text-sm text-rose-700">Motivo de retiro: <span class="font-medium">{{ $cliente->motivo_retiro_nombre }}</span></p>
+            @endif
         </div>
 
-        <a href="{{ route('cobros.extraordinario.create', ['cliente_id' => $clienteId]) }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
-            Generar cobro extraordinario
-        </a>
+        @if(!$cliente->esta_retirado)
+            <a href="{{ route('cobros.extraordinario.create', ['cliente_id' => $clienteId]) }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
+                Generar cobro extraordinario
+            </a>
+        @endif
 
         @if($cliente->esta_retirado)
             <button
@@ -32,11 +37,15 @@
                 Reactivar cliente
             </button>
         @else
-            <form method="POST" action="{{ route('clientes.retirar', $clienteId) }}" onsubmit="return confirm('¿Marcar este cliente como retirado?');">
-                @csrf
-                @method('PATCH')
-                <button type="submit" class="inline-flex items-center rounded bg-rose-100 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-200">Retirar cliente</button>
-            </form>
+            <button
+                type="button"
+                data-retirar-url="{{ route('clientes.retirar', $clienteId) }}"
+                data-retirar-id="{{ $clienteId }}"
+                data-retirar-nombre="{{ $cliente->empresa ?: ($cliente->nombre ?: 'este cliente') }}"
+                class="inline-flex items-center rounded bg-rose-100 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-200"
+            >
+                Retirar cliente
+            </button>
         @endif
     </div>
 
@@ -56,4 +65,5 @@
 </div>
 
 @include('clientes.partials.reactivar-modal')
+@include('clientes.partials.retirar-modal')
 @endsection

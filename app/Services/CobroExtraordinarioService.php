@@ -10,6 +10,7 @@ class CobroExtraordinarioService
 {
     public function __construct(
         private readonly RevisarProformaCalculator $revisarProformaCalculator,
+        private readonly ClienteRetiradoService $clienteRetiradoService,
     ) {
     }
 
@@ -45,16 +46,56 @@ class CobroExtraordinarioService
             $select[] = 'vlrextrae';
         }
 
-        if (Schema::hasColumn('clientes_potenciales', 'retirado')) {
-            $select[] = 'retirado';
-        }
+        $select = $this->clienteRetiradoService->addSelectColumns($select, null, 'fecha_retiro', 'retirado');
 
-        if (Schema::hasColumn('clientes_potenciales', 'fecha_retiro')) {
-            $select[] = 'fecha_retiro';
-        }
+        $query = DB::table('clientes_potenciales')
+            ->select($select);
 
-        return DB::table('clientes_potenciales')
-            ->select($select)
+        $this->clienteRetiradoService->applyNoRetiradosConstraint($query);
+
+        return $query
+            ->orderBy('codigo')
+            ->orderBy('nombre')
+            ->get();
+    }
+
+    public function getRetiradosSearchCandidates(): Collection
+    {
+        $select = [
+            'idclientes_potenciales as id',
+            'codigo',
+            'nombre',
+            'empresa',
+        ];
+
+        $select = $this->clienteRetiradoService->addSelectColumns($select, null, 'fecha_retiro', 'retirado');
+
+        $query = DB::table('clientes_potenciales')
+            ->select($select);
+
+        $query->where(function ($builder): void {
+            $fechaRetiroColumn = Schema::hasColumn('clientes_potenciales', 'fecha_retiro') ? 'fecha_retiro' : null;
+            $retiroFlagColumn = null;
+
+            foreach (['retiro', 'retirado'] as $column) {
+                if (Schema::hasColumn('clientes_potenciales', $column)) {
+                    $retiroFlagColumn = $column;
+                    break;
+                }
+            }
+
+            if ($fechaRetiroColumn !== null) {
+                $builder->whereNotNull($fechaRetiroColumn)
+                    ->whereRaw("TRIM(COALESCE({$fechaRetiroColumn}, '')) <> ''");
+            }
+
+            if ($retiroFlagColumn !== null) {
+                $method = $fechaRetiroColumn !== null ? 'orWhereRaw' : 'whereRaw';
+                $builder->{$method}("COALESCE({$retiroFlagColumn}, 0) = 1");
+            }
+        });
+
+        return $query
             ->orderBy('codigo')
             ->orderBy('nombre')
             ->get();
@@ -92,13 +133,7 @@ class CobroExtraordinarioService
             $select[] = 'vlrextrae';
         }
 
-        if (Schema::hasColumn('clientes_potenciales', 'retirado')) {
-            $select[] = 'retirado';
-        }
-
-        if (Schema::hasColumn('clientes_potenciales', 'fecha_retiro')) {
-            $select[] = 'fecha_retiro';
-        }
+        $select = $this->clienteRetiradoService->addSelectColumns($select, null, 'fecha_retiro', 'retirado');
 
         return DB::table('clientes_potenciales')
             ->select($select)
@@ -144,6 +179,15 @@ class CobroExtraordinarioService
 
     public function createCobro(object $cliente, array $input): array
     {
+        if ($this->clienteRetiradoService->estaRetirado($cliente)) {
+            return [
+                'created' => false,
+                'duplicated' => false,
+                'blocked' => true,
+                'message' => 'No es posible generar cobros extraordinarios para clientes retirados.',
+            ];
+        }
+
         $mes = mb_strtolower(trim((string) ($input['mes'] ?? '')));
         $anio = (int) ($input['anio'] ?? 0);
         $clienteId = (int) ($cliente->id ?? 0);

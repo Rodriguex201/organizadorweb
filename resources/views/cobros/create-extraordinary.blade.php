@@ -219,6 +219,7 @@ document.addEventListener('DOMContentLoaded', function () {
             option,
         }))
         .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
+    const retiredClienteOptions = @json($clientesRetiradosSearch ?? []);
 
     const hideResults = () => {
         clienteResults.innerHTML = '';
@@ -259,6 +260,18 @@ document.addEventListener('DOMContentLoaded', function () {
             .slice(0, 25);
 
         if (matches.length === 0) {
+            const retiredMatches = retiredClienteOptions
+                .filter((item) => item.search.includes(normalized))
+                .slice(0, 5);
+
+            if (retiredMatches.length > 0) {
+                clienteResults.innerHTML = retiredMatches.map((item) => (
+                    `<div class="px-3 py-2 text-sm text-amber-700 bg-amber-50 border-b border-amber-100 last:border-b-0">${item.label} - Cliente retirado</div>`
+                )).join('');
+                clienteResults.classList.remove('hidden');
+                return;
+            }
+
             clienteResults.innerHTML = '<div class="px-3 py-2 text-sm text-slate-500">Sin coincidencias</div>';
             clienteResults.classList.remove('hidden');
             return;

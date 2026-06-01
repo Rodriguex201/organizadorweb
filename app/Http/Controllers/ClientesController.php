@@ -45,6 +45,7 @@ class ClientesController extends Controller
             $mapping['fecha_cotizacion'] ? "{$mapping['fecha_cotizacion']} as fecha_cotizacion" : DB::raw('NULL as fecha_cotizacion'),
             $mapping['fecha_retiro'] ? "{$mapping['fecha_retiro']} as fecha_retiro" : DB::raw('NULL as fecha_retiro'),
             $mapping['retiro_flag'] ? "{$mapping['retiro_flag']} as retiro_flag" : DB::raw('NULL as retiro_flag'),
+            $mapping['tipo_retiro'] ? "{$mapping['tipo_retiro']} as tipo_retiro" : DB::raw('NULL as tipo_retiro'),
             $mapping['fecha_reactivacion'] ? "{$mapping['fecha_reactivacion']} as fecha_reactivacion" : DB::raw('NULL as fecha_reactivacion'),
             $mapping['motivo_reactivacion'] ? "{$mapping['motivo_reactivacion']} as motivo_reactivacion" : DB::raw('NULL as motivo_reactivacion'),
             $mapping['ip_empresa'] ? "{$mapping['ip_empresa']} as ip_empresa" : DB::raw('NULL as ip_empresa'),
@@ -84,9 +85,11 @@ class ClientesController extends Controller
             $query->orderByDesc($mapping['id']);
         }
 
+        $motivosRetiro = $this->loadRetiroReasons();
         $clientes = $query->paginate(15)->withQueryString();
-        $clientes->getCollection()->transform(function ($cliente) use ($mapping) {
+        $clientes->getCollection()->transform(function ($cliente) use ($mapping, $motivosRetiro) {
             $cliente->esta_retirado = $this->isClienteRetirado($cliente, $mapping);
+            $cliente->motivo_retiro_nombre = $this->resolveRetiroReasonLabel($cliente, $mapping, $motivosRetiro);
 
             return $cliente;
         });
@@ -112,6 +115,7 @@ class ClientesController extends Controller
             'contratos' => $contratos,
             'mapping' => $mapping,
             'motivosReactivacion' => $this->loadReactivationReasons(),
+            'motivosRetiro' => $motivosRetiro,
         ]);
     }
 
@@ -233,6 +237,8 @@ class ClientesController extends Controller
         abort_if(!$cliente, 404);
 
         $cliente->esta_retirado = $this->isClienteRetirado($cliente, $mapping);
+        $motivosRetiro = $this->loadRetiroReasons();
+        $cliente->motivo_retiro_nombre = $this->resolveRetiroReasonLabel($cliente, $mapping, $motivosRetiro);
 
         return view('clientes.edit', [
             'cliente' => $cliente,
@@ -240,6 +246,7 @@ class ClientesController extends Controller
             'mapping' => $mapping,
             'catalogos' => $this->loadFormCatalogs(),
             'motivosReactivacion' => $this->loadReactivationReasons(),
+            'motivosRetiro' => $motivosRetiro,
         ]);
     }
 
@@ -270,9 +277,24 @@ class ClientesController extends Controller
         return redirect()->route('clientes.index')->with('status', 'Cliente actualizado correctamente.');
     }
 
-    public function retirar(int $id): RedirectResponse
+    public function retirar(Request $request, int $id): RedirectResponse
     {
         $mapping = $this->resolveColumnMapping();
+        $motivosRetiro = $this->loadRetiroReasons();
+
+        if (($motivosRetiro['ids'] ?? []) === []) {
+            return back()->withErrors([
+                'general' => 'No hay motivos de retiro disponibles en la tabla conceptos_r.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'motivo_retiro' => array_merge(['required'], $this->catalogRule($motivosRetiro)),
+            'cliente_retiro_id' => ['nullable', 'integer'],
+        ], [
+            'motivo_retiro.required' => 'Selecciona un motivo de retiro.',
+            'motivo_retiro.in' => 'Selecciona un motivo de retiro válido.',
+        ]);
         $payload = [];
 
         if ($mapping['fecha_retiro']) {
@@ -281,6 +303,10 @@ class ClientesController extends Controller
 
         if ($mapping['retiro_flag']) {
             $payload[$mapping['retiro_flag']] = 1;
+        }
+
+        if ($mapping['tipo_retiro']) {
+            $payload[$mapping['tipo_retiro']] = $validated['motivo_retiro'];
         }
 
         if ($payload === []) {
@@ -748,6 +774,39 @@ class ClientesController extends Controller
         ];
     }
 
+    private function loadRetiroReasons(): array
+    {
+        if (!Schema::hasTable('conceptos_r')) {
+            return ['options' => [], 'by_id' => [], 'ids' => []];
+        }
+
+        $rows = DB::table('conceptos_r')
+            ->select(['id_retiro', 'conceptosretiro'])
+            ->orderBy('conceptosretiro')
+            ->get();
+
+        $options = [];
+        $byId = [];
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $item = [
+                'id' => (string) $row->id_retiro,
+                'label' => (string) $row->conceptosretiro,
+            ];
+
+            $options[] = $item;
+            $byId[(string) $row->id_retiro] = $item;
+            $ids[] = (string) $row->id_retiro;
+        }
+
+        return [
+            'options' => $options,
+            'by_id' => $byId,
+            'ids' => $ids,
+        ];
+    }
+
     private function loadCatalog(
         string $table,
         array $idCandidates,
@@ -841,6 +900,18 @@ class ClientesController extends Controller
         $retiroFlag = $mapping['retiro_flag'] ? ($cliente->{$mapping['retiro_flag']} ?? null) : ($cliente->retiro_flag ?? null);
 
         return !empty($fechaRetiro) || (int) $retiroFlag === 1;
+    }
+
+    private function resolveRetiroReasonLabel(object $cliente, array $mapping, array $catalogo): ?string
+    {
+        $tipoRetiroColumn = $mapping['tipo_retiro'] ?? null;
+        $tipoRetiro = $tipoRetiroColumn ? ($cliente->{$tipoRetiroColumn} ?? null) : ($cliente->tipo_retiro ?? null);
+
+        if ($tipoRetiro === null || $tipoRetiro === '') {
+            return null;
+        }
+
+        return $catalogo['by_id'][(string) $tipoRetiro]['label'] ?? null;
     }
 
     private function buildReactivationComment(mixed $currentValue, string $fecha, ?string $motivo, string $observacion): string

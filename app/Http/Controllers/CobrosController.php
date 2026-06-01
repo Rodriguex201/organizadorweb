@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\CobrosService;
 use App\Services\CobroExtraordinarioService;
+use App\Services\ClienteRetiradoService;
 use App\Services\ProformaEmailService;
 use App\Services\RevisarProformaCalculator;
 use App\Services\ProformaPdfService;
@@ -26,6 +27,7 @@ class CobrosController extends Controller
     public function __construct(
         private readonly CobrosService $cobrosService,
         private readonly CobroExtraordinarioService $cobroExtraordinarioService,
+        private readonly ClienteRetiradoService $clienteRetiradoService,
         private readonly ProformaPreviewService $proformaPreviewService,
         private readonly ProformaStoreService $proformaStoreService,
         private readonly ProformaPdfService $proformaPdfService,
@@ -91,6 +93,16 @@ $filters = [
         ]);
 
         $clientes = $this->cobroExtraordinarioService->getClientes();
+        $clientesRetirados = $this->cobroExtraordinarioService->getRetiradosSearchCandidates();
+        $clientesRetiradosSearch = $clientesRetirados->map(function (object $cliente): array {
+            $label = trim((string) ($cliente->codigo ?? '')).' - '.trim((string) ($cliente->empresa ?: $cliente->nombre ?: 'Sin nombre'));
+
+            return [
+                'id' => (string) ($cliente->id ?? ''),
+                'label' => $label !== ' - ' ? $label : 'Cliente retirado',
+                'search' => mb_strtolower($label),
+            ];
+        })->values()->all();
         $selectedClienteId = (int) old('cliente_id', $validated['cliente_id'] ?? 0);
         $selectedCliente = $selectedClienteId > 0
             ? $this->cobroExtraordinarioService->findCliente($selectedClienteId)
@@ -119,6 +131,8 @@ $filters = [
             'selectedMes' => $mes,
             'selectedAnio' => $anio,
             'preview' => $preview,
+            'clientesRetirados' => $clientesRetirados,
+            'clientesRetiradosSearch' => $clientesRetiradosSearch,
         ]);
     }
 
@@ -145,6 +159,13 @@ $filters = [
         }
 
         $resultado = $this->cobroExtraordinarioService->createCobro($cliente, $validated);
+
+        if (($resultado['blocked'] ?? false) === true) {
+            return back()
+                ->withInput()
+                ->with('status', $resultado['message'])
+                ->with('status_type', 'warning');
+        }
 
         if (($resultado['duplicated'] ?? false) === true) {
             return back()
@@ -602,6 +623,13 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             throw new NotFoundHttpException('Cobro no encontrado.');
         }
 
+        if ($this->clienteRetiradoService->estaRetirado($cobro)) {
+            return redirect()
+                ->route('cobros.show', $id)
+                ->with('status', 'No es posible regenerar proformas para clientes retirados.')
+                ->with('status_type', 'warning');
+        }
+
         $cobroActualizado = $this->cobrosService->findCobroById($id) ?: $cobro;
         $resultado = $this->proformaStoreService->regenerateFromCobro($cobroActualizado);
         $proformaId = (int) ($resultado['proforma_id'] ?? 0);
@@ -750,6 +778,13 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
         if (!$cobro) {
             throw new NotFoundHttpException('Cobro no encontrado.');
+        }
+
+        if ($this->clienteRetiradoService->estaRetirado($cobro)) {
+            return redirect()
+                ->route('cobros.proforma.preview', $id)
+                ->with('status', 'No es posible generar proformas para clientes retirados.')
+                ->with('status_type', 'warning');
         }
 
         $resultado = $this->proformaStoreService->storeFromCobro($cobro);

@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\Schema;
 
 class CobrosService
 {
+    public function __construct(
+        private readonly ClienteRetiradoService $clienteRetiradoService,
+    ) {
+    }
+
     public const MESES = [
         1 => 'enero',
         2 => 'febrero',
@@ -160,6 +165,13 @@ return $query
             $select[] = 'cp.vlrextrae as cliente_vlrextrae';
         }
 
+        $select = $this->clienteRetiradoService->addSelectColumns(
+            $select,
+            'cp',
+            'cliente_fecha_retiro',
+            'cliente_retiro_flag',
+        );
+
         return DB::table('valores_externos as ve')
             ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
             ->select($select)
@@ -285,6 +297,7 @@ return $query
     public function findCobrosForMassGeneration(array $filters, int $grupoFecha): Collection
     {
         $filters['grupo_fecha'] = (string) $grupoFecha;
+        $filters['exclude_retirados'] = true;
 
         $query = $this->buildCobrosQuery($filters);
         $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
@@ -372,6 +385,10 @@ if (!empty($filters['anio'])) {
     // 🔥 GRUPO FECHA
     if ($grupoFecha !== null) {
         $query->whereRaw("CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED) = ?", [$grupoFecha]);
+    }
+
+    if (($filters['exclude_retirados'] ?? false) === true) {
+        $this->clienteRetiradoService->applyNoRetiradosConstraint($query, 'cp');
     }
 
     // 🔥 FILTRO NOTA

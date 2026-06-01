@@ -60,6 +60,7 @@
                     <th class="px-3 py-3 text-left whitespace-nowrap">IP empresa</th>
                     <th class="px-3 py-3 text-left whitespace-nowrap">Fecha cotizacion</th>
                     <th class="px-3 py-3 text-left whitespace-nowrap">Fecha retiro</th>
+                    <th class="px-3 py-3 text-left">Motivo retiro</th>
                     <th class="px-3 py-3 text-left whitespace-nowrap">Fecha reactivacion</th>
                     <th class="px-3 py-3 text-left">Motivo reactivacion</th>
                     <th class="px-3 py-3 text-left whitespace-nowrap">Acciones</th>
@@ -99,6 +100,7 @@
                         <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->ip_empresa ?: '-' }}</td>
                         <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->fecha_cotizacion ?: '-' }}</td>
                         <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->fecha_retiro ?: '-' }}</td>
+                        <td class="px-3 py-3 align-top text-xs leading-tight text-slate-700">{{ $cliente->motivo_retiro_nombre ?: '-' }}</td>
                         <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->fecha_reactivacion ?: '-' }}</td>
                         <td class="px-3 py-3 align-top text-xs leading-tight text-slate-700">{{ $cliente->motivo_reactivacion ?: '-' }}</td>
                         <td class="px-3 py-3 align-top">
@@ -118,11 +120,15 @@
                                             Reactivar
                                         </button>
                                     @else
-                                        <form method="POST" action="{{ route('clientes.retirar', $cliente->id) }}" onsubmit="return confirm('¿Marcar este cliente como retirado?');">
-                                            @csrf
-                                            @method('PATCH')
-                                            <button type="submit" class="inline-flex items-center rounded bg-rose-100 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-200">Retirar</button>
-                                        </form>
+                                        <button
+                                            type="button"
+                                            data-retirar-url="{{ route('clientes.retirar', $cliente->id) }}"
+                                            data-retirar-id="{{ $cliente->id }}"
+                                            data-retirar-nombre="{{ $cliente->empresa ?: ($cliente->nombre ?: 'este cliente') }}"
+                                            class="inline-flex items-center rounded bg-rose-100 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-200"
+                                        >
+                                            Retirar
+                                        </button>
                                     @endif
                                 @else
                                     <span class="text-xs text-slate-400">Sin identificador</span>
@@ -132,7 +138,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="11" class="px-4 py-8 text-center text-slate-500">No hay clientes disponibles para los filtros seleccionados.</td>
+                        <td colspan="12" class="px-4 py-8 text-center text-slate-500">No hay clientes disponibles para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>
@@ -146,4 +152,5 @@
 </div>
 
 @include('clientes.partials.reactivar-modal')
+@include('clientes.partials.retirar-modal')
 @endsection
