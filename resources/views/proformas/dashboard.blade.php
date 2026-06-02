@@ -8,7 +8,7 @@
 
     <div class="mb-6 flex items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-bold">Dashboard de Proformas</h1>
+            <h1 class="text-2xl font-bold">Informes de Proformas</h1>
             <p class="text-sm text-slate-600">Resumen general por periodo de <code>sg_proform</code>.</p>
         </div>
         <div class="flex gap-2">
@@ -397,7 +397,7 @@
                 return `Exportando ${currentRecordCount} registros del dashboard actual...`;
             }
 
-            return 'Preparando la exportación con las columnas seleccionadas.';
+            return 'Preparando la exportaciï¿½n con las columnas seleccionadas.';
         };
 
         const setExportingState = (exporting) => {

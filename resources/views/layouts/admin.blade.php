@@ -31,7 +31,7 @@
                     </a>
                     <a href="{{ route('proformas.dashboard') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('proformas.dashboard') ? 'bg-slate-800' : '' }}">
                         <span class="text-base">📊</span>
-                        <span class="sidebar-label">Dashboard</span>
+                        <span class="sidebar-label">Informes</span>
                     </a>
 
                         <div class="rounded px-3 py-2 {{ request()->routeIs('configuracion.*') ? 'bg-slate-800' : '' }}">
