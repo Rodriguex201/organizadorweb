@@ -2,24 +2,54 @@
     @push('scripts')
         <script>
             (() => {
+                const toUppercase = (value) => String(value ?? '').toLocaleUpperCase('es-CO');
+                const clienteForm = document.querySelector('form[action*="/clientes"]');
+                const isEditForm = clienteForm?.querySelector('input[name="_method"][value="PUT"]') !== null;
+
+                if (clienteForm) {
+                    const uppercaseSelector = 'input[type="text"]:not([type="email"]):not([type="hidden"]), textarea';
+
+                    clienteForm.querySelectorAll(uppercaseSelector).forEach((field) => {
+                        field.addEventListener('input', () => {
+                            const uppercased = toUppercase(field.value);
+
+                            if (field.value !== uppercased) {
+                                field.value = uppercased;
+                            }
+                        });
+                    });
+                }
+
                 const codigoInput = document.getElementById('codigo');
                 const codigoEstado = document.getElementById('codigo_estado');
                 const codigoModoEstado = document.getElementById('codigo_modo_estado');
                 const codigoModeInputs = document.querySelectorAll('input[name="codigo_mode"]');
 
-                if (codigoInput && codigoEstado && codigoModeInputs.length) {
+                if (codigoInput && codigoEstado) {
                     const availabilityUrl = `{{ route('clientes.codigo.disponibilidad') }}`;
                     const nextCodigoUrl = `{{ route('clientes.codigo.siguiente') }}`;
+                    const currentClienteId = clienteForm?.dataset.clienteId ?? '';
                     let availabilityTimeout = null;
                     let nextTimeout = null;
                     let availabilityController = null;
                     let nextController = null;
+                    let codigoDisponible = !isEditForm;
 
-                    const normalizeCodigo = (value) => value.trim().toUpperCase();
+                    const normalizeCodigo = (value) => toUppercase(value).trim();
 
                     const selectedMode = () => {
                         const current = Array.from(codigoModeInputs).find((input) => input.checked);
                         return current ? current.value : 'manual';
+                    };
+
+                    const availabilityParams = (codigo) => {
+                        const params = new URLSearchParams({ codigo });
+
+                        if (currentClienteId !== '') {
+                            params.set('exclude_id', currentClienteId);
+                        }
+
+                        return params.toString();
                     };
 
                     const setCodigoEstado = (message, tone = 'neutral') => {
@@ -57,35 +87,41 @@
                         }
 
                         if (codigo === '') {
+                            codigoDisponible = !isEditForm;
                             setCodigoEstado('Escribe un código para validar.');
-                            return;
+                            return false;
                         }
 
                         availabilityController = new AbortController();
                         setCodigoEstado('Validando código...');
 
                         try {
-                            const response = await fetch(`${availabilityUrl}?codigo=${encodeURIComponent(codigo)}`, {
+                            const response = await fetch(`${availabilityUrl}?${availabilityParams(codigo)}`, {
                                 headers: { 'Accept': 'application/json' },
                                 signal: availabilityController.signal,
                             });
                             const payload = await response.json();
 
                             if (!response.ok) {
+                                codigoDisponible = false;
                                 setCodigoEstado(payload.message ?? 'No fue posible validar el código.', 'error');
-                                return;
+                                return false;
                             }
 
+                            codigoDisponible = Boolean(payload.available);
                             setCodigoEstado(
                                 payload.message ?? (payload.available ? 'Código disponible' : 'Código en uso'),
                                 payload.available ? 'success' : 'error'
                             );
+                            return payload.available;
                         } catch (error) {
                             if (error.name === 'AbortError') {
-                                return;
+                                return null;
                             }
 
+                            codigoDisponible = false;
                             setCodigoEstado('No fue posible validar el código.', 'error');
+                            return false;
                         }
                     };
 
@@ -138,8 +174,9 @@
 
                     codigoInput.addEventListener('input', () => {
                         codigoInput.value = normalizeCodigo(codigoInput.value);
+                        codigoDisponible = !isEditForm;
 
-                        if (selectedMode() === 'secuencia') {
+                        if (codigoModeInputs.length && selectedMode() === 'secuencia') {
                             scheduleNextCodigo();
                             return;
                         }
@@ -148,7 +185,7 @@
                     });
 
                     codigoInput.addEventListener('blur', () => {
-                        if (selectedMode() === 'secuencia') {
+                        if (codigoModeInputs.length && selectedMode() === 'secuencia') {
                             requestNextCodigo(codigoInput.value);
                             return;
                         }
@@ -169,13 +206,30 @@
                         });
                     });
 
-                    syncModoHint();
+                    if (codigoModeInputs.length) {
+                        syncModoHint();
 
-                    if (selectedMode() === 'secuencia') {
-                        requestNextCodigo(codigoInput.value);
+                        if (selectedMode() === 'secuencia') {
+                            requestNextCodigo(codigoInput.value);
+                        } else {
+                            validateAvailability(codigoInput.value);
+                        }
                     } else {
                         validateAvailability(codigoInput.value);
                     }
+
+                    clienteForm?.addEventListener('submit', async (event) => {
+                        if (!isEditForm || codigoInput.disabled) {
+                            return;
+                        }
+
+                        const isAvailable = await validateAvailability(codigoInput.value);
+
+                        if (isAvailable === false || codigoDisponible === false) {
+                            event.preventDefault();
+                            codigoInput.focus();
+                        }
+                    });
                 }
 
                 const inputBusqueda = document.getElementById('ciudad_busqueda');
@@ -214,8 +268,8 @@
                             opcion.textContent = item.label;
 
                             opcion.addEventListener('click', () => {
-                                inputBusqueda.value = item.label;
-                                inputDepartamento.value = item.label;
+                                inputBusqueda.value = toUppercase(item.label);
+                                inputDepartamento.value = toUppercase(item.label);
                                 setEstado('Ciudad seleccionada.');
                                 limpiarResultados();
                             });
@@ -225,6 +279,7 @@
                     };
 
                     inputBusqueda.addEventListener('input', () => {
+                        inputBusqueda.value = toUppercase(inputBusqueda.value);
                         inputDepartamento.value = inputBusqueda.value.trim();
                         limpiarResultados();
                         setEstado('Usa buscar para seleccionar una ciudad.');

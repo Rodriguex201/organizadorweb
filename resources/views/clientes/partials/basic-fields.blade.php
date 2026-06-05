@@ -20,6 +20,8 @@
     $selectedModalidad = (string) $value('modalidad', $mapping['modalidad'] ?? null);
     $selectedLlego = (string) $value('llego', $mapping['llego'] ?? null);
     $selectedTipoCliente = (string) $value('tipo_cliente_id', $mapping['tipo_cliente'] ?? null);
+    $selectedRegimen = (string) $value('regimen', $mapping['regimen'] ?? null);
+    $regimenOptions = ['SAS', 'PCS', 'SMP'];
 @endphp
 
 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -47,9 +49,10 @@
     </div>
 
     <div>
-        <label class="mb-1 block text-sm font-medium" for="nombre">Nombre</label>
+        <label class="mb-1 block text-sm font-medium" for="nombre">Nombre Responsable</label>
         <input id="nombre" name="nombre" type="text" value="{{ $value('nombre', $mapping['nombre']) }}" @disabled($fieldUnavailable($mapping['nombre']))
                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
+        <p class="mt-1 text-xs text-slate-500">Nombre de la persona responsable o contacto principal de la empresa.</p>
     </div>
 
     <div>
@@ -70,8 +73,8 @@
             <p id="codigo_modo_estado" class="mt-2 text-xs text-slate-500">
                 {{ $codigoMode === 'secuencia' ? 'Usa el codigo actual como referencia y se completara el siguiente consecutivo.' : 'Puedes escribir el codigo libremente. La disponibilidad se valida en tiempo real.' }}
             </p>
-            <p id="codigo_estado" class="mt-1 text-xs text-slate-500"></p>
         @endif
+        <p id="codigo_estado" class="mt-1 text-xs text-slate-500"></p>
         @error('codigo')
             <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
         @enderror
@@ -161,6 +164,20 @@
                 <option value="{{ $opcion['id'] }}" @selected($selectedModalidad === (string) $opcion['id'] || $selectedModalidad === $opcion['label'])>{{ $opcion['label'] }}</option>
             @endforeach
         </select>
+    </div>
+
+    <div>
+        <label class="mb-1 block text-sm font-medium" for="regimen">Regimen</label>
+        <select id="regimen" name="regimen" @disabled($fieldUnavailable($mapping['regimen'] ?? null))
+                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
+            <option value="">Selecciona una opcion</option>
+            @foreach($regimenOptions as $opcion)
+                <option value="{{ $opcion }}" @selected($selectedRegimen === $opcion)>{{ $opcion }}</option>
+            @endforeach
+        </select>
+        @error('regimen')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
     </div>
 
     <div>

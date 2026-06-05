@@ -133,6 +133,7 @@ class ClientesController extends Controller
         $mapping = $this->resolveColumnMapping();
         $codigoColumn = $mapping['codigo'] ?? null;
         $codigo = $this->normalizeCodigo((string) $request->query('codigo', ''));
+        $excludeId = $request->query('exclude_id');
 
         if (!$codigoColumn) {
             return response()->json([
@@ -148,13 +149,14 @@ class ClientesController extends Controller
             ]);
         }
 
-        $exists = DB::table('clientes_potenciales')
-            ->whereRaw('UPPER(TRIM(' . $codigoColumn . ')) = ?', [$codigo])
-            ->exists();
+        $conflictingClient = $this->findCodigoConflict($codigo, $mapping, $excludeId);
+        $exists = $conflictingClient !== null;
 
         return response()->json([
             'available' => !$exists,
-            'message' => $exists ? 'Código en uso' : 'Código disponible',
+            'message' => $exists
+                ? "El código {$codigo} ya está siendo utilizado por otro cliente."
+                : 'Código disponible',
         ]);
     }
 
@@ -193,6 +195,19 @@ class ClientesController extends Controller
             $this->rules($catalogos, $mapping, true),
             $this->validationMessages()
         );
+        $validated = $this->normalizeClientTextInputs($validated);
+
+        if (($validated['codigo'] ?? '') !== '') {
+            $codigo = $this->normalizeCodigo((string) $validated['codigo']);
+            $conflictingClient = $this->findCodigoConflict($codigo, $mapping);
+
+            if ($conflictingClient !== null) {
+                return back()->withInput()->withErrors([
+                    'codigo' => "El código {$codigo} ya está siendo utilizado por otro cliente.",
+                ]);
+            }
+        }
+
         $payload = $this->buildPayload($validated, $mapping, $catalogos);
 
         if ($payload === []) {
@@ -259,6 +274,19 @@ class ClientesController extends Controller
             $this->rules($catalogos, $mapping),
             $this->validationMessages()
         );
+        $validated = $this->normalizeClientTextInputs($validated);
+
+        if (($validated['codigo'] ?? '') !== '') {
+            $codigo = $this->normalizeCodigo((string) $validated['codigo']);
+            $conflictingClient = $this->findCodigoConflict($codigo, $mapping, $id);
+
+            if ($conflictingClient !== null) {
+                return back()->withInput()->withErrors([
+                    'codigo' => "El código {$codigo} ya está siendo utilizado por otro cliente.",
+                ]);
+            }
+        }
+
         $payload = $this->buildPayload($validated, $mapping, $catalogos);
 
         if ($payload === []) {
@@ -414,23 +442,7 @@ class ClientesController extends Controller
 
     private function buildPayload(array $validated, array $mapping, array $catalogos): array
     {
-        $textInputsToUppercase = [
-            'nit',
-            'dv',
-            'nombre',
-            'codigo',
-            'empresa',
-            'departamento',
-            'ip_empresa',
-        ];
-
-        foreach ($textInputsToUppercase as $field) {
-            if (!array_key_exists($field, $validated)) {
-                continue;
-            }
-
-            $validated[$field] = $this->toUppercase($validated[$field]);
-        }
+        $validated = $this->normalizeClientTextInputs($validated);
 
         $payload = [];
 
@@ -446,6 +458,7 @@ class ClientesController extends Controller
             'fecha_inicio' => 'fecha_llegada',
             'fecha_arriendo' => 'fecha_arriendo',
             'ip_empresa' => 'ip_empresa',
+            'regimen' => 'regimen',
         ];
 
         foreach ($inputToLogical as $input => $logicalKey) {
@@ -501,6 +514,59 @@ class ClientesController extends Controller
         }
 
         return $payload;
+    }
+
+    private function findCodigoConflict(string $codigo, array $mapping, mixed $excludeId = null): ?object
+    {
+        $codigoColumn = $mapping['codigo'] ?? null;
+
+        if (!$codigoColumn) {
+            return null;
+        }
+
+        $normalizedCodigo = $this->normalizeCodigo($codigo);
+
+        if ($normalizedCodigo === '') {
+            return null;
+        }
+
+        $query = DB::table('clientes_potenciales')
+            ->select($mapping['id'] ? "{$mapping['id']} as id" : DB::raw('NULL as id'))
+            ->whereRaw('UPPER(TRIM(' . $codigoColumn . ')) = ?', [$normalizedCodigo]);
+
+        if ($excludeId !== null && $excludeId !== '' && $mapping['id']) {
+            $query->where($mapping['id'], '!=', $excludeId);
+        }
+
+        return $query->first();
+    }
+
+    private function normalizeClientTextInputs(array $validated): array
+    {
+        foreach ($this->clientTextInputsToUppercase() as $field) {
+            if (!array_key_exists($field, $validated)) {
+                continue;
+            }
+
+            $validated[$field] = $this->toUppercase($validated[$field]);
+        }
+
+        return $validated;
+    }
+
+    private function clientTextInputsToUppercase(): array
+    {
+        return [
+            'nit',
+            'dv',
+            'nombre',
+            'codigo',
+            'empresa',
+            'celular1',
+            'departamento',
+            'ip_empresa',
+            'regimen',
+        ];
     }
 
     private function mapCatalogValue(array &$payload, array $validated, ?string $targetColumn, string $inputKey, array $catalogo): void
@@ -563,6 +629,7 @@ class ClientesController extends Controller
             'fecha_arriendo' => ['nullable', 'date'],
             'ip_empresa' => ['nullable', 'string', 'max:255'],
             'departamento' => ['nullable', 'string', 'max:150'],
+            'regimen' => ['nullable', Rule::in(['SAS', 'PCS', 'SMP'])],
             'vlrprincipal' => ['nullable', 'numeric', 'min:0'],
             'numequipos' => ['nullable', 'numeric', 'min:0'],
             'vlrterminal' => ['nullable', 'numeric', 'min:0'],
@@ -590,10 +657,6 @@ class ClientesController extends Controller
             if ($mapping['nit']) {
                 $rules['nit'][] = Rule::unique('clientes_potenciales', $mapping['nit']);
             }
-
-            if ($mapping['codigo']) {
-                $rules['codigo'][] = Rule::unique('clientes_potenciales', $mapping['codigo']);
-            }
         }
 
         return $rules;
@@ -605,7 +668,7 @@ class ClientesController extends Controller
             'nit.unique' => 'El NIT ingresado ya existe en clientes potenciales.',
             'dv.max' => 'El DV no puede tener más de 3 caracteres.',
             'dv.regex' => 'El DV solo permite números y la letra X.',
-            'codigo.unique' => 'El código ingresado ya existe en clientes potenciales.',
+            'regimen.in' => 'Selecciona un regimen válido: SAS, PCS o SMP.',
         ];
     }
 
@@ -1110,6 +1173,7 @@ private function normalizeFolderName(string $value): string
             'fecha_retiro' => $pick(['fecha_retiro']),
             'fecha_reactivacion' => $pick(['freact']),
             'ip_empresa' => $pick(['ip_empresa']),
+            'regimen' => $pick(['regimen']),
             'clase' => $pick(['clase', 'idclase', 'idclases']),
             'modalidad' => $pick(['modalidad']),
             'llego' => $pick(['llego', 'idllego']),
