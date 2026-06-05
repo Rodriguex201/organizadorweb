@@ -118,6 +118,7 @@
                     <th class="px-3 py-2">Código</th>
                     <th class="px-3 py-2">Empresa</th>
                     <th class="px-3 py-2">Periodo</th>
+                    <th class="px-3 py-2">Origen</th>
                     <th class="px-3 py-2 text-right">Valor total</th>
                     <th class="px-3 py-2 text-center">Nota</th>
                     <th class="px-3 py-2">Estado</th>
@@ -167,6 +168,11 @@
                             <p class="text-xs text-slate-500">Emisora: {{ strtoupper((string) ($proforma->emisora ?? 'N/D')) }}</p>
                         </td>
                         <td class="px-3 py-2 text-slate-700">{{ $proformasService->monthLabel($proforma->mes) }} {{ $proforma->anio ?: 'N/D' }}</td>
+                        <td class="px-3 py-2">
+                            <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold {{ $proformasService->resolutionSourceBadgeClass($proforma->cliente_resolution_source ?? null) }}">
+                                {{ $proformasService->resolutionSourceLabel($proforma->cliente_resolution_source ?? null) }}
+                            </span>
+                        </td>
                         <td class="px-3 py-2 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
                         <td class="px-3 py-2 text-center">
                             @if($clientePotencialId > 0)
@@ -222,7 +228,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
+                        <td colspan="11" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>

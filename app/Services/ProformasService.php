@@ -66,7 +66,8 @@ class ProformasService
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as id_cliente')
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as cliente_potencial_id')
             ->selectRaw($this->joinedClienteFieldExpression('nota_cobro').' as nota_cobro')
-            ->selectRaw($this->joinedClienteFieldExpression('fecha_arriendo').' as cliente_fecha_arriendo');
+            ->selectRaw($this->joinedClienteFieldExpression('fecha_arriendo').' as cliente_fecha_arriendo')
+            ->selectRaw($this->clienteResolutionSourceExpression().' as cliente_resolution_source');
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
         $codigo = trim((string) ($filters['codigo'] ?? ''));
@@ -179,8 +180,27 @@ class ProformasService
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as cliente_potencial_id')
             ->selectRaw($this->joinedClienteFieldExpression('nota_cobro').' as nota_cobro')
             ->selectRaw($this->joinedClienteFieldExpression('fecha_arriendo').' as cliente_fecha_arriendo')
+            ->selectRaw($this->clienteResolutionSourceExpression().' as cliente_resolution_source')
             ->where('p.id', $id)
             ->first();
+    }
+
+    public function resolutionSourceLabel(?string $source): string
+    {
+        return match ($source) {
+            'id_cobro' => 'Enlazada por id_cobro',
+            'fallback' => 'Resuelta por fallback historico',
+            default => 'Sin origen resuelto',
+        };
+    }
+
+    public function resolutionSourceBadgeClass(?string $source): string
+    {
+        return match ($source) {
+            'id_cobro' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+            'fallback' => 'border-amber-200 bg-amber-50 text-amber-800',
+            default => 'border-slate-200 bg-slate-50 text-slate-600',
+        };
     }
 
     public function canSendProforma(null|object $proforma): bool
@@ -715,6 +735,15 @@ class ProformasService
     private function joinedClienteFieldExpression(string $field): string
     {
         return "COALESCE(cp_cobro.{$field}, cp_fallback.{$field})";
+    }
+
+    private function clienteResolutionSourceExpression(): string
+    {
+        return "CASE
+            WHEN p.id_cobro IS NOT NULL AND p.id_cobro > 0 THEN 'id_cobro'
+            WHEN cp_fallback.idclientes_potenciales IS NOT NULL THEN 'fallback'
+            ELSE NULL
+        END";
     }
 
     private function normalizedRegimenSql(string $regimenColumn): string

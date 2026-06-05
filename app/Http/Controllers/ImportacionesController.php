@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CobrosService;
+use App\Services\CobrosBasePeriodoService;
 use App\Services\ImportacionesService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ class ImportacionesController extends Controller
 
     public function __construct(
         private readonly ImportacionesService $importacionesService,
+        private readonly CobrosBasePeriodoService $cobrosBasePeriodoService,
     ) {
     }
 
@@ -120,6 +122,91 @@ class ImportacionesController extends Controller
         return redirect()
             ->route('configuracion.importaciones.index')
             ->with('status', 'Vista previa temporal eliminada.')
+            ->with('status_type', 'success');
+    }
+
+    public function generateBase(Request $request): RedirectResponse
+    {
+        $batch = $request->session()->get(self::SESSION_BATCH_KEY);
+
+        if (!is_array($batch)) {
+            return redirect()
+                ->route('configuracion.importaciones.index')
+                ->with('status', 'No hay una carga temporal activa para determinar el periodo.')
+                ->with('status_type', 'warning');
+        }
+
+        $periodo = is_array($batch['periodo'] ?? null) ? $batch['periodo'] : [];
+        $mes = (string) ($periodo['mes'] ?? '');
+        $anio = (int) ($periodo['anio'] ?? 0);
+
+        if ($mes === '' || $anio <= 0) {
+            return redirect()
+                ->route('configuracion.importaciones.index')
+                ->with('status', 'No fue posible resolver el periodo de la carga temporal.')
+                ->with('status_type', 'warning');
+        }
+
+        $result = $this->cobrosBasePeriodoService->generate($mes, $anio);
+        $message = sprintf(
+            'Registros base generados para %s %d. Nuevos: %d. Ya existentes: %d. Clientes activos evaluados: %d.',
+            ucfirst((string) $result['periodo']['mes']),
+            (int) $result['periodo']['anio'],
+            (int) $result['created'],
+            (int) $result['skipped_existing'],
+            (int) $result['total_active_clients'],
+        );
+
+        return redirect()
+            ->route('configuracion.importaciones.index')
+            ->with('status', $message)
+            ->with('status_type', 'success');
+    }
+
+    public function assignAmbiguous(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'entry_id' => ['required', 'string'],
+            'id_cobro' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $batch = $request->session()->get(self::SESSION_BATCH_KEY);
+
+        if (!is_array($batch)) {
+            return redirect()
+                ->route('configuracion.importaciones.index')
+                ->with('status', 'No hay una carga temporal activa para resolver coincidencias ambiguas.')
+                ->with('status_type', 'warning');
+        }
+
+        try {
+            $assignmentResult = $this->importacionesService->assignManualMatch(
+                $batch,
+                (string) $validated['entry_id'],
+                (int) $validated['id_cobro'],
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return redirect()
+                ->route('configuracion.importaciones.index')
+                ->with('status', $exception->getMessage())
+                ->with('status_type', 'warning');
+        }
+
+        $request->session()->put(self::SESSION_BATCH_KEY, $assignmentResult['batch']);
+
+        $resolvedEntries = (int) ($assignmentResult['resolved_entries'] ?? 1);
+        $nit = (string) ($assignmentResult['nit'] ?? '');
+        $message = $resolvedEntries > 1
+            ? sprintf(
+                'Se resolvieron automaticamente %d entradas para el NIT %s.',
+                $resolvedEntries,
+                $nit
+            )
+            : 'Coincidencia ambigua resuelta manualmente. Ya puedes continuar con la extraccion.';
+
+        return redirect()
+            ->route('configuracion.importaciones.index')
+            ->with('status', $message)
             ->with('status_type', 'success');
     }
 }

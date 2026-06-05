@@ -61,6 +61,14 @@
                     <dd class="font-medium text-slate-900">{{ $proforma->anio ?: 'N/D' }}</dd>
                 </div>
                 <div>
+                    <dt class="text-slate-500">Origen de resolucion</dt>
+                    <dd>
+                        <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold {{ $proformasService->resolutionSourceBadgeClass($proforma->cliente_resolution_source ?? null) }}">
+                            {{ $proformasService->resolutionSourceLabel($proforma->cliente_resolution_source ?? null) }}
+                        </span>
+                    </dd>
+                </div>
+                <div>
                     <dt class="text-slate-500">Valor total</dt>
                     <dd class="font-medium text-slate-900">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</dd>
                 </div>

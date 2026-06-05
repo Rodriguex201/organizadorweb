@@ -106,6 +106,8 @@ Route::middleware('auth.custom')->group(function (): void {
         Route::get('/configuracion/importaciones', [ImportacionesController::class, 'index'])->name('configuracion.importaciones.index');
         Route::post('/configuracion/importaciones/preview', [ImportacionesController::class, 'preview'])->name('configuracion.importaciones.preview');
         Route::post('/configuracion/importaciones/extract', [ImportacionesController::class, 'extract'])->name('configuracion.importaciones.extract');
+        Route::post('/configuracion/importaciones/generate-base', [ImportacionesController::class, 'generateBase'])->name('configuracion.importaciones.generate-base');
+        Route::post('/configuracion/importaciones/assign-ambiguous', [ImportacionesController::class, 'assignAmbiguous'])->name('configuracion.importaciones.assign-ambiguous');
         Route::post('/configuracion/importaciones/clear', [ImportacionesController::class, 'clear'])->name('configuracion.importaciones.clear');
 
         Route::get('/configuracion/usuarios', [ConfiguracionUsuarioController::class, 'index'])->name('configuracion.usuarios.index');

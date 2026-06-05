@@ -62,6 +62,10 @@ class ProformaStoreService
 
     public function storeFromCobro(object $cobro, array $extraConcepto = [], bool $preserveExistingEstado = false): array
     {
+        if ($validationError = $this->validateCobroReference($cobro)) {
+            return $validationError;
+        }
+
         return DB::transaction(function () use ($cobro, $extraConcepto, $preserveExistingEstado) {
             $preview = $this->proformaPreviewService->buildFromCobro($cobro);
             $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
@@ -183,6 +187,27 @@ class ProformaStoreService
 
         return $resultado + [
             'regenerated' => true,
+        ];
+    }
+
+    private function validateCobroReference(object $cobro): ?array
+    {
+        if (!Schema::hasColumn('sg_proform', 'id_cobro')) {
+            return null;
+        }
+
+        $idCobro = (int) ($cobro->id_cobro ?? 0);
+
+        if ($idCobro > 0) {
+            return null;
+        }
+
+        return [
+            'created' => false,
+            'duplicated' => false,
+            'blocked' => true,
+            'proforma_id' => null,
+            'message' => 'No se puede generar la proforma porque el cobro no tiene un id_cobro valido.',
         ];
     }
 

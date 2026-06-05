@@ -81,8 +81,50 @@ $filters = [
         'cobros' => $cobros,
         'filters' => $filters,
         'meses' => $this->cobrosService::MESES,
+        'periodSummary' => $this->buildPeriodSummary($filters),
     ]);
 }
+
+    private function buildPeriodSummary(array $filters): ?object
+    {
+        $mes = trim((string) ($filters['mes'] ?? ''));
+        $anio = $filters['anio'] ?? null;
+
+        if ($mes === '' || $anio === null) {
+            return null;
+        }
+
+        $yearColumn = $this->resolveValoresExternosYearColumn();
+
+        return DB::table('valores_externos')
+            ->selectRaw('
+                COALESCE(SUM(numero_facturas), 0) as total_facturas,
+                COALESCE(SUM(numero_nota_debito), 0) as total_notas_debito,
+                COALESCE(SUM(numero_nota_credito), 0) as total_notas_credito,
+                COALESCE(SUM(numero_documento_soporte), 0) as total_documentos_soporte,
+                COALESCE(SUM(numero_nota_ajuste), 0) as total_notas_ajuste,
+                COALESCE(SUM(numero_acuse), 0) as total_acuses,
+                COALESCE(SUM(valor_facturas), 0) as valor_facturas,
+                COALESCE(SUM(valor_documentos), 0) as valor_documentos,
+                COALESCE(SUM(valor_acuse), 0) as valor_acuse,
+                COALESCE(SUM(valor_mensualidad), 0) as valor_mensualidad,
+                COALESCE(SUM(valor_total), 0) as valor_total
+            ')
+            ->whereRaw('LOWER(TRIM(mes)) = ?', [mb_strtolower($mes)])
+            ->where($yearColumn, (int) $anio)
+            ->first();
+    }
+
+    private function resolveValoresExternosYearColumn(): string
+    {
+        foreach (['año', 'aÃ±o', 'aÃƒÂ±o', 'aÃƒÆ’Ã‚Â±o'] as $candidate) {
+            if (Schema::hasColumn('valores_externos', $candidate)) {
+                return $candidate;
+            }
+        }
+
+        return 'año';
+    }
 
     public function createExtraordinary(Request $request): View
     {
@@ -229,6 +271,15 @@ $filters = [
 
             try {
                 $resultado = $this->proformaStoreService->storeFromCobro($cobro);
+
+                if (($resultado['blocked'] ?? false) === true) {
+                    $fallidas[] = [
+                        'id_cobro' => $idCobro,
+                        'error' => (string) ($resultado['message'] ?? 'No se pudo generar la proforma.'),
+                    ];
+                    continue;
+                }
+
                 $proformaId = (int) ($resultado['proforma_id'] ?? 0);
 
                 if (($resultado['duplicated'] ?? false) === true) {
@@ -610,6 +661,13 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 ],
             );
 
+            if (($resultado['blocked'] ?? false) === true) {
+                return redirect()
+                    ->route('cobros.proforma.preview', $id)
+                    ->with('status', $resultado['message'])
+                    ->with('status_type', 'warning');
+            }
+
             return redirect()
                 ->route('cobros.proforma.preview', $id)
                 ->with('status', $resultado['message'].' Revisión guardada. Flujo de envío por correo pendiente para fase siguiente.')
@@ -639,6 +697,16 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
         $cobroActualizado = $this->cobrosService->findCobroById($id) ?: $cobro;
         $resultado = $this->proformaStoreService->regenerateFromCobro($cobroActualizado);
+
+        if (($resultado['blocked'] ?? false) === true) {
+            $redirectRoute = $request->input('redirect_to') === 'revisar' ? 'cobros.revisar' : 'cobros.show';
+
+            return redirect()
+                ->route($redirectRoute, $id)
+                ->with('status', $resultado['message'])
+                ->with('status_type', 'warning');
+        }
+
         $proformaId = (int) ($resultado['proforma_id'] ?? 0);
 
         if ($proformaId <= 0) {
@@ -796,7 +864,9 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
         $resultado = $this->proformaStoreService->storeFromCobro($cobro);
 
-        $flashType = $resultado['duplicated'] ? 'warning' : 'success';
+        $flashType = ($resultado['blocked'] ?? false) === true
+            ? 'warning'
+            : (($resultado['duplicated'] ?? false) ? 'warning' : 'success');
 
         return redirect()
             ->route('cobros.proforma.preview', $id)

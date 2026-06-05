@@ -174,6 +174,57 @@
         </form>
     </div>
 
+    @php
+        $periodSummaryMetrics = [
+            ['label' => 'Total Facturas', 'value' => $periodSummary->total_facturas ?? 0, 'tone' => 'text-sky-700 bg-sky-50 border-sky-200', 'type' => 'count'],
+            ['label' => 'Total Notas Débito', 'value' => $periodSummary->total_notas_debito ?? 0, 'tone' => 'text-indigo-700 bg-indigo-50 border-indigo-200', 'type' => 'count'],
+            ['label' => 'Total Notas Crédito', 'value' => $periodSummary->total_notas_credito ?? 0, 'tone' => 'text-violet-700 bg-violet-50 border-violet-200', 'type' => 'count'],
+            ['label' => 'Total Documentos Soporte', 'value' => $periodSummary->total_documentos_soporte ?? 0, 'tone' => 'text-emerald-700 bg-emerald-50 border-emerald-200', 'type' => 'count'],
+            ['label' => 'Total Notas Ajuste', 'value' => $periodSummary->total_notas_ajuste ?? 0, 'tone' => 'text-amber-700 bg-amber-50 border-amber-200', 'type' => 'count'],
+            ['label' => 'Total Acuses', 'value' => $periodSummary->total_acuses ?? 0, 'tone' => 'text-cyan-700 bg-cyan-50 border-cyan-200', 'type' => 'count'],
+            ['label' => 'Valor Facturas', 'value' => $periodSummary->valor_facturas ?? 0, 'tone' => 'text-slate-700 bg-slate-50 border-slate-200', 'type' => 'currency'],
+            ['label' => 'Valor Documentos', 'value' => $periodSummary->valor_documentos ?? 0, 'tone' => 'text-teal-700 bg-teal-50 border-teal-200', 'type' => 'currency'],
+            ['label' => 'Valor Acuse', 'value' => $periodSummary->valor_acuse ?? 0, 'tone' => 'text-blue-700 bg-blue-50 border-blue-200', 'type' => 'currency'],
+            ['label' => 'Valor Mensualidad', 'value' => $periodSummary->valor_mensualidad ?? 0, 'tone' => 'text-fuchsia-700 bg-fuchsia-50 border-fuchsia-200', 'type' => 'currency'],
+            ['label' => 'Valor Total', 'value' => $periodSummary->valor_total ?? 0, 'tone' => 'text-rose-700 bg-rose-50 border-rose-200', 'type' => 'currency'],
+        ];
+    @endphp
+
+    <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900">Resumen del período</h2>
+                <p class="text-sm text-slate-600">
+                    Totales leídos directamente desde <code>valores_externos</code>
+                    @if(!empty($filters['mes']) && !empty($filters['anio']))
+                        para {{ ucfirst((string) $filters['mes']) }} {{ $filters['anio'] }}.
+                    @else
+                        con los filtros actuales.
+                    @endif
+                </p>
+            </div>
+            <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-600">
+                Base de datos
+            </span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            @foreach($periodSummaryMetrics as $metric)
+                <div class="rounded-xl border px-4 py-3 {{ $metric['tone'] }}">
+                    <p class="text-xs font-semibold uppercase tracking-wide opacity-80">{{ $metric['label'] }}</p>
+                    <p class="mt-2 text-2xl font-bold">
+                        @if($metric['type'] === 'currency')
+                            ${{ number_format((float) $metric['value'], 0, ',', '.') }}
+                        @else
+                            {{ number_format((float) $metric['value'], 0, ',', '.') }}
+                        @endif
+                    </p>
+                    <p class="mt-1 text-xs opacity-75">Listo para futura comparación Excel vs base.</p>
+                </div>
+            @endforeach
+        </div>
+    </div>
+
     <div class="bg-white rounded-lg shadow overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full text-sm">

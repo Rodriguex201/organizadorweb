@@ -6,6 +6,7 @@ use App\Imports\GenericSpreadsheetImport;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Excel as ExcelFormat;
 use Maatwebsite\Excel\Facades\Excel;
@@ -79,6 +80,10 @@ class ImportacionesService
                     continue;
                 }
 
+                if ($metadata['type'] === 'soporte' && $this->shouldSkipSoporteRow($row)) {
+                    continue;
+                }
+
                 $nit = $this->normalizeNit($row[2] ?? null);
                 $emisorOriginal = $this->normalizeText($row[3] ?? null);
 
@@ -105,6 +110,7 @@ class ImportacionesService
 
                 if (!isset($aggregated[$key])) {
                     $aggregated[$key] = [
+                        'entry_id' => $this->buildEntryIdentifier($nit, $emisor, $file->getClientOriginalName(), $rowNumber),
                         'nit' => $nit,
                         'emisor' => $emisor,
                         'emisor_original' => $emisorOriginal,
@@ -157,109 +163,86 @@ class ImportacionesService
         $anio = (int) ($periodo['anio'] ?? 0);
         $entries = is_array($batch['entries'] ?? null) ? $batch['entries'] : [];
         $parseErrors = is_array($batch['errors'] ?? null) ? $batch['errors'] : [];
+        $manualAssignments = is_array($batch['manual_assignments'] ?? null) ? $batch['manual_assignments'] : [];
+        $manualAssignmentsByNit = is_array($batch['manual_assignments_by_nit'] ?? null) ? $batch['manual_assignments_by_nit'] : [];
 
-        $cobrosByKey = $this->loadCobrosByPeriodo($mes, $anio);
+        $cobrosByNit = $this->loadCobrosByPeriodo($mes, $anio);
+        $baseRecordsCount = array_sum(array_map('count', $cobrosByNit));
         $previewRows = [];
         $processErrors = [];
 
+        if ($baseRecordsCount === 0 && $entries !== []) {
+            return [
+                'periodo' => [
+                    'mes' => $mes,
+                    'anio' => $anio,
+                ],
+                'sources' => $batch['sources'] ?? [],
+                'rows' => [],
+                'parse_errors' => $parseErrors,
+                'process_errors' => [],
+                'summary' => [
+                    'total' => count($entries),
+                    'ready' => 0,
+                    'with_errors' => 0,
+                    'parse_errors' => count($parseErrors),
+                ],
+                'requires_base_generation' => true,
+                'base_generation_notice' => 'No existen registros base en valores_externos para el periodo seleccionado. Primero debes generarlos antes de importar los archivos.',
+            ];
+        }
+
         foreach ($entries as $entry) {
+            $entryId = $this->resolveEntryIdentifier($entry);
             $nit = $this->normalizeNit($entry['nit'] ?? null);
             $emisor = $this->normalizeEmitter($entry['emisor'] ?? null);
-            $key = $nit . '|' . $emisor;
-            $matches = $cobrosByKey[$key] ?? [];
+            $matches = $cobrosByNit[$nit] ?? [];
 
             if ($matches === []) {
                 $previewRows[] = $this->buildErrorPreviewRow(
                     $entry,
-                    'No se encontro un registro en valores_externos para el NIT/emisor del periodo seleccionado.'
+                    'No se encontro un registro en valores_externos para el NIT del periodo seleccionado.',
+                    $entryId
                 );
                 $processErrors[] = [
                     'file' => implode(', ', (array) ($entry['sources'] ?? [])),
                     'row' => implode(', ', array_map('strval', (array) ($entry['rows'] ?? []))),
-                    'message' => "Sin coincidencia para NIT {$nit} y emisor {$emisor}.",
+                    'message' => "Sin coincidencia para NIT {$nit}.",
                 ];
                 continue;
             }
 
             if (count($matches) > 1) {
+                $assignedMatch = $this->resolveAssignedMatch(
+                    $matches,
+                    $manualAssignmentsByNit[$nit] ?? $manualAssignments[$entryId] ?? null
+                );
+
+                if ($assignedMatch !== null) {
+                    $previewRows[] = $this->buildReadyPreviewRow($entry, $mes, $anio, $assignedMatch, true, $matches);
+                    continue;
+                }
+
                 $previewRows[] = $this->buildErrorPreviewRow(
                     $entry,
-                    'Se encontraron multiples coincidencias en valores_externos para el mismo NIT/emisor.'
+                    'Multiples registros para el mismo NIT en el periodo.',
+                    $entryId,
+                    [
+                        'entry_id' => $entryId,
+                        'match_count' => count($matches),
+                        'matches' => $matches,
+                    ]
                 );
                 $processErrors[] = [
                     'file' => implode(', ', (array) ($entry['sources'] ?? [])),
                     'row' => implode(', ', array_map('strval', (array) ($entry['rows'] ?? []))),
-                    'message' => "Multiples coincidencias para NIT {$nit} y emisor {$emisor}.",
+                    'message' => "Multiples registros para el mismo NIT {$nit} en el periodo.",
                 ];
                 continue;
             }
 
             $match = $matches[0];
-            $cobro = $this->cobrosService->findCobroById((int) $match['id_cobro']);
-
-            if (!$cobro) {
-                $previewRows[] = $this->buildErrorPreviewRow(
-                    $entry,
-                    'El cobro asociado no pudo cargarse para calcular los valores.'
-                );
-                $processErrors[] = [
-                    'file' => implode(', ', (array) ($entry['sources'] ?? [])),
-                    'row' => implode(', ', array_map('strval', (array) ($entry['rows'] ?? []))),
-                    'message' => "No fue posible cargar el cobro {$match['id_cobro']}.",
-                ];
-                continue;
-            }
-
-            $input = $this->cobrosService->mapCobroToRevisionValues($cobro);
-            $input['facturas'] = (float) ($entry['facturas'] ?? 0);
-            $input['nota_debito'] = (float) ($entry['nota_debito'] ?? 0);
-            $input['nota_credito'] = (float) ($entry['nota_credito'] ?? 0);
-            $input['soporte'] = (float) ($entry['soporte'] ?? 0);
-            $input['nota_ajuste'] = (float) ($entry['nota_ajuste'] ?? 0);
-            $input['acuse'] = (float) ($entry['acuse'] ?? 0);
-
-            $calculated = $this->revisarProformaCalculator->calculate($input);
-
-            $previewRows[] = [
-                'status' => 'ready',
-                'error_message' => null,
-                'id_cobro' => (int) $match['id_cobro'],
-                'id_cliente' => (int) ($match['id_cliente'] ?? 0),
-                'nit' => $nit,
-                'emisor' => $emisor,
-                'cliente' => $match['cliente'],
-                'periodo' => $mes . ' ' . $anio,
-                'sources' => array_values((array) ($entry['sources'] ?? [])),
-                'rows' => array_values((array) ($entry['rows'] ?? [])),
-                'imported' => [
-                    'facturas' => (float) ($entry['facturas'] ?? 0),
-                    'nota_debito' => (float) ($entry['nota_debito'] ?? 0),
-                    'nota_credito' => (float) ($entry['nota_credito'] ?? 0),
-                    'soporte' => (float) ($entry['soporte'] ?? 0),
-                    'nota_ajuste' => (float) ($entry['nota_ajuste'] ?? 0),
-                    'acuse' => (float) ($entry['acuse'] ?? 0),
-                ],
-                'calculated' => [
-                    'valor_facturas' => (float) ($calculated['valor_facturas'] ?? 0),
-                    'valor_documentos' => (float) ($calculated['valor_documentos'] ?? 0),
-                    'valor_acuse' => (float) ($calculated['valor_acuse'] ?? 0),
-                    'valor_mensualidad' => (float) ($calculated['total_mensualidad'] ?? 0),
-                    'valor_total' => (float) ($calculated['valor_total_proforma'] ?? 0),
-                ],
-                'persist_payload' => [
-                    'numero_facturas' => (float) ($entry['facturas'] ?? 0),
-                    'numero_nota_debito' => (float) ($entry['nota_debito'] ?? 0),
-                    'numero_nota_credito' => (float) ($entry['nota_credito'] ?? 0),
-                    'numero_documento_soporte' => (float) ($entry['soporte'] ?? 0),
-                    'numero_nota_ajuste' => (float) ($entry['nota_ajuste'] ?? 0),
-                    'numero_acuse' => (float) ($entry['acuse'] ?? 0),
-                    'valor_facturas' => (float) ($calculated['valor_facturas'] ?? 0),
-                    'valor_documentos' => (float) ($calculated['valor_documentos'] ?? 0),
-                    'valor_acuse' => (float) ($calculated['valor_acuse'] ?? 0),
-                    'valor_mensualidad' => (float) ($calculated['total_mensualidad'] ?? 0),
-                    'valor_total' => (float) ($calculated['valor_total_proforma'] ?? 0),
-                ],
-            ];
+            $previewRows[] = $this->buildReadyPreviewRow($entry, $mes, $anio, $match);
         }
 
         return [
@@ -277,6 +260,8 @@ class ImportacionesService
                 'with_errors' => count(array_filter($previewRows, fn (array $row) => $row['status'] !== 'ready')),
                 'parse_errors' => count($parseErrors),
             ],
+            'requires_base_generation' => false,
+            'base_generation_notice' => null,
         ];
     }
 
@@ -287,7 +272,9 @@ class ImportacionesService
      */
     public function processBatch(array $batch, array $preview, string $usuario, ?int $idUsuario = null): array
     {
-        $rows = is_array($preview['rows'] ?? null) ? $preview['rows'] : [];
+        $rows = $this->consolidateReadyRows(
+            is_array($preview['rows'] ?? null) ? $preview['rows'] : []
+        );
         $errors = array_merge(
             is_array($preview['parse_errors'] ?? null) ? $preview['parse_errors'] : [],
             is_array($preview['process_errors'] ?? null) ? $preview['process_errors'] : [],
@@ -304,11 +291,11 @@ class ImportacionesService
             $processed++;
 
             try {
-                DB::table('valores_externos')
+                $affected = DB::table('valores_externos')
                     ->where('id_cobro', (int) ($row['id_cobro'] ?? 0))
                     ->update($row['persist_payload'] ?? []);
 
-                $updated++;
+                $updated += max($affected, 0);
             } catch (\Throwable $exception) {
                 $errors[] = [
                     'file' => implode(', ', (array) ($row['sources'] ?? [])),
@@ -352,6 +339,144 @@ class ImportacionesService
     }
 
     /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function consolidateReadyRows(array $rows): array
+    {
+        $consolidated = [];
+
+        foreach ($rows as $row) {
+            if (($row['status'] ?? null) !== 'ready') {
+                continue;
+            }
+
+            $idCobro = (int) ($row['id_cobro'] ?? 0);
+            if ($idCobro <= 0) {
+                continue;
+            }
+
+            if (!isset($consolidated[$idCobro])) {
+                $consolidated[$idCobro] = $row;
+                continue;
+            }
+
+            $consolidated[$idCobro]['sources'] = array_values(array_unique(array_merge(
+                (array) ($consolidated[$idCobro]['sources'] ?? []),
+                (array) ($row['sources'] ?? []),
+            )));
+            $consolidated[$idCobro]['rows'] = array_values(array_unique(array_merge(
+                array_map('strval', (array) ($consolidated[$idCobro]['rows'] ?? [])),
+                array_map('strval', (array) ($row['rows'] ?? [])),
+            )));
+            $consolidated[$idCobro]['resolved_manually'] = (bool) (($consolidated[$idCobro]['resolved_manually'] ?? false) || ($row['resolved_manually'] ?? false));
+
+            foreach (['facturas', 'nota_debito', 'nota_credito', 'soporte', 'nota_ajuste', 'acuse'] as $field) {
+                $consolidated[$idCobro]['imported'][$field] = (float) ($consolidated[$idCobro]['imported'][$field] ?? 0)
+                    + (float) ($row['imported'][$field] ?? 0);
+            }
+        }
+
+        foreach ($consolidated as $idCobro => &$row) {
+            $cobro = $this->cobrosService->findCobroById((int) $idCobro);
+            if (!$cobro) {
+                continue;
+            }
+
+            $input = $this->cobrosService->mapCobroToRevisionValues($cobro);
+            $input['facturas'] = (float) ($row['imported']['facturas'] ?? 0);
+            $input['nota_debito'] = (float) ($row['imported']['nota_debito'] ?? 0);
+            $input['nota_credito'] = (float) ($row['imported']['nota_credito'] ?? 0);
+            $input['soporte'] = (float) ($row['imported']['soporte'] ?? 0);
+            $input['nota_ajuste'] = (float) ($row['imported']['nota_ajuste'] ?? 0);
+            $input['acuse'] = (float) ($row['imported']['acuse'] ?? 0);
+
+            $calculated = $this->revisarProformaCalculator->calculate($input);
+            $row['calculated'] = [
+                'valor_facturas' => (float) ($calculated['valor_facturas'] ?? 0),
+                'valor_documentos' => (float) ($calculated['valor_documentos'] ?? 0),
+                'valor_acuse' => (float) ($calculated['valor_acuse'] ?? 0),
+                'valor_mensualidad' => (float) ($calculated['total_mensualidad'] ?? 0),
+                'valor_total' => (float) ($calculated['valor_total_proforma'] ?? 0),
+            ];
+            $row['persist_payload'] = [
+                'numero_facturas' => (float) ($row['imported']['facturas'] ?? 0),
+                'numero_nota_debito' => (float) ($row['imported']['nota_debito'] ?? 0),
+                'numero_nota_credito' => (float) ($row['imported']['nota_credito'] ?? 0),
+                'numero_documento_soporte' => (float) ($row['imported']['soporte'] ?? 0),
+                'numero_nota_ajuste' => (float) ($row['imported']['nota_ajuste'] ?? 0),
+                'numero_acuse' => (float) ($row['imported']['acuse'] ?? 0),
+                'valor_facturas' => (float) ($calculated['valor_facturas'] ?? 0),
+                'valor_documentos' => (float) ($calculated['valor_documentos'] ?? 0),
+                'valor_acuse' => (float) ($calculated['valor_acuse'] ?? 0),
+                'valor_mensualidad' => (float) ($calculated['total_mensualidad'] ?? 0),
+                'valor_total' => (float) ($calculated['valor_total_proforma'] ?? 0),
+            ];
+        }
+        unset($row);
+
+        return array_values($consolidated);
+    }
+
+    /**
+     * @param array<string, mixed> $batch
+     * @return array<string, mixed>
+     */
+    public function assignManualMatch(array $batch, string $entryId, int $idCobro): array
+    {
+        $periodo = $batch['periodo'] ?? [];
+        $mes = $this->normalizeMes((string) ($periodo['mes'] ?? ''));
+        $anio = (int) ($periodo['anio'] ?? 0);
+        $entries = is_array($batch['entries'] ?? null) ? $batch['entries'] : [];
+        $cobrosByNit = $this->loadCobrosByPeriodo($mes, $anio);
+
+        foreach ($entries as $entry) {
+            if ($this->resolveEntryIdentifier($entry) !== $entryId) {
+                continue;
+            }
+
+            $nit = $this->normalizeNit($entry['nit'] ?? null);
+            $matches = $cobrosByNit[$nit] ?? [];
+
+            if (count($matches) <= 1) {
+                throw new \InvalidArgumentException('El registro indicado ya no tiene multiples coincidencias para resolver.');
+            }
+
+            $assignedMatch = $this->resolveAssignedMatch($matches, $idCobro);
+            if ($assignedMatch === null) {
+                throw new \InvalidArgumentException('La coincidencia seleccionada no pertenece al NIT del registro importado.');
+            }
+
+            $batch['manual_assignments'] = is_array($batch['manual_assignments'] ?? null)
+                ? $batch['manual_assignments']
+                : [];
+            $batch['manual_assignments_by_nit'] = is_array($batch['manual_assignments_by_nit'] ?? null)
+                ? $batch['manual_assignments_by_nit']
+                : [];
+            $batch['manual_assignments_by_nit'][$nit] = $idCobro;
+
+            $resolvedEntries = 0;
+            foreach ($entries as $candidateEntry) {
+                if ($this->normalizeNit($candidateEntry['nit'] ?? null) !== $nit) {
+                    continue;
+                }
+
+                $candidateEntryId = $this->resolveEntryIdentifier($candidateEntry);
+                $batch['manual_assignments'][$candidateEntryId] = $idCobro;
+                $resolvedEntries++;
+            }
+
+            return [
+                'batch' => $batch,
+                'nit' => $nit,
+                'resolved_entries' => $resolvedEntries,
+            ];
+        }
+
+        throw new \InvalidArgumentException('No se encontro el registro importado que intentas resolver.');
+    }
+
+    /**
      * @return array<string, array{type:string,columns:array<string,int>}>
      */
     private function fileTypeMap(): array
@@ -382,7 +507,7 @@ class ImportacionesService
     }
 
     /**
-     * @return array<string, array<int, array{id_cobro:int,id_cliente:int,cliente:string}>>
+     * @return array<string, array<int, array<string, mixed>>>
      */
     private function loadCobrosByPeriodo(string $mes, int $anio): array
     {
@@ -392,30 +517,41 @@ class ImportacionesService
                 've.id_cobro',
                 've.id_cliente',
                 'cp.nit',
+                'cp.dv',
+                'cp.codigo',
                 'cp.empresa',
                 'cp.nombre',
                 'cp.regimen',
+                'cp.fecha_arriendo',
+                'cp.fecha_retiro',
+                'cp.retiro',
             ])
             ->whereRaw('LOWER(TRIM(ve.mes)) = ?', [$mes])
-            ->whereRaw('ve.`año` = ?', [$anio])
+            ->where("ve.{$this->resolveYearColumn()}", $anio)
             ->get();
 
         $grouped = [];
 
         foreach ($rows as $row) {
-            $nit = $this->normalizeNit($row->nit ?? null);
-            $emisor = $this->normalizeEmitterFromRegimen($row->regimen ?? null);
-
+            $nit = $this->normalizeClienteNit($row->nit ?? null, $row->dv ?? null);
             if ($nit === '') {
                 continue;
             }
 
-            $key = $nit . '|' . $emisor;
-            $grouped[$key] ??= [];
-            $grouped[$key][] = [
+            $grouped[$nit] ??= [];
+            $grouped[$nit][] = [
                 'id_cobro' => (int) $row->id_cobro,
                 'id_cliente' => (int) ($row->id_cliente ?? 0),
                 'cliente' => trim((string) ($row->empresa ?: $row->nombre ?: 'Sin nombre')),
+                'codigo' => trim((string) ($row->codigo ?? '')),
+                'nombre' => trim((string) ($row->nombre ?? '')),
+                'empresa' => trim((string) ($row->empresa ?? '')),
+                'regimen' => trim((string) ($row->regimen ?? '')),
+                'fecha_arriendo' => $row->fecha_arriendo,
+                'fecha_retiro' => $row->fecha_retiro,
+                'estado' => ((int) ($row->retiro ?? 0) === 1 || trim((string) ($row->fecha_retiro ?? '')) !== '')
+                    ? 'Retirado'
+                    : 'Activo',
             ];
         }
 
@@ -446,6 +582,15 @@ class ImportacionesService
 
         return in_array($nit, ['NIT', 'DOCUMENTO', 'IDENTIFICACION'], true)
             || str_contains($emisor, 'EMISOR');
+    }
+
+    /**
+     * @param array<int, mixed> $row
+     */
+    private function shouldSkipSoporteRow(array $row): bool
+    {
+        return $this->quantityFromCell($row[4] ?? null) <= 0
+            && $this->quantityFromCell($row[5] ?? null) <= 0;
     }
 
     private function normalizeNit(mixed $value): string
@@ -490,6 +635,13 @@ class ImportacionesService
         };
     }
 
+    private function normalizeClienteNit(mixed $nit, mixed $dv): string
+    {
+        return $this->normalizeNit(
+            $this->normalizeText($nit) . $this->normalizeText($dv)
+        );
+    }
+
     private function normalizeMes(string $mes): string
     {
         $value = Str::lower(trim($mes));
@@ -497,6 +649,19 @@ class ImportacionesService
         return in_array($value, CobrosService::MESES, true)
             ? $value
             : (CobrosService::MESES[(int) now()->format('n')] ?? 'enero');
+    }
+
+    private function resolveYearColumn(): string
+    {
+        if (Schema::hasColumn('valores_externos', 'año')) {
+            return 'año';
+        }
+
+        if (Schema::hasColumn('valores_externos', 'aÃ±o')) {
+            return 'aÃ±o';
+        }
+
+        return 'año';
     }
 
     private function quantityFromCell(mixed $value): float
@@ -564,11 +729,12 @@ class ImportacionesService
      * @param array<string, mixed> $entry
      * @return array<string, mixed>
      */
-    private function buildErrorPreviewRow(array $entry, string $message): array
+    private function buildErrorPreviewRow(array $entry, string $message, ?string $entryId = null, array $extra = []): array
     {
-        return [
+        return array_merge([
             'status' => 'error',
             'error_message' => $message,
+            'entry_id' => $entryId ?? $this->resolveEntryIdentifier($entry),
             'id_cobro' => null,
             'id_cliente' => null,
             'nit' => $entry['nit'] ?? '',
@@ -593,6 +759,121 @@ class ImportacionesService
                 'valor_total' => 0.0,
             ],
             'persist_payload' => [],
+        ], $extra);
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     * @param array<string, mixed> $match
+     * @return array<string, mixed>
+     */
+    private function buildReadyPreviewRow(array $entry, string $mes, int $anio, array $match, bool $resolvedManually = false, array $availableMatches = []): array
+    {
+        $cobro = $this->cobrosService->findCobroById((int) $match['id_cobro']);
+
+        if (!$cobro) {
+            return $this->buildErrorPreviewRow(
+                $entry,
+                'El cobro asociado no pudo cargarse para calcular los valores.'
+            );
+        }
+
+        $input = $this->cobrosService->mapCobroToRevisionValues($cobro);
+        $input['facturas'] = (float) ($entry['facturas'] ?? 0);
+        $input['nota_debito'] = (float) ($entry['nota_debito'] ?? 0);
+        $input['nota_credito'] = (float) ($entry['nota_credito'] ?? 0);
+        $input['soporte'] = (float) ($entry['soporte'] ?? 0);
+        $input['nota_ajuste'] = (float) ($entry['nota_ajuste'] ?? 0);
+        $input['acuse'] = (float) ($entry['acuse'] ?? 0);
+
+        $calculated = $this->revisarProformaCalculator->calculate($input);
+        $nit = $this->normalizeNit($entry['nit'] ?? null);
+        $emisor = $this->normalizeEmitter($entry['emisor'] ?? null);
+
+        return [
+            'status' => 'ready',
+            'error_message' => null,
+            'entry_id' => $this->resolveEntryIdentifier($entry),
+            'resolved_manually' => $resolvedManually,
+            'match_count' => $resolvedManually ? count($availableMatches) : 0,
+            'matches' => $resolvedManually ? $availableMatches : [],
+            'selected_codigo' => (string) ($match['codigo'] ?? ''),
+            'selected_id_cobro' => (int) ($match['id_cobro'] ?? 0),
+            'id_cobro' => (int) $match['id_cobro'],
+            'id_cliente' => (int) ($match['id_cliente'] ?? 0),
+            'nit' => $nit,
+            'emisor' => $emisor,
+            'cliente' => $match['cliente'],
+            'periodo' => $mes . ' ' . $anio,
+            'sources' => array_values((array) ($entry['sources'] ?? [])),
+            'rows' => array_values((array) ($entry['rows'] ?? [])),
+            'imported' => [
+                'facturas' => (float) ($entry['facturas'] ?? 0),
+                'nota_debito' => (float) ($entry['nota_debito'] ?? 0),
+                'nota_credito' => (float) ($entry['nota_credito'] ?? 0),
+                'soporte' => (float) ($entry['soporte'] ?? 0),
+                'nota_ajuste' => (float) ($entry['nota_ajuste'] ?? 0),
+                'acuse' => (float) ($entry['acuse'] ?? 0),
+            ],
+            'calculated' => [
+                'valor_facturas' => (float) ($calculated['valor_facturas'] ?? 0),
+                'valor_documentos' => (float) ($calculated['valor_documentos'] ?? 0),
+                'valor_acuse' => (float) ($calculated['valor_acuse'] ?? 0),
+                'valor_mensualidad' => (float) ($calculated['total_mensualidad'] ?? 0),
+                'valor_total' => (float) ($calculated['valor_total_proforma'] ?? 0),
+            ],
+            'persist_payload' => [
+                'numero_facturas' => (float) ($entry['facturas'] ?? 0),
+                'numero_nota_debito' => (float) ($entry['nota_debito'] ?? 0),
+                'numero_nota_credito' => (float) ($entry['nota_credito'] ?? 0),
+                'numero_documento_soporte' => (float) ($entry['soporte'] ?? 0),
+                'numero_nota_ajuste' => (float) ($entry['nota_ajuste'] ?? 0),
+                'numero_acuse' => (float) ($entry['acuse'] ?? 0),
+                'valor_facturas' => (float) ($calculated['valor_facturas'] ?? 0),
+                'valor_documentos' => (float) ($calculated['valor_documentos'] ?? 0),
+                'valor_acuse' => (float) ($calculated['valor_acuse'] ?? 0),
+                'valor_mensualidad' => (float) ($calculated['total_mensualidad'] ?? 0),
+                'valor_total' => (float) ($calculated['valor_total_proforma'] ?? 0),
+            ],
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $matches
+     * @return array<string, mixed>|null
+     */
+    private function resolveAssignedMatch(array $matches, mixed $assignedIdCobro): ?array
+    {
+        $assigned = (int) $assignedIdCobro;
+        if ($assigned <= 0) {
+            return null;
+        }
+
+        foreach ($matches as $match) {
+            if ((int) ($match['id_cobro'] ?? 0) === $assigned) {
+                return $match;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveEntryIdentifier(array $entry): string
+    {
+        $existing = trim((string) ($entry['entry_id'] ?? ''));
+
+        return $existing !== ''
+            ? $existing
+            : $this->buildEntryIdentifier(
+                (string) ($entry['nit'] ?? ''),
+                (string) ($entry['emisor'] ?? ''),
+                implode('|', (array) ($entry['sources'] ?? [])),
+                implode('|', array_map('strval', (array) ($entry['rows'] ?? []))),
+            );
+    }
+
+    private function buildEntryIdentifier(string $nit, string $emisor, string $source, string|int $row): string
+    {
+        return sha1($nit . '|' . $emisor . '|' . $source . '|' . (string) $row);
     }
 }
