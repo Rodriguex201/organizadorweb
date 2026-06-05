@@ -17,12 +17,6 @@ class ConfiguracionConceptoController extends Controller
 
     public function index(): View
     {
-        abort_unless(
-            strtolower(session('rol_nombre', '')) === 'admin',
-            403,
-            'Esta sección es solo para administradores.'
-        );
-
         return view('configuracion.conceptos', [
             'conceptos' => $this->conceptosConfigService->allWithUsage(),
         ]);
@@ -33,7 +27,7 @@ class ConfiguracionConceptoController extends Controller
         abort_unless(
             strtolower(session('rol_nombre', '')) === 'admin',
             403,
-            'Esta sección es solo para administradores.'
+            'Esta seccion es solo para administradores.'
         );
 
         $this->conceptosConfigService->create($request->validated());
@@ -49,7 +43,7 @@ class ConfiguracionConceptoController extends Controller
         abort_unless(
             strtolower(session('rol_nombre', '')) === 'admin',
             403,
-            'Esta sección es solo para administradores.'
+            'Esta seccion es solo para administradores.'
         );
 
         $this->conceptosConfigService->update($concepto, $request->validated());
@@ -65,7 +59,7 @@ class ConfiguracionConceptoController extends Controller
         abort_unless(
             strtolower(session('rol_nombre', '')) === 'admin',
             403,
-            'Esta sección es solo para administradores.'
+            'Esta seccion es solo para administradores.'
         );
 
         $result = $this->conceptosConfigService->delete($concepto);
@@ -81,7 +75,7 @@ class ConfiguracionConceptoController extends Controller
         abort_unless(
             strtolower(session('rol_nombre', '')) === 'admin',
             403,
-            'Esta sección es solo para administradores.'
+            'Esta seccion es solo para administradores.'
         );
 
         $activo = $this->conceptosConfigService->toggleActive($concepto);

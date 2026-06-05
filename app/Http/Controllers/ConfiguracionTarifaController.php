@@ -15,12 +15,6 @@ class ConfiguracionTarifaController extends Controller
 
     public function index(): View
     {
-        abort_unless(
-            strtolower(session('rol_nombre', '')) === 'admin',
-            403,
-            'Esta seccion es solo para administradores.'
-        );
-
         return view('configuracion.tarifas', [
             'tarifas' => $this->tarifaConfigService->all(),
         ]);

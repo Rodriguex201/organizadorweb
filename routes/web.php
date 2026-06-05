@@ -87,29 +87,27 @@ Route::middleware('auth.custom')->group(function (): void {
         ->middleware('role:admin,user')
         ->name('proformas.estado.update');
 
-    Route::middleware('role.admin')->group(function (): void {
+    Route::middleware('role:admin,user')->group(function (): void {
         Route::get('/configuracion/directorio', [ConfiguracionDirectorioController::class, 'index'])->name('configuracion.directorio.index');
-        Route::put('/configuracion/directorio', [ConfiguracionDirectorioController::class, 'update'])->name('configuracion.directorio.update');
-
         Route::get('/configuracion/estados-proforma', [ConfiguracionEstadoProformaController::class, 'index'])->name('configuracion.estados-proforma.index');
-        Route::patch('/configuracion/estados-proforma/{estadoCodigo}', [ConfiguracionEstadoProformaController::class, 'update'])->name('configuracion.estados-proforma.update');
-
         Route::get('/configuracion/conceptos', [ConfiguracionConceptoController::class, 'index'])->name('configuracion.conceptos.index');
-        Route::post('/configuracion/conceptos', [ConfiguracionConceptoController::class, 'store'])->name('configuracion.conceptos.store');
-        Route::put('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'update'])->name('configuracion.conceptos.update');
-        Route::patch('/configuracion/conceptos/{concepto}/toggle', [ConfiguracionConceptoController::class, 'toggle'])->name('configuracion.conceptos.toggle');
-        Route::delete('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'destroy'])->name('configuracion.conceptos.destroy');
-
         Route::get('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'index'])->name('configuracion.tarifas.index');
-        Route::put('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'update'])->name('configuracion.tarifas.update');
-
         Route::get('/configuracion/importaciones', [ImportacionesController::class, 'index'])->name('configuracion.importaciones.index');
         Route::post('/configuracion/importaciones/preview', [ImportacionesController::class, 'preview'])->name('configuracion.importaciones.preview');
         Route::post('/configuracion/importaciones/extract', [ImportacionesController::class, 'extract'])->name('configuracion.importaciones.extract');
         Route::post('/configuracion/importaciones/generate-base', [ImportacionesController::class, 'generateBase'])->name('configuracion.importaciones.generate-base');
         Route::post('/configuracion/importaciones/assign-ambiguous', [ImportacionesController::class, 'assignAmbiguous'])->name('configuracion.importaciones.assign-ambiguous');
         Route::post('/configuracion/importaciones/clear', [ImportacionesController::class, 'clear'])->name('configuracion.importaciones.clear');
+    });
 
+    Route::middleware('role.admin')->group(function (): void {
+        Route::put('/configuracion/directorio', [ConfiguracionDirectorioController::class, 'update'])->name('configuracion.directorio.update');
+        Route::patch('/configuracion/estados-proforma/{estadoCodigo}', [ConfiguracionEstadoProformaController::class, 'update'])->name('configuracion.estados-proforma.update');
+        Route::post('/configuracion/conceptos', [ConfiguracionConceptoController::class, 'store'])->name('configuracion.conceptos.store');
+        Route::put('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'update'])->name('configuracion.conceptos.update');
+        Route::patch('/configuracion/conceptos/{concepto}/toggle', [ConfiguracionConceptoController::class, 'toggle'])->name('configuracion.conceptos.toggle');
+        Route::delete('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'destroy'])->name('configuracion.conceptos.destroy');
+        Route::put('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'update'])->name('configuracion.tarifas.update');
         Route::get('/configuracion/usuarios', [ConfiguracionUsuarioController::class, 'index'])->name('configuracion.usuarios.index');
         Route::get('/configuracion/usuarios/crear', [ConfiguracionUsuarioController::class, 'create'])->name('configuracion.usuarios.create');
         Route::post('/configuracion/usuarios', [ConfiguracionUsuarioController::class, 'store'])->name('configuracion.usuarios.store');
