@@ -21,18 +21,58 @@ class EmpresaServidorService
     {
         try {
             $debug = self::debugConexionPorCodigo($codigo);
+            $conexionesConBase = array_values(array_filter(
+                ['mysql_213', 'mysql_167'],
+                static fn (string $conexion): bool => ($debug[$conexion]['show_databases_ok'] ?? false) === true
+            ));
             $conexionDetectada = null;
 
-            foreach (['mysql_213', 'mysql_167'] as $conexion) {
-                if (($debug[$conexion]['show_databases_ok'] ?? false) === true) {
-                    $conexionDetectada = $conexion;
-                    Log::info('[ACTIVACION MYSQL DEBUG] ENCONTRADA EN '.$conexion, [
+            if (count($conexionesConBase) > 1) {
+                Log::warning('[ACTIVACION MYSQL DEBUG] BASE DUPLICADA EN MULTIPLES SERVIDORES', [
+                    'codigo_original' => $debug['codigo_original'],
+                    'codigo_normalizado' => $debug['codigo_normalizado'],
+                    'conexiones' => $conexionesConBase,
+                ]);
+            }
+
+            if (count($conexionesConBase) === 1) {
+                $conexionDetectada = $conexionesConBase[0];
+            } elseif (count($conexionesConBase) > 1) {
+                $conexionesConRegistroGlobal = array_values(array_filter(
+                    $conexionesConBase,
+                    static fn (string $conexion): bool => ($debug[$conexion]['global_empresa_encontrada'] ?? false) === true
+                ));
+
+                if (count($conexionesConRegistroGlobal) === 1) {
+                    $conexionDetectada = $conexionesConRegistroGlobal[0];
+                } elseif (count($conexionesConRegistroGlobal) > 1) {
+                    $conexionDetectada = $conexionesConRegistroGlobal[0];
+
+                    Log::warning('[ACTIVACION MYSQL DEBUG] REGISTRO GLOBAL DUPLICADO EN MULTIPLES SERVIDORES', [
                         'codigo_original' => $debug['codigo_original'],
                         'codigo_normalizado' => $debug['codigo_normalizado'],
-                        'conexion_intentada' => $conexion,
+                        'conexiones' => $conexionesConRegistroGlobal,
+                        'conexion_seleccionada' => $conexionDetectada,
                     ]);
-                    break;
+                } else {
+                    $conexionDetectada = $conexionesConBase[0];
+
+                    Log::warning('[ACTIVACION MYSQL DEBUG] BASE DUPLICADA SIN REGISTRO GLOBAL ENCONTRADO', [
+                        'codigo_original' => $debug['codigo_original'],
+                        'codigo_normalizado' => $debug['codigo_normalizado'],
+                        'conexiones' => $conexionesConBase,
+                        'conexion_seleccionada' => $conexionDetectada,
+                    ]);
                 }
+            }
+
+            if ($conexionDetectada !== null) {
+                Log::info('[ACTIVACION MYSQL DEBUG] ENCONTRADA EN '.$conexionDetectada, [
+                    'codigo_original' => $debug['codigo_original'],
+                    'codigo_normalizado' => $debug['codigo_normalizado'],
+                    'conexion_intentada' => $conexionDetectada,
+                    'motivo' => self::resolverMotivoSeleccion($debug, $conexionDetectada, $conexionesConBase),
+                ]);
             }
 
             Log::info('[EMPRESA SERVIDOR]', [
@@ -41,6 +81,10 @@ class EmpresaServidorService
                 'errores' => [
                     'mysql_213' => $debug['mysql_213']['error'] ?? null,
                     'mysql_167' => $debug['mysql_167']['error'] ?? null,
+                ],
+                'global_empresa_encontrada' => [
+                    'mysql_213' => $debug['mysql_213']['global_empresa_encontrada'] ?? false,
+                    'mysql_167' => $debug['mysql_167']['global_empresa_encontrada'] ?? false,
                 ],
             ]);
 
@@ -81,6 +125,8 @@ class EmpresaServidorService
             'show_databases_ok' => false,
             'databases_encontradas' => [],
             'information_schema_encontradas' => [],
+            'global_empresa_encontrada' => false,
+            'global_empresa_registros' => [],
             'error' => null,
         ];
 
@@ -134,6 +180,7 @@ class EmpresaServidorService
 
             if ($resultadoShowDatabases !== []) {
                 $resultado['show_databases_ok'] = true;
+                self::cargarRegistroGlobal($conexion, $codigoOriginal, $resultado, $config);
 
                 return $resultado;
             }
@@ -156,6 +203,10 @@ class EmpresaServidorService
             ]);
 
             $resultado['show_databases_ok'] = $resultadoInformationSchema !== [];
+
+            if ($resultado['show_databases_ok']) {
+                self::cargarRegistroGlobal($conexion, $codigoOriginal, $resultado, $config);
+            }
 
             return $resultado;
         } catch (Throwable $exception) {
@@ -194,6 +245,51 @@ class EmpresaServidorService
     private static function normalizeRows(array $rows): array
     {
         return array_map(static fn (object $row): array => (array) $row, $rows);
+    }
+
+    private static function cargarRegistroGlobal(string $conexion, string $codigoOriginal, array &$resultado, array $config): void
+    {
+        $globalStart = microtime(true);
+        $globalRows = DB::connection($conexion)->select(
+            'SELECT emprobra, emprfinit, emprfpago FROM `empresas`.`empresas` WHERE emprobra = ? LIMIT 1',
+            [$codigoOriginal],
+        );
+
+        $resultado['global_empresa_registros'] = self::normalizeRows($globalRows);
+        $resultado['global_empresa_encontrada'] = $globalRows !== [];
+
+        Log::info('[ACTIVACION MYSQL DEBUG] CONSULTA GLOBAL EMPRESAS', [
+            'host' => (string) ($config['host'] ?? ''),
+            'puerto' => (string) ($config['port'] ?? ''),
+            'usuario' => (string) ($config['username'] ?? ''),
+            'codigo_original' => $codigoOriginal,
+            'conexion_intentada' => $conexion,
+            'tiempo_ms' => self::elapsedMs($globalStart),
+            'registro_encontrado' => $resultado['global_empresa_encontrada'],
+            'resultado_crudo_completo' => $resultado['global_empresa_registros'],
+        ]);
+    }
+
+    private static function resolverMotivoSeleccion(array $debug, string $conexionDetectada, array $conexionesConBase): string
+    {
+        if (count($conexionesConBase) === 1) {
+            return 'base_encontrada_en_un_solo_servidor';
+        }
+
+        $conexionesConRegistroGlobal = array_values(array_filter(
+            $conexionesConBase,
+            static fn (string $conexion): bool => ($debug[$conexion]['global_empresa_encontrada'] ?? false) === true
+        ));
+
+        if (count($conexionesConRegistroGlobal) === 1) {
+            return 'registro_global_encontrado_en_servidor_unico';
+        }
+
+        if (count($conexionesConRegistroGlobal) > 1) {
+            return 'registro_global_duplicado_se_aplica_prioridad_deterministica';
+        }
+
+        return 'base_duplicada_sin_registro_global_se_aplica_prioridad_deterministica';
     }
 
     private static function formatException(Throwable $exception): array

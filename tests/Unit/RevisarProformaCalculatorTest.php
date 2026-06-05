@@ -36,12 +36,12 @@ class RevisarProformaCalculatorTest extends TestCase
         ]);
 
         $this->assertSame(8.0, $resultado['total_facturas']);
-        $this->assertSame(10.0, $resultado['valor_facturas']);
+        $this->assertSame(16.0, $resultado['valor_facturas']);
         $this->assertSame(5.0, $resultado['total_documentos']);
         $this->assertSame(12.0, $resultado['valor_documentos']);
         $this->assertSame(12.0, $resultado['valor_acuse']);
         $this->assertSame(297.0, $resultado['total_mensualidad']);
-        $this->assertSame(331.0, $resultado['valor_total_proforma']);
+        $this->assertSame(337.0, $resultado['valor_total_proforma']);
     }
 
     public function test_no_agrega_extra_si_numero_equipos_extra_es_cero(): void

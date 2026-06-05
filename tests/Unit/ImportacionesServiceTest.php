@@ -574,11 +574,11 @@ class ImportacionesServiceTest extends TestCase
                     'numero_documento_soporte' => 3.0,
                     'numero_nota_ajuste' => 0.0,
                     'numero_acuse' => 0.0,
-                    'valor_facturas' => 20.0,
+                    'valor_facturas' => 30.0,
                     'valor_documentos' => 15.0,
                     'valor_acuse' => 0.0,
                     'valor_mensualidad' => 100.0,
-                    'valor_total' => 135.0,
+                    'valor_total' => 145.0,
                 ], 'facturas.xlsx', 10),
                 $this->readyProcessRow(501, [
                     'acuse' => 4.0,
@@ -609,10 +609,10 @@ class ImportacionesServiceTest extends TestCase
         $this->assertSame(1.0, (float) $row->numero_nota_credito);
         $this->assertSame(3.0, (float) $row->numero_documento_soporte);
         $this->assertSame(4.0, (float) $row->numero_acuse);
-        $this->assertSame(20.0, (float) $row->valor_facturas);
+        $this->assertSame(30.0, (float) $row->valor_facturas);
         $this->assertSame(15.0, (float) $row->valor_documentos);
         $this->assertSame(12.0, (float) $row->valor_acuse);
-        $this->assertSame(147.0, (float) $row->valor_total);
+        $this->assertSame(157.0, (float) $row->valor_total);
         $this->assertSame(1, (int) $log->cantidad_registros);
     }
 

@@ -130,10 +130,10 @@ class ProformaPreviewService
         }
 
         $numeroFacturas = $this->toFloat($cobro->numero_facturas ?? null);
-        if ($numeroFacturas > 0) {
-            $cantidadFacturas = $numeroFacturas
-                + $this->toFloat($cobro->numero_nota_debito ?? null)
-                + $this->toFloat($cobro->numero_nota_credito ?? null);
+        $cantidadFacturas = $numeroFacturas
+            + $this->toFloat($cobro->numero_nota_debito ?? null)
+            + $this->toFloat($cobro->numero_nota_credito ?? null);
+        if ($cantidadFacturas > 0) {
 
             $concepto = $this->resolverConceptoDesdeCatalogo(self::CODIGO_FACTURACION, $catalogoConceptos, 'Facturacion electronica', [
                 'origen' => 'preview_facturacion',
@@ -144,7 +144,7 @@ class ProformaPreviewService
                 concepto: $concepto['nombre'],
                 cantidad: $cantidadFacturas,
                 valorUnitario: $this->toFloat($cobro->cliente_vlrfactura ?? null),
-                valorParcialOverride: $this->toFloat($cobro->valor_facturas ?? null),
+                valorParcialOverride: $cantidadFacturas * $this->toFloat($cobro->cliente_vlrfactura ?? null),
             );
         }
 
@@ -241,7 +241,7 @@ class ProformaPreviewService
         $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
 
         return $this->toFloat($revision['total_mensualidad'] ?? null)
-            + $this->toFloat($cobro->valor_facturas ?? null)
+            + $this->toFloat($revision['valor_facturas'] ?? null)
             + $this->toFloat($cobro->valor_documentos ?? null)
             + $this->toFloat($cobro->valor_acuse ?? null);
     }

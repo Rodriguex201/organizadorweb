@@ -64,20 +64,28 @@ class ProformaPreviewServiceTest extends TestCase
         $lineas = $preview['detalle']['lineas'];
 
         $lineaExtra = null;
+        $lineaFacturacion = null;
         foreach ($lineas as $linea) {
             if (($linea['codigo'] ?? null) === '0011') {
                 $lineaExtra = $linea;
-                break;
+            }
+
+            if (($linea['codigo'] ?? null) === '0081') {
+                $lineaFacturacion = $linea;
             }
         }
 
         $this->assertNotNull($lineaExtra);
+        $this->assertNotNull($lineaFacturacion);
         $this->assertSame('SERVICIO CLOUD TERMINALES EXTRA', $lineaExtra['concepto']);
         $this->assertSame(2.0, $lineaExtra['cantidad']);
         $this->assertSame(30.0, $lineaExtra['valor_unitario']);
         $this->assertSame(60.0, $lineaExtra['valor_parcial']);
-        $this->assertSame(311.0, $preview['detalle']['total_preview']);
-        $this->assertSame(311.0, $preview['detalle']['total_calculado']);
+        $this->assertSame(8.0, $lineaFacturacion['cantidad']);
+        $this->assertSame(2.0, $lineaFacturacion['valor_unitario']);
+        $this->assertSame(16.0, $lineaFacturacion['valor_parcial']);
+        $this->assertSame(317.0, $preview['detalle']['total_preview']);
+        $this->assertSame(317.0, $preview['detalle']['total_calculado']);
     }
 
     public function test_no_falla_si_el_concepto_de_terminales_extra_no_existe_en_bd(): void
