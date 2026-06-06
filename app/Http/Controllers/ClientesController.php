@@ -737,7 +737,16 @@ class ClientesController extends Controller
             'nombre' => ['nullable', 'string', 'max:150'],
             'empresa' => ['nullable', 'string', 'max:150'],
             'celular1' => ['nullable', 'string', 'max:30'],
-            'email' => ['nullable', 'email', 'max:150'],
+            'email' => [
+                'nullable',
+                'string',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (!$this->isValidEmailList($value)) {
+                        $fail('Debe ingresar un correo valido o varios correos validos separados por coma o punto y coma.');
+                    }
+                },
+            ],
             'codigo' => ['nullable', 'string', 'max:50'],
             'fecha_inicio' => ['nullable', 'date'],
             'fecha_arriendo' => ['nullable', 'date'],
@@ -785,6 +794,38 @@ class ClientesController extends Controller
             'dv.regex' => 'El DV solo permite números y la letra X.',
             'regimen.in' => 'Selecciona un regimen válido: SAS, PCS o SMP.',
         ];
+    }
+
+    private function isValidEmailList(mixed $value): bool
+    {
+        if ($value === null) {
+            return true;
+        }
+
+        $raw = trim((string) $value);
+
+        if ($raw === '') {
+            return true;
+        }
+
+        $emails = preg_split('/[;,]/', $raw) ?: [];
+        $validEmails = 0;
+
+        foreach ($emails as $email) {
+            $email = trim((string) $email);
+
+            if ($email === '') {
+                return false;
+            }
+
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return false;
+            }
+
+            $validEmails++;
+        }
+
+        return $validEmails > 0;
     }
 
     private function toUppercase(mixed $value): mixed

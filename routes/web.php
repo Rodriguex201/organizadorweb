@@ -43,6 +43,7 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/cobros', [CobrosController::class, 'index'])->name('cobros.index');
     Route::get('/cobros/extraordinario/crear', [CobrosController::class, 'createExtraordinary'])->name('cobros.extraordinario.create');
     Route::post('/cobros/extraordinario', [CobrosController::class, 'storeExtraordinary'])->name('cobros.extraordinario.store');
+    Route::post('/cobros/lote-pendiente/limpiar', [CobrosController::class, 'limpiarLotePendienteEnvio'])->name('cobros.lote-pendiente.limpiar');
     Route::post('/cobros/proformas-masivo/{grupo}', [CobrosController::class, 'generarProformasMasivo'])->name('cobros.proformas-masivo');
     Route::post('/cobros/proformas-masivo/{grupo}/enviar', [CobrosController::class, 'enviarProformasMasivo'])->name('cobros.proformas-masivo.enviar');
     Route::post('/cobros/proformas-masivo/{grupo}/pendientes/activar', [CobrosController::class, 'activarPendientesFacturacionMasivo'])->name('cobros.proformas-masivo.pendientes.activar');

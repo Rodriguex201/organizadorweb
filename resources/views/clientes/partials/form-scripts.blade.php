@@ -7,7 +7,7 @@
                 const isEditForm = clienteForm?.querySelector('input[name="_method"][value="PUT"]') !== null;
 
                 if (clienteForm) {
-                    const uppercaseSelector = 'input[type="text"]:not([type="email"]):not([type="hidden"]), textarea';
+                    const uppercaseSelector = 'input[type="text"]:not([type="hidden"]):not([name="email"]), textarea';
 
                     clienteForm.querySelectorAll(uppercaseSelector).forEach((field) => {
                         field.addEventListener('input', () => {

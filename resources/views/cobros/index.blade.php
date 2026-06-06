@@ -26,6 +26,14 @@
             <a href="{{ route('cobros.extraordinario.create') }}" class="inline-flex items-center rounded bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-200">
                 Generar cobro extraordinario
             </a>
+            @if(($canClearPendingBatch ?? false) === true)
+                <form method="POST" action="{{ route('cobros.lote-pendiente.limpiar') }}">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center rounded bg-rose-100 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-200">
+                        Limpiar lote pendiente de envio
+                    </button>
+                </form>
+            @endif
             <form method="POST" action="{{ route('cobros.proformas-masivo', ['grupo' => 7]) }}">
                 @csrf
                 <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">

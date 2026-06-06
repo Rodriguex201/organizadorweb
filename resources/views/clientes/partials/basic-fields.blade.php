@@ -101,8 +101,12 @@
 
     <div>
         <label class="mb-1 block text-sm font-medium" for="email">Email</label>
-        <input id="email" name="email" type="email" value="{{ $value('email', $mapping['email']) }}" @disabled($fieldUnavailable($mapping['email']))
+        <input id="email" name="email" type="text" inputmode="email" autocomplete="email" value="{{ $value('email', $mapping['email']) }}" @disabled($fieldUnavailable($mapping['email']))
                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
+        <p class="mt-1 text-xs text-slate-500">Puede ingresar varios correos separados por coma o punto y coma. Ejemplo: correo1@empresa.com, correo2@empresa.com</p>
+        @error('email')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
     </div>
 
     <div class="md:col-span-2">

@@ -74,7 +74,7 @@ $filters = [
     'filtro_envio' => $validated['filtro_envio'] ?? null,
 ];
 
-
+    $this->sanitizePendingProformasForEnvioSession();
 
     $cobros = $this->cobrosService->paginateCobros($filters);
 
@@ -83,6 +83,7 @@ $filters = [
         'filters' => $filters,
         'meses' => $this->cobrosService::MESES,
         'periodSummary' => $this->buildPeriodSummary($filters),
+        'canClearPendingBatch' => $this->canManagePendingBatchCleanup(),
     ]);
 }
 
@@ -443,6 +444,7 @@ $filters = [
             abort(404);
         }
 
+        $this->sanitizePendingProformasForEnvioSession();
         $payload = session('cobros.proformas_listas_para_envio');
 
         if (!is_array($payload) || (int) ($payload['grupo'] ?? 0) !== $grupo) {
@@ -545,6 +547,22 @@ $filters = [
             ->route('cobros.index', array_filter($filters, fn ($value) => $value !== null && $value !== ''))
             ->with('status', $message)
             ->with('status_type', count($fallidas) > 0 ? 'warning' : 'success');
+    }
+
+    public function limpiarLotePendienteEnvio(): RedirectResponse
+    {
+        abort_unless(
+            $this->canManagePendingBatchCleanup(),
+            403,
+            'No tienes permisos para usar esta herramienta.'
+        );
+
+        $this->clearCobrosPendingBatchSession();
+
+        return redirect()
+            ->route('cobros.index')
+            ->with('status', 'Lote pendiente de envio limpiado correctamente.')
+            ->with('status_type', 'success');
     }
 
     public function show(int $id): View
@@ -1269,5 +1287,93 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             ->keyBy(fn (array $item) => (int) $item['id'])
             ->values()
             ->all();
+    }
+
+    private function clearCobrosPendingBatchSession(): void
+    {
+        session()->forget([
+            'cobros.proformas_listas_para_envio',
+            'cobros.proformas_masivo_pendientes_facturacion',
+            'cobros.proformas_masivo_regenerar_pendientes',
+            'cobros_proformas_masivo_omitidas',
+            'cobros_proformas_masivo_activados',
+        ]);
+    }
+
+    private function canManagePendingBatchCleanup(): bool
+    {
+        return app()->environment(['local', 'testing']) || esAdmin();
+    }
+
+    private function sanitizePendingProformasForEnvioSession(): void
+    {
+        $payload = session('cobros.proformas_listas_para_envio');
+
+        if (!is_array($payload)) {
+            return;
+        }
+
+        $proformas = is_array($payload['proformas'] ?? null) ? $payload['proformas'] : [];
+
+        if ($proformas === []) {
+            session()->forget('cobros.proformas_listas_para_envio');
+
+            return;
+        }
+
+        $proformaIds = collect($proformas)
+            ->filter(fn ($item) => is_array($item) && (int) ($item['id'] ?? 0) > 0)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($proformaIds->isEmpty()) {
+            session()->forget('cobros.proformas_listas_para_envio');
+
+            return;
+        }
+
+        $existingIds = DB::table('sg_proform')
+            ->whereIn('id', $proformaIds->all())
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $existingIdsLookup = array_fill_keys($existingIds, true);
+        $proformasSanitizadas = [];
+
+        foreach ($proformas as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $proformaId = (int) ($item['id'] ?? 0);
+
+            if ($proformaId <= 0) {
+                continue;
+            }
+
+            if (!isset($existingIdsLookup[$proformaId])) {
+                Log::warning('Cobros lote pendiente descartado por proforma inexistente.', [
+                    'proforma_id' => $proformaId,
+                    'empresa' => trim((string) ($item['empresa'] ?? '')),
+                    'grupo' => (int) ($payload['grupo'] ?? 0),
+                ]);
+
+                continue;
+            }
+
+            $proformasSanitizadas[] = $item;
+        }
+
+        if ($proformasSanitizadas === []) {
+            session()->forget('cobros.proformas_listas_para_envio');
+
+            return;
+        }
+
+        $payload['proformas'] = array_values($proformasSanitizadas);
+        session()->put('cobros.proformas_listas_para_envio', $payload);
     }
 }
