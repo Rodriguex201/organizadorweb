@@ -30,6 +30,8 @@
         </div>
     </div>
 
+    @include('partials.facturacion-cliente-alert', ['facturacionCliente' => $facturacionCliente])
+
     <section class="bg-white rounded-lg shadow p-5">
         <h2 class="text-lg font-semibold mb-4">Cabecera proforma (en memoria)</h2>
         <dl class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">

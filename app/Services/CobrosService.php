@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ClientePotencial;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
@@ -157,6 +158,18 @@ return $query
             'cp.vlrextra2 as cliente_vlrextra2',
         ];
 
+        if (Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+            $select[] = 'cp.estado_facturacion as cliente_estado_facturacion';
+        } else {
+            $select[] = DB::raw("'".ClientePotencial::ESTADO_FACTURACION_ACTIVO."' as cliente_estado_facturacion");
+        }
+
+        if (Schema::hasColumn('clientes_potenciales', 'fecha_inicio_facturacion')) {
+            $select[] = 'cp.fecha_inicio_facturacion as cliente_fecha_inicio_facturacion';
+        } else {
+            $select[] = DB::raw('NULL as cliente_fecha_inicio_facturacion');
+        }
+
         if (Schema::hasColumn('clientes_potenciales', 'numextra')) {
             $select[] = 'cp.numextra as cliente_numextra';
         }
@@ -298,6 +311,7 @@ return $query
     {
         $filters['grupo_fecha'] = (string) $grupoFecha;
         $filters['exclude_retirados'] = true;
+        $filters['only_facturacion_activa'] = true;
 
         $query = $this->buildCobrosQuery($filters);
         $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
@@ -342,9 +356,22 @@ private function buildCobrosQuery(array $filters)
             'cp.fecha_arriendo',
             'cp.codigo',
             'cp.nombre',
+            'cp.empresa',
             'cp.regimen',
             'cp.nota_cobro',
         ]);
+
+    if (Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+        $query->addSelect(DB::raw($this->billingStatusSql('cp.estado_facturacion').' as estado_facturacion'));
+    } else {
+        $query->addSelect(DB::raw("'".ClientePotencial::ESTADO_FACTURACION_ACTIVO."' as estado_facturacion"));
+    }
+
+    if (Schema::hasColumn('clientes_potenciales', 'fecha_inicio_facturacion')) {
+        $query->addSelect('cp.fecha_inicio_facturacion');
+    } else {
+        $query->addSelect(DB::raw('NULL as fecha_inicio_facturacion'));
+    }
 
     // 🔥 FILTRO MES
     if (!empty($filters['mes'])) {
@@ -357,7 +384,7 @@ if (!empty($filters['anio'])) {
 }
 
     // 🔥 FILTRO PROFORMA
-    if (!is_null($filters['proforma'])) {
+    if (!is_null($filters['proforma'] ?? null)) {
         $query->where('ve.Proforma', $filters['proforma']);
     }
 
@@ -389,6 +416,12 @@ if (!empty($filters['anio'])) {
 
     if (($filters['exclude_retirados'] ?? false) === true) {
         $this->clienteRetiradoService->applyNoRetiradosConstraint($query, 'cp');
+    }
+
+    if (($filters['only_facturacion_activa'] ?? false) === true && Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+        $query->whereRaw($this->billingStatusSql('cp.estado_facturacion').' = ?', [
+            ClientePotencial::ESTADO_FACTURACION_ACTIVO,
+        ]);
     }
 
     // 🔥 FILTRO NOTA
@@ -553,6 +586,11 @@ if (!empty($filters['anio'])) {
         }
 
         return "LOWER({$collapsed})";
+    }
+
+    private function billingStatusSql(string $column): string
+    {
+        return "CASE WHEN UPPER(TRIM(COALESCE({$column}, ''))) = 'PENDIENTE' THEN 'PENDIENTE' ELSE 'ACTIVO' END";
     }
 
     private function normalizarOrdenFecha(null|string $orden): ?string

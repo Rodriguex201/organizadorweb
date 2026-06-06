@@ -58,6 +58,7 @@
         'mapping' => $mapping,
         'value' => $value,
         'fieldUnavailable' => $fieldUnavailable,
+        'estadosFacturacion' => $estadosFacturacion,
     ])
 
     <p class="mt-4 text-xs text-slate-500">Los campos deshabilitados no existen aÃºn en la tabla <code>clientes_potenciales</code> de esta instancia y se muestran como fallback visual.</p>

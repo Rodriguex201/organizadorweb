@@ -13,6 +13,11 @@
                 @else
                     <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Activo</span>
                 @endif
+                @if(($cliente->estado_facturacion_normalizado ?? null) === \App\Models\ClientePotencial::ESTADO_FACTURACION_ACTIVO)
+                    <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Facturacion ACTIVO</span>
+                @else
+                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Facturacion PENDIENTE</span>
+                @endif
             </div>
             <p class="text-sm text-slate-600">Ajuste de datos en <code>clientes_potenciales</code>.</p>
             @if(!empty($cliente->motivo_retiro_nombre))

@@ -33,6 +33,8 @@
         </div>
     @endif
 
+    @include('partials.facturacion-cliente-alert', ['facturacionCliente' => $facturacionCliente])
+
     @if ($errors->any())
         <div class="rounded border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             <p class="font-semibold mb-1">Hay errores de validacion:</p>

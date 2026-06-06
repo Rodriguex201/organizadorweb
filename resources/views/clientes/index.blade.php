@@ -54,6 +54,7 @@
                 <tr>
                     <th class="px-3 py-3 text-left">Cliente</th>
                     <th class="px-3 py-3 text-left whitespace-nowrap">Estado</th>
+                    <th class="px-3 py-3 text-left whitespace-nowrap">Facturacion</th>
                     <th class="px-3 py-3 text-left whitespace-nowrap">Codigo</th>
                     <th class="px-3 py-3 text-left whitespace-nowrap">Fecha inicio</th>
                     <th class="px-3 py-3 text-left whitespace-nowrap">Fecha arriendo</th>
@@ -92,6 +93,13 @@
                                 <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">Retirado</span>
                             @else
                                 <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Activo</span>
+                            @endif
+                        </td>
+                        <td class="px-3 py-3 align-top whitespace-nowrap">
+                            @if(($cliente->estado_facturacion_normalizado ?? null) === \App\Models\ClientePotencial::ESTADO_FACTURACION_ACTIVO)
+                                <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">ACTIVO</span>
+                            @else
+                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">PENDIENTE</span>
                             @endif
                         </td>
                         <td class="px-3 py-3 align-top whitespace-nowrap text-xs text-slate-700">{{ $cliente->codigo ?: '-' }}</td>
@@ -138,7 +146,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="12" class="px-4 py-8 text-center text-slate-500">No hay clientes disponibles para los filtros seleccionados.</td>
+                        <td colspan="13" class="px-4 py-8 text-center text-slate-500">No hay clientes disponibles para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 </tbody>

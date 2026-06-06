@@ -196,5 +196,7 @@
             </div>
         </section>
     </div>
+
+    @include('partials.facturacion-cliente-alert', ['facturacionCliente' => $facturacionCliente])
 </div>
 @endsection

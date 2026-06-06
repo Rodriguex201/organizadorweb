@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClientePotencial;
 use App\Services\CobrosService;
 use App\Services\CobroExtraordinarioService;
 use App\Services\ClienteRetiradoService;
@@ -466,6 +467,7 @@ $filters = [
             'proformaPersistidaId' => $proformaPersistidaId,
             'proformaPersistida' => $proformaPersistida,
             'canSendPersistedProforma' => $this->proformasService->canSendProforma($proformaPersistida),
+            'facturacionCliente' => $this->buildFacturacionClienteData($cobro),
         ]);
     }
 
@@ -488,6 +490,7 @@ $filters = [
             'reviewValues' => $reviewValues,
             'formData' => $formData,
             'proformaPersistidaId' => $proformaPersistidaId,
+            'facturacionCliente' => $this->buildFacturacionClienteData($cobro),
         ]);
     }
 
@@ -642,6 +645,13 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         ]);
 
         if ($accion === 'generar') {
+            if ($this->clienteTieneFacturacionPendiente($cobro)) {
+                return redirect()
+                    ->route('cobros.revisar', $id)
+                    ->with('status', 'Este cliente aun no ha iniciado facturacion.')
+                    ->with('status_type', 'warning');
+            }
+
             if ($valorExtra > 0) {
                 $request->validate([
                     'codigo_concepto_extra' => ['required', 'string', 'max:100'],
@@ -692,6 +702,13 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             return redirect()
                 ->route('cobros.show', $id)
                 ->with('status', 'No es posible regenerar proformas para clientes retirados.')
+                ->with('status_type', 'warning');
+        }
+
+        if ($this->clienteTieneFacturacionPendiente($cobro)) {
+            return redirect()
+                ->route('cobros.show', $id)
+                ->with('status', 'Este cliente aun no ha iniciado facturacion.')
                 ->with('status_type', 'warning');
         }
 
@@ -844,6 +861,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             'cobro' => $cobro,
             'proforma' => $proforma,
             'proformaPersistidaId' => $proformaPersistidaId,
+            'facturacionCliente' => $this->buildFacturacionClienteData($cobro),
         ]);
     }
 
@@ -859,6 +877,13 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             return redirect()
                 ->route('cobros.proforma.preview', $id)
                 ->with('status', 'No es posible generar proformas para clientes retirados.')
+                ->with('status_type', 'warning');
+        }
+
+        if ($this->clienteTieneFacturacionPendiente($cobro)) {
+            return redirect()
+                ->route('cobros.proforma.preview', $id)
+                ->with('status', 'Este cliente aun no ha iniciado facturacion.')
                 ->with('status_type', 'warning');
         }
 
@@ -892,5 +917,24 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
     private function asegurarPdfDeProforma(int $proformaId): array
     {
         return $this->proformaPdfService->generateForProformaId($proformaId);
+    }
+
+    private function buildFacturacionClienteData(object $cobro): array
+    {
+        $estado = ClientePotencial::normalizeEstadoFacturacion(
+            $cobro->cliente_estado_facturacion ?? $cobro->estado_facturacion ?? null
+        );
+
+        return [
+            'estado' => $estado,
+            'es_pendiente' => $estado === ClientePotencial::ESTADO_FACTURACION_PENDIENTE,
+            'fecha_inicio' => $cobro->cliente_fecha_inicio_facturacion ?? $cobro->fecha_inicio_facturacion ?? null,
+            'cliente_id' => (int) ($cobro->cliente_id ?? $cobro->id_cliente ?? 0),
+        ];
+    }
+
+    private function clienteTieneFacturacionPendiente(object $cobro): bool
+    {
+        return (bool) ($this->buildFacturacionClienteData($cobro)['es_pendiente'] ?? false);
     }
 }

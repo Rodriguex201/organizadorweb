@@ -21,7 +21,14 @@
     $selectedLlego = (string) $value('llego', $mapping['llego'] ?? null);
     $selectedTipoCliente = (string) $value('tipo_cliente_id', $mapping['tipo_cliente'] ?? null);
     $selectedRegimen = (string) $value('regimen', $mapping['regimen'] ?? null);
+    $selectedEstadoFacturacion = (string) old(
+        'estado_facturacion',
+        $cliente?->estado_facturacion_normalizado
+            ?? $cliente?->{$mapping['estado_facturacion'] ?? 'estado_facturacion'}
+            ?? \App\Models\ClientePotencial::ESTADO_FACTURACION_PENDIENTE
+    );
     $regimenOptions = ['SAS', 'PCS', 'SMP'];
+    $estadosFacturacion = $estadosFacturacion ?? \App\Models\ClientePotencial::estadosFacturacion();
 @endphp
 
 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -203,5 +210,18 @@
                 <option value="{{ $opcion['id'] }}" @selected($selectedLlego === (string) $opcion['id'] || $selectedLlego === $opcion['label'])>{{ $opcion['label'] }}</option>
             @endforeach
         </select>
+    </div>
+
+    <div>
+        <label class="mb-1 block text-sm font-medium" for="estado_facturacion">Estado Facturacion</label>
+        <select id="estado_facturacion" name="estado_facturacion" @disabled($fieldUnavailable($mapping['estado_facturacion'] ?? null))
+                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
+            @foreach($estadosFacturacion as $estadoFacturacion)
+                <option value="{{ $estadoFacturacion }}" @selected($selectedEstadoFacturacion === $estadoFacturacion)>{{ $estadoFacturacion }}</option>
+            @endforeach
+        </select>
+        @error('estado_facturacion')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
     </div>
 </div>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClientePotencial;
 use App\Services\ClienteValorTotalCalculator;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
@@ -50,6 +51,8 @@ class ClientesController extends Controller
             $mapping['motivo_reactivacion'] ? "{$mapping['motivo_reactivacion']} as motivo_reactivacion" : DB::raw('NULL as motivo_reactivacion'),
             $mapping['ip_empresa'] ? "{$mapping['ip_empresa']} as ip_empresa" : DB::raw('NULL as ip_empresa'),
             $mapping['contrato'] ? "{$mapping['contrato']} as contrato" : DB::raw('NULL as contrato'),
+            $mapping['estado_facturacion'] ? "{$mapping['estado_facturacion']} as estado_facturacion" : DB::raw("'".ClientePotencial::ESTADO_FACTURACION_ACTIVO."' as estado_facturacion"),
+            $mapping['fecha_inicio_facturacion'] ? "{$mapping['fecha_inicio_facturacion']} as fecha_inicio_facturacion" : DB::raw('NULL as fecha_inicio_facturacion'),
         ];
 
         $query->select($selects);
@@ -90,6 +93,7 @@ class ClientesController extends Controller
         $clientes->getCollection()->transform(function ($cliente) use ($mapping, $motivosRetiro) {
             $cliente->esta_retirado = $this->isClienteRetirado($cliente, $mapping);
             $cliente->motivo_retiro_nombre = $this->resolveRetiroReasonLabel($cliente, $mapping, $motivosRetiro);
+            $cliente->estado_facturacion_normalizado = $this->resolveBillingStatus($cliente, $mapping);
 
             return $cliente;
         });
@@ -116,6 +120,7 @@ class ClientesController extends Controller
             'mapping' => $mapping,
             'motivosReactivacion' => $this->loadReactivationReasons(),
             'motivosRetiro' => $motivosRetiro,
+            'estadosFacturacion' => ClientePotencial::estadosFacturacion(),
         ]);
     }
 
@@ -125,6 +130,7 @@ class ClientesController extends Controller
             'mapping' => $this->resolveColumnMapping(),
             'catalogos' => $this->loadFormCatalogs(),
             'tarifasDefaults' => $this->tarifaConfigService->clientCreateDefaults(),
+            'estadosFacturacion' => ClientePotencial::estadosFacturacion(),
         ]);
     }
 
@@ -209,6 +215,7 @@ class ClientesController extends Controller
         }
 
         $payload = $this->buildPayload($validated, $mapping, $catalogos);
+        $this->applyBillingDefaultsForCreate($payload, $validated, $mapping);
 
         if ($payload === []) {
             return back()->withInput()->withErrors([
@@ -254,6 +261,7 @@ class ClientesController extends Controller
         $cliente->esta_retirado = $this->isClienteRetirado($cliente, $mapping);
         $motivosRetiro = $this->loadRetiroReasons();
         $cliente->motivo_retiro_nombre = $this->resolveRetiroReasonLabel($cliente, $mapping, $motivosRetiro);
+        $cliente->estado_facturacion_normalizado = $this->resolveBillingStatus($cliente, $mapping);
 
         return view('clientes.edit', [
             'cliente' => $cliente,
@@ -262,6 +270,7 @@ class ClientesController extends Controller
             'catalogos' => $this->loadFormCatalogs(),
             'motivosReactivacion' => $this->loadReactivationReasons(),
             'motivosRetiro' => $motivosRetiro,
+            'estadosFacturacion' => ClientePotencial::estadosFacturacion(),
         ]);
     }
 
@@ -269,6 +278,9 @@ class ClientesController extends Controller
     {
         $mapping = $this->resolveColumnMapping();
         $catalogos = $this->loadFormCatalogs();
+        $clienteActual = $this->findClienteById($id, $mapping);
+
+        abort_if(!$clienteActual, 404);
 
         $validated = $request->validate(
             $this->rules($catalogos, $mapping),
@@ -288,6 +300,7 @@ class ClientesController extends Controller
         }
 
         $payload = $this->buildPayload($validated, $mapping, $catalogos);
+        $this->applyBillingStateTransition($payload, $validated, $clienteActual, $mapping);
 
         if ($payload === []) {
             return back()->withInput()->withErrors([
@@ -303,6 +316,39 @@ class ClientesController extends Controller
         $query->update($payload);
 
         return redirect()->route('clientes.index')->with('status', 'Cliente actualizado correctamente.');
+    }
+
+    public function activarFacturacion(Request $request, int $id): RedirectResponse
+    {
+        $mapping = $this->resolveColumnMapping();
+        $cliente = $this->findClienteById($id, $mapping);
+
+        abort_if(!$cliente, 404);
+
+        if (!$mapping['estado_facturacion']) {
+            return back()->withErrors([
+                'general' => 'La columna estado_facturacion no esta disponible en clientes_potenciales.',
+            ]);
+        }
+
+        $payload = [
+            $mapping['estado_facturacion'] => ClientePotencial::ESTADO_FACTURACION_ACTIVO,
+        ];
+
+        if (
+            $mapping['fecha_inicio_facturacion']
+            && empty($cliente->{$mapping['fecha_inicio_facturacion']} ?? null)
+        ) {
+            $payload[$mapping['fecha_inicio_facturacion']] = Carbon::now()->toDateString();
+        }
+
+        DB::table('clientes_potenciales')
+            ->where($mapping['id'], $id)
+            ->update($payload);
+
+        return back()
+            ->with('status', 'Cliente activado para facturacion correctamente.')
+            ->with('status_type', 'success');
     }
 
     public function retirar(Request $request, int $id): RedirectResponse
@@ -459,6 +505,7 @@ class ClientesController extends Controller
             'fecha_arriendo' => 'fecha_arriendo',
             'ip_empresa' => 'ip_empresa',
             'regimen' => 'regimen',
+            'estado_facturacion' => 'estado_facturacion',
         ];
 
         foreach ($inputToLogical as $input => $logicalKey) {
@@ -516,6 +563,72 @@ class ClientesController extends Controller
         return $payload;
     }
 
+    private function applyBillingDefaultsForCreate(array &$payload, array $validated, array $mapping): void
+    {
+        if ($mapping['estado_facturacion']) {
+            $payload[$mapping['estado_facturacion']] = ClientePotencial::normalizeEstadoFacturacion(
+                $validated['estado_facturacion'] ?? null,
+                ClientePotencial::ESTADO_FACTURACION_PENDIENTE
+            );
+        }
+
+        if (!$mapping['fecha_inicio_facturacion']) {
+            return;
+        }
+
+        $estadoDestino = ClientePotencial::normalizeEstadoFacturacion(
+            $validated['estado_facturacion'] ?? null,
+            ClientePotencial::ESTADO_FACTURACION_PENDIENTE
+        );
+
+        $payload[$mapping['fecha_inicio_facturacion']] = $estadoDestino === ClientePotencial::ESTADO_FACTURACION_ACTIVO
+            ? Carbon::now()->toDateString()
+            : null;
+    }
+
+    private function applyBillingStateTransition(array &$payload, array $validated, object $clienteActual, array $mapping): void
+    {
+        if (!$mapping['estado_facturacion']) {
+            return;
+        }
+
+        $estadoActual = $this->resolveBillingStatus($clienteActual, $mapping);
+        $estadoDestino = ClientePotencial::normalizeEstadoFacturacion(
+            $validated['estado_facturacion'] ?? null,
+            $estadoActual
+        );
+
+        $payload[$mapping['estado_facturacion']] = $estadoDestino;
+
+        if (
+            $estadoActual === ClientePotencial::ESTADO_FACTURACION_PENDIENTE
+            && $estadoDestino === ClientePotencial::ESTADO_FACTURACION_ACTIVO
+            && $mapping['fecha_inicio_facturacion']
+            && empty($clienteActual->{$mapping['fecha_inicio_facturacion']} ?? null)
+        ) {
+            $payload[$mapping['fecha_inicio_facturacion']] = Carbon::now()->toDateString();
+        }
+    }
+
+    private function resolveBillingStatus(object $cliente, array $mapping): string
+    {
+        $column = $mapping['estado_facturacion'] ?? null;
+        $estado = $column ? ($cliente->{$column} ?? null) : ($cliente->estado_facturacion ?? null);
+
+        return ClientePotencial::normalizeEstadoFacturacion($estado);
+    }
+
+    private function findClienteById(int $id, array $mapping): ?object
+    {
+        if (!$mapping['id']) {
+            return null;
+        }
+
+        return DB::table('clientes_potenciales')
+            ->where($mapping['id'], $id)
+            ->first();
+    }
+
     private function findCodigoConflict(string $codigo, array $mapping, mixed $excludeId = null): ?object
     {
         $codigoColumn = $mapping['codigo'] ?? null;
@@ -566,6 +679,7 @@ class ClientesController extends Controller
             'departamento',
             'ip_empresa',
             'regimen',
+            'estado_facturacion',
         ];
     }
 
@@ -630,6 +744,7 @@ class ClientesController extends Controller
             'ip_empresa' => ['nullable', 'string', 'max:255'],
             'departamento' => ['nullable', 'string', 'max:150'],
             'regimen' => ['nullable', Rule::in(['SAS', 'PCS', 'SMP'])],
+            'estado_facturacion' => ['nullable', Rule::in(ClientePotencial::estadosFacturacion())],
             'vlrprincipal' => ['nullable', 'numeric', 'min:0'],
             'numequipos' => ['nullable', 'numeric', 'min:0'],
             'vlrterminal' => ['nullable', 'numeric', 'min:0'],
@@ -1200,6 +1315,8 @@ private function normalizeFolderName(string $value): string
             'motivo_reactivacion' => $pick(['mreact']),
             'tipo_retiro' => $pick(['tipoRetiro']),
             'comentarios_reactivacion' => $pick(['Comentarios', 'notas']),
+            'estado_facturacion' => $pick(['estado_facturacion']),
+            'fecha_inicio_facturacion' => $pick(['fecha_inicio_facturacion']),
         ];
     }
 }

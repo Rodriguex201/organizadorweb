@@ -274,11 +274,19 @@
                         $notaCobro = trim((string) ($cobro->nota_cobro ?? ''));
                         $notaResumen = $notaCobro !== '' ? \Illuminate\Support\Str::limit($notaCobro, 50) : 'Sin nota de cobro';
                         $clienteId = (int) ($cobro->cliente_id ?? 0);
+                        $estadoFacturacion = \App\Models\ClientePotencial::normalizeEstadoFacturacion($cobro->estado_facturacion ?? null);
                     @endphp
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3">{{ $fechaArriendoFormateada }}</td>
                         <td class="px-4 py-3 font-medium">{{ $cobro->codigo ?: '—' }}</td>
-                        <td class="px-4 py-3">{{ $cobro->nombre ?: 'Sin nombre' }}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex flex-col gap-1">
+                                <span>{{ $cobro->nombre ?: 'Sin nombre' }}</span>
+                                <span class="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold {{ $estadoFacturacion === \App\Models\ClientePotencial::ESTADO_FACTURACION_ACTIVO ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
+                                    {{ $estadoFacturacion }}
+                                </span>
+                            </div>
+                        </td>
                         <td class="px-4 py-3">{{ $cobro->regimen ?: '—' }}</td>
                         <td class="px-4 py-3 text-right">${{ number_format((float) ($cobro->valor_total ?? 0), 0, ',', '.') }}</td>
                         <td class="px-4 py-3 text-center">

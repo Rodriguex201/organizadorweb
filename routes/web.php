@@ -36,6 +36,7 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/clientes/{id}', [ClientesController::class, 'show'])->name('clientes.show');
     Route::get('/clientes/{id}/edit', [ClientesController::class, 'edit'])->name('clientes.edit');
     Route::put('/clientes/{id}', [ClientesController::class, 'update'])->name('clientes.update');
+    Route::patch('/clientes/{id}/activar-facturacion', [ClientesController::class, 'activarFacturacion'])->name('clientes.activar-facturacion');
     Route::patch('/clientes/{id}/retirar', [ClientesController::class, 'retirar'])->name('clientes.retirar');
     Route::patch('/clientes/{id}/reactivar', [ClientesController::class, 'reactivar'])->name('clientes.reactivar');
 
