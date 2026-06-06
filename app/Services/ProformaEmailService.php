@@ -79,28 +79,18 @@ class ProformaEmailService
     public function resolveDestinatarios(object $proforma, ?string $logPrefix = null): array
     {
         $original = $this->resolveClienteEmailRaw($proforma);
-        $emails = [];
-        $invalidos = [];
         $logPrefix = $this->normalizeLogPrefix($logPrefix);
-
-        foreach (explode(',', $original) as $email) {
-            $email = trim($email);
-
-            if ($email === '') {
-                continue;
-            }
-
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $invalidos[] = $email;
-                continue;
-            }
-
-            $emails[] = $email;
-        }
-
-        $emails = array_values(array_unique($emails));
+        ['emails' => $emails, 'invalidos' => $invalidos] = $this->parseDestinatarios($original);
 
         if ($logPrefix !== null) {
+            Log::info($logPrefix.' DESTINATARIOS PROCESADOS', [
+                'proforma_id' => $proforma->id ?? null,
+                'destinatarios_originales' => $original,
+                'destinatarios_procesados' => $emails,
+                'correos_invalidos_descartados' => $invalidos,
+                'cantidad_validos' => count($emails),
+            ]);
+
             foreach ($invalidos as $emailInvalido) {
                 Log::warning($logPrefix.' EMAIL INVALIDO', [
                     'proforma_id' => $proforma->id ?? null,
@@ -110,7 +100,7 @@ class ProformaEmailService
         }
 
         if ($emails === []) {
-            throw new RuntimeException('El cliente no tiene correos validos registrados en clientes_potenciales.email.');
+            throw new RuntimeException('El cliente no tiene correos validos registrados en clientes_potenciales.email. Motivo: todos los destinatarios fueron descartados tras la validacion.');
         }
 
         return [
@@ -150,6 +140,37 @@ class ProformaEmailService
         }
 
         return '';
+    }
+
+    /**
+     * @return array{emails:array<int,string>,invalidos:array<int,string>}
+     */
+    private function parseDestinatarios(string $destinatariosRaw): array
+    {
+        $segmentos = preg_split('/[;,]/', $destinatariosRaw) ?: [];
+        $emails = [];
+        $invalidos = [];
+
+        foreach ($segmentos as $email) {
+            $email = trim((string) $email);
+
+            if ($email === '') {
+                continue;
+            }
+
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $invalidos[] = $email;
+
+                continue;
+            }
+
+            $emails[] = $email;
+        }
+
+        return [
+            'emails' => array_values(array_unique($emails)),
+            'invalidos' => array_values(array_unique($invalidos)),
+        ];
     }
 
     /**

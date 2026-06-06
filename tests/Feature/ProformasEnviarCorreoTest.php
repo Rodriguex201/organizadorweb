@@ -152,4 +152,49 @@ class ProformasEnviarCorreoTest extends TestCase
                 ],
             ]);
     }
+
+    public function test_si_todos_los_destinatarios_son_invalidos_registra_intento_fallido_y_responde_error(): void
+    {
+        $this->withoutMiddleware();
+
+        $service = Mockery::mock(ProformasService::class);
+        $pdfService = Mockery::mock(ProformaPdfService::class);
+        $emailService = Mockery::mock(ProformaEmailService::class);
+        $dashboardExportService = Mockery::mock(ProformaDashboardExportService::class);
+
+        $proformaInicial = (object) [
+            'id' => 12,
+            'enviado' => 0,
+            'estado' => ProformasService::ESTADO_GENERADA,
+            'nro_prof' => 'PF-12',
+            'rpdf' => 'proformas',
+            'npdf' => 'pf-12.pdf',
+        ];
+
+        $service->shouldReceive('findProformaById')
+            ->once()
+            ->with(12)
+            ->andReturn($proformaInicial);
+        $service->shouldReceive('canSendProforma')->once()->with($proformaInicial)->andReturn(true);
+        $service->shouldReceive('registrarIntentoFallido')->once()->with(12);
+
+        $emailService->shouldReceive('resolveDestinatarios')
+            ->once()
+            ->with($proformaInicial, '[ENVIO MANUAL PROFORMA]')
+            ->andThrow(new \RuntimeException('El cliente no tiene correos validos registrados en clientes_potenciales.email. Motivo: todos los destinatarios fueron descartados tras la validacion.'));
+        $emailService->shouldNotReceive('sendProforma');
+
+        $this->app->instance(ProformasService::class, $service);
+        $this->app->instance(ProformaPdfService::class, $pdfService);
+        $this->app->instance(ProformaEmailService::class, $emailService);
+        $this->app->instance(ProformaDashboardExportService::class, $dashboardExportService);
+
+        $response = $this->postJson(route('proformas.enviar', ['id' => 12]));
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'ok' => false,
+                'message' => 'No se pudo enviar el correo: El cliente no tiene correos validos registrados en clientes_potenciales.email. Motivo: todos los destinatarios fueron descartados tras la validacion.',
+            ]);
+    }
 }

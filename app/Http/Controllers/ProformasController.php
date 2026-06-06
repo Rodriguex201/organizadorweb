@@ -418,16 +418,16 @@ class ProformasController extends Controller
             'proforma_id' => $id,
         ]);
 
-        $destinatarios = $this->proformaEmailService->resolveDestinatarios($proforma, $logPrefix);
-
-        Log::info($logPrefix.' DATOS PREVIOS', [
-            'proforma_id' => $id,
-            'email_original_cliente' => $destinatarios['original'],
-            'correo_final_a_enviar' => $destinatarios['emails'],
-            'cantidad_correos' => $destinatarios['count'],
-        ]);
-
         try {
+            $destinatarios = $this->proformaEmailService->resolveDestinatarios($proforma, $logPrefix);
+
+            Log::info($logPrefix.' DATOS PREVIOS', [
+                'proforma_id' => $id,
+                'email_original_cliente' => $destinatarios['original'],
+                'correo_final_a_enviar' => $destinatarios['emails'],
+                'cantidad_correos' => $destinatarios['count'],
+            ]);
+
             $this->proformaEmailService->sendProforma($proforma, [
                 'destinatarios' => $destinatarios,
                 'log_prefix' => $logPrefix,
@@ -455,6 +455,8 @@ class ProformasController extends Controller
 
             return redirect()->back()->with('status', 'Proforma enviada por correo correctamente.')->with('status_type', 'success');
         } catch (\Throwable $exception) {
+            $this->proformasService->registrarIntentoFallido($id);
+
             Log::error($logPrefix.' CATCH', [
                 'proforma_id' => $id,
                 'mensaje_error' => $exception->getMessage(),
