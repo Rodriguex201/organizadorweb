@@ -443,7 +443,7 @@ class ProformasService
             ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
             ->where('cp.nit', trim((string) ($proforma->nit ?? '')))
             ->whereRaw('LOWER(TRIM(ve.mes)) = ?', [mb_strtolower($mesTexto)])
-            ->whereRaw('ve.`año` = ?', [(int) ($proforma->anio ?? 0)])
+            ->whereRaw($this->valoresExternosYearSql().' = ?', [(int) ($proforma->anio ?? 0)])
             ->whereRaw(
                 "CASE UPPER(TRIM(cp.regimen))
                     WHEN 'PCS' THEN 'PCS'
@@ -542,7 +542,7 @@ class ProformasService
 
     private function queryProformasByGrupoFecha(int $grupoFecha, ?int $mes = null, ?int $anio = null)
     {
-        $diaArriendo = "CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED)";
+        $diaArriendo = $this->arriendoCutDaySql('cp.fecha_arriendo');
 
         return DB::table('sg_proform as p')
             ->leftJoin('clientes_potenciales as cp', function ($join) {
@@ -650,7 +650,7 @@ class ProformasService
                                 })
                                 ->whereRaw('BINARY TRIM(cp.nit) = BINARY TRIM(p.nit)')
                                 ->whereRaw('BINARY LOWER(TRIM(ve.mes)) = BINARY '.$this->proformaMesTextoSql('p.mes'))
-                                ->whereRaw('ve.`año` = p.anio')
+                                ->whereRaw($this->valoresExternosYearSql().' = p.anio')
                                 ->whereRaw("BINARY CASE UPPER(TRIM(COALESCE(cp.regimen, '')))
                                     WHEN 'PCS' THEN 'PCS'
                                     WHEN 'SMP' THEN 'SMP'
@@ -664,7 +664,7 @@ class ProformasService
                 $query
                     ->whereRaw('BINARY TRIM(cp.nit) = BINARY TRIM(p.nit)')
                     ->whereRaw('BINARY LOWER(TRIM(ve.mes)) = BINARY '.$this->proformaMesTextoSql('p.mes'))
-                    ->whereRaw('ve.`año` = p.anio')
+                    ->whereRaw($this->valoresExternosYearSql().' = p.anio')
                     ->whereRaw("BINARY CASE UPPER(TRIM(COALESCE(cp.regimen, '')))
                         WHEN 'PCS' THEN 'PCS'
                         WHEN 'SMP' THEN 'SMP'
@@ -725,11 +725,11 @@ class ProformasService
             ->join('clientes_potenciales as cp_lookup', 'cp_lookup.idclientes_potenciales', '=', DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)'))
             ->selectRaw('TRIM(cp_lookup.nit) as nit_normalized')
             ->selectRaw('LOWER(TRIM(ve.mes)) as mes_normalized')
-            ->selectRaw('ve.`año` as anio')
+            ->selectRaw($this->valoresExternosYearSql().' as anio')
             ->selectRaw($this->normalizedRegimenSql('cp_lookup.regimen').' as emisora_normalized')
             ->selectRaw('MAX(cp_lookup.idclientes_potenciales) as id_cliente')
             ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
-            ->groupByRaw('TRIM(cp_lookup.nit), LOWER(TRIM(ve.mes)), ve.`año`, '.$this->normalizedRegimenSql('cp_lookup.regimen'));
+            ->groupByRaw('TRIM(cp_lookup.nit), LOWER(TRIM(ve.mes)), '.$this->valoresExternosYearSql().', '.$this->normalizedRegimenSql('cp_lookup.regimen'));
     }
 
     private function joinedClienteFieldExpression(string $field): string
@@ -739,6 +739,13 @@ class ProformasService
 
     private function clienteResolutionSourceExpression(): string
     {
+        if (!$this->hasSgProformIdCobroColumn()) {
+            return "CASE
+                WHEN cp_fallback.idclientes_potenciales IS NOT NULL THEN 'fallback'
+                ELSE NULL
+            END";
+        }
+
         return "CASE
             WHEN p.id_cobro IS NOT NULL AND p.id_cobro > 0 THEN 'id_cobro'
             WHEN cp_fallback.idclientes_potenciales IS NOT NULL THEN 'fallback'
@@ -758,6 +765,23 @@ class ProformasService
     private function normalizedEmisoraSql(string $emisoraColumn): string
     {
         return "UPPER(TRIM(COALESCE({$emisoraColumn}, 'SAS')))";
+    }
+
+    private function valoresExternosYearSql(string $alias = 've'): string
+    {
+        return "{$alias}.`año`";
+    }
+
+    private function arriendoCutDaySql(string $column): string
+    {
+        $firstSegment = "SUBSTRING_INDEX(TRIM(COALESCE({$column}, '')), '-', 1)";
+        $lastSegment = "SUBSTRING_INDEX(TRIM(COALESCE({$column}, '')), '-', -1)";
+
+        return "CASE
+            WHEN CHAR_LENGTH({$firstSegment}) = 4
+                THEN CAST({$lastSegment} AS UNSIGNED)
+            ELSE CAST({$firstSegment} AS UNSIGNED)
+        END";
     }
 
     private function hasSgProformIdCobroColumn(): bool

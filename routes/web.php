@@ -45,6 +45,9 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::post('/cobros/extraordinario', [CobrosController::class, 'storeExtraordinary'])->name('cobros.extraordinario.store');
     Route::post('/cobros/proformas-masivo/{grupo}', [CobrosController::class, 'generarProformasMasivo'])->name('cobros.proformas-masivo');
     Route::post('/cobros/proformas-masivo/{grupo}/enviar', [CobrosController::class, 'enviarProformasMasivo'])->name('cobros.proformas-masivo.enviar');
+    Route::post('/cobros/proformas-masivo/{grupo}/pendientes/activar', [CobrosController::class, 'activarPendientesFacturacionMasivo'])->name('cobros.proformas-masivo.pendientes.activar');
+    Route::post('/cobros/proformas-masivo/{grupo}/pendientes/regenerar', [CobrosController::class, 'regenerarPendientesFacturacionMasivo'])->name('cobros.proformas-masivo.pendientes.regenerar');
+    Route::post('/cobros/proformas-masivo/{grupo}/pendientes/descartar', [CobrosController::class, 'descartarRegeneracionPendientesFacturacionMasivo'])->name('cobros.proformas-masivo.pendientes.descartar');
 
     Route::get('/cobros/{id}', [CobrosController::class, 'show'])->name('cobros.show');
     Route::patch('/cobros/clientes/{id}/nota', [CobrosController::class, 'updateNotaCobro'])->name('cobros.nota.update');

@@ -254,89 +254,187 @@ $filters = [
             'filtro_envio' => $validated['filtro_envio'] ?? null,
         ];
 
-        $idsCobro = $this->cobrosService->findCobrosForMassGeneration($filters, $grupo);
+        Log::info('Generacion masiva grupo: inicio.', [
+            'grupo' => $grupo,
+            'filters' => $filters,
+            'database' => DB::connection()->getDatabaseName(),
+            'mass_generation_snapshot' => $this->cobrosService->buildMassGenerationDebugSnapshot($filters, $grupo),
+        ]);
 
-        $creadas = 0;
-        $actualizadas = 0;
-        $fallidas = [];
-        $omitidas = 0;
-        $proformasListas = [];
+        $candidatos = $this->cobrosService->findCobroCandidatesForMassGeneration($filters, $grupo);
+        $resultado = $this->procesarGeneracionMasiva($grupo, $filters, $candidatos);
 
-        foreach ($idsCobro as $idCobro) {
-            $cobro = $this->cobrosService->findCobroById((int) $idCobro);
+        return $this->buildMassGenerationRedirect($grupo, $filters, $resultado);
+    }
 
-            if (!$cobro) {
-                $omitidas++;
-                continue;
-            }
+    public function activarPendientesFacturacionMasivo(Request $request, int $grupo): RedirectResponse
+    {
+        if (!in_array($grupo, [7, 27], true)) {
+            abort(404);
+        }
 
-            try {
-                $resultado = $this->proformaStoreService->storeFromCobro($cobro);
+        $validated = $request->validate([
+            'clientes' => ['required', 'array', 'min:1'],
+            'clientes.*' => ['integer', 'min:1'],
+        ]);
 
-                if (($resultado['blocked'] ?? false) === true) {
-                    $fallidas[] = [
-                        'id_cobro' => $idCobro,
-                        'error' => (string) ($resultado['message'] ?? 'No se pudo generar la proforma.'),
-                    ];
+        $payload = session('cobros.proformas_masivo_pendientes_facturacion');
+
+        if (!is_array($payload) || (int) ($payload['grupo'] ?? 0) !== $grupo) {
+            return redirect()
+                ->route('cobros.index')
+                ->with('status', 'No hay clientes pendientes de facturacion disponibles para activar.')
+                ->with('status_type', 'warning');
+        }
+
+        $items = collect($payload['items'] ?? []);
+        $seleccionados = array_values(array_unique(array_map('intval', $validated['clientes'] ?? [])));
+
+        $aActivar = $items
+            ->filter(fn (array $item) => in_array((int) ($item['cliente_id'] ?? 0), $seleccionados, true))
+            ->values();
+
+        if ($aActivar->isEmpty()) {
+            return redirect()
+                ->route('cobros.index', array_filter($payload['filters'] ?? [], fn ($value) => $value !== null && $value !== ''))
+                ->with('status', 'No se seleccionaron clientes pendientes validos.')
+                ->with('status_type', 'warning');
+        }
+
+        $clienteIds = $aActivar->pluck('cliente_id')->map(fn ($id) => (int) $id)->all();
+        $clientes = DB::table('clientes_potenciales')
+            ->whereIn('idclientes_potenciales', $clienteIds)
+            ->get()
+            ->keyBy('idclientes_potenciales');
+
+        $fechaHoy = Carbon::now()->toDateString();
+        $activados = [];
+
+        DB::transaction(function () use ($aActivar, $clientes, $fechaHoy, &$activados): void {
+            foreach ($aActivar as $item) {
+                $clienteId = (int) ($item['cliente_id'] ?? 0);
+                $clienteActual = $clientes->get($clienteId);
+
+                if (!$clienteActual) {
                     continue;
                 }
 
-                $proformaId = (int) ($resultado['proforma_id'] ?? 0);
+                $update = [];
 
-                if (($resultado['duplicated'] ?? false) === true) {
-                    $actualizadas++;
-                } else {
-                    $creadas++;
+                if (Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+                    $update['estado_facturacion'] = ClientePotencial::ESTADO_FACTURACION_ACTIVO;
                 }
 
-                if ($proformaId > 0) {
-                    $this->asegurarPdfDeProforma($proformaId);
-
-                    $proformasListas[] = [
-                        'id' => $proformaId,
-                        'empresa' => trim((string) ($cobro->cliente_empresa ?? $cobro->cliente_nombre ?? 'Sin nombre')),
-                    ];
+                if (
+                    Schema::hasColumn('clientes_potenciales', 'fecha_inicio_facturacion')
+                    && empty($clienteActual->fecha_inicio_facturacion ?? null)
+                ) {
+                    $update['fecha_inicio_facturacion'] = $fechaHoy;
                 }
-            } catch (\Throwable $exception) {
-                Log::error('Error en generacion masiva de proformas desde cobros.', [
-                    'grupo' => $grupo,
-                    'id_cobro' => $idCobro,
-                    'message' => $exception->getMessage(),
+
+                if ($update !== []) {
+                    DB::table('clientes_potenciales')
+                        ->where('idclientes_potenciales', $clienteId)
+                        ->update($update);
+                }
+
+                $activados[] = array_merge($item, [
+                    'estado_facturacion' => ClientePotencial::ESTADO_FACTURACION_ACTIVO,
+                    'fecha_inicio_facturacion' => $clienteActual->fecha_inicio_facturacion ?? ($update['fecha_inicio_facturacion'] ?? null),
                 ]);
 
-                report($exception);
-
-                $fallidas[] = [
-                    'id_cobro' => $idCobro,
-                    'error' => $exception->getMessage(),
-                ];
+                Log::info('Cobros masivo pendiente activado.', [
+                    'accion' => 'activar_facturacion_masiva',
+                    'fecha' => now()->toDateTimeString(),
+                    'usuario' => $this->resolveMassActionUser(),
+                    'cliente_id' => $clienteId,
+                    'cliente_codigo' => $item['codigo'] ?? null,
+                    'cliente_empresa' => $item['empresa'] ?? null,
+                    'grupo' => $item['grupo'] ?? null,
+                ]);
             }
-        }
+        });
 
-        $statusType = count($fallidas) > 0 ? 'warning' : 'success';
-        $message = "Generacion masiva grupo {$grupo} finalizada. Creadas: {$creadas}. Actualizadas: {$actualizadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
+        $restantes = $items
+            ->reject(fn (array $item) => in_array((int) ($item['cliente_id'] ?? 0), $seleccionados, true))
+            ->values()
+            ->all();
 
-        if ($fallidas !== []) {
-            $message .= ' Errores: '.collect($fallidas)
-                ->take(3)
-                ->map(fn (array $fallida) => sprintf('cobro #%s (%s)', $fallida['id_cobro'], $fallida['error']))
-                ->implode(' | ');
-        }
-
-        if ($proformasListas !== []) {
-            session()->put('cobros.proformas_listas_para_envio', [
+        if ($restantes !== []) {
+            session()->put('cobros.proformas_masivo_pendientes_facturacion', [
                 'grupo' => $grupo,
-                'filters' => $filters,
-                'proformas' => array_values($proformasListas),
+                'filters' => $payload['filters'] ?? [],
+                'items' => $restantes,
             ]);
         } else {
-            session()->forget('cobros.proformas_listas_para_envio');
+            session()->forget('cobros.proformas_masivo_pendientes_facturacion');
         }
 
+        session()->put('cobros.proformas_masivo_regenerar_pendientes', [
+            'grupo' => $grupo,
+            'filters' => $payload['filters'] ?? [],
+            'items' => array_values($activados),
+        ]);
+
+        Log::info('Cobros masivo pendientes activados: resumen.', [
+            'accion' => 'activar_facturacion_masiva_resumen',
+            'fecha' => now()->toDateTimeString(),
+            'usuario' => $this->resolveMassActionUser(),
+            'grupo' => $grupo,
+            'clientes_activados' => count($activados),
+        ]);
+
         return redirect()
-            ->route('cobros.index', array_filter($filters, fn ($value) => $value !== null && $value !== ''))
-            ->with('status', $message)
-            ->with('status_type', $statusType);
+            ->route('cobros.index', array_filter($payload['filters'] ?? [], fn ($value) => $value !== null && $value !== ''))
+            ->with('status', 'Se activaron '.count($activados).' clientes.')
+            ->with('status_type', 'success')
+            ->with('cobros_proformas_masivo_activados', [
+                'grupo' => $grupo,
+                'count' => count($activados),
+            ]);
+    }
+
+    public function regenerarPendientesFacturacionMasivo(int $grupo): RedirectResponse
+    {
+        if (!in_array($grupo, [7, 27], true)) {
+            abort(404);
+        }
+
+        $payload = session('cobros.proformas_masivo_regenerar_pendientes');
+
+        if (!is_array($payload) || (int) ($payload['grupo'] ?? 0) !== $grupo) {
+            return redirect()
+                ->route('cobros.index')
+                ->with('status', 'No hay clientes activados pendientes de regeneracion.')
+                ->with('status_type', 'warning');
+        }
+
+        $candidatos = collect($payload['items'] ?? [])->map(function (array $item): object {
+            return (object) $item;
+        });
+
+        $resultado = $this->procesarGeneracionMasiva($grupo, $payload['filters'] ?? [], $candidatos);
+
+        session()->forget('cobros.proformas_masivo_regenerar_pendientes');
+
+        return $this->buildMassGenerationRedirect($grupo, $payload['filters'] ?? [], $resultado)
+            ->with('status', 'Se activaron '.count($payload['items'] ?? []).' clientes. '.$resultado['message'])
+            ->with('status_type', $resultado['status_type']);
+    }
+
+    public function descartarRegeneracionPendientesFacturacionMasivo(int $grupo): RedirectResponse
+    {
+        if (!in_array($grupo, [7, 27], true)) {
+            abort(404);
+        }
+
+        $payload = session('cobros.proformas_masivo_regenerar_pendientes');
+        session()->forget('cobros.proformas_masivo_regenerar_pendientes');
+
+        return redirect()
+            ->route('cobros.index', array_filter(($payload['filters'] ?? []), fn ($value) => $value !== null && $value !== ''))
+            ->with('status', 'No se regeneraron las proformas omitidas.')
+            ->with('status_type', 'warning');
     }
 
     public function enviarProformasMasivo(Request $request, int $grupo): RedirectResponse
@@ -936,5 +1034,240 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
     private function clienteTieneFacturacionPendiente(object $cobro): bool
     {
         return (bool) ($this->buildFacturacionClienteData($cobro)['es_pendiente'] ?? false);
+    }
+
+    private function buildOmitidaDetalleItem(string $codigo, string $empresa, string $motivo, array $extra = []): array
+    {
+        return array_merge([
+            'codigo' => $codigo !== '' ? $codigo : 'Sin codigo',
+            'empresa' => $empresa !== '' ? $empresa : 'Sin nombre',
+            'motivo' => $motivo !== '' ? $motivo : 'Motivo no especificado',
+        ], $extra);
+    }
+
+    private function procesarGeneracionMasiva(int $grupo, array $filters, \Illuminate\Support\Collection $candidatos): array
+    {
+        $idsCobro = $candidatos->pluck('id_cobro')
+            ->map(fn ($idCobro) => (int) $idCobro)
+            ->filter(fn (int $idCobro) => $idCobro > 0)
+            ->values();
+
+        Log::info('Generacion masiva grupo: ids resueltos.', [
+            'grupo' => $grupo,
+            'total_candidatos' => $candidatos->count(),
+            'total_ids_cobro' => $idsCobro->count(),
+            'ids_cobro_muestra' => $idsCobro->take(15)->values()->all(),
+        ]);
+
+        $creadas = 0;
+        $actualizadas = 0;
+        $fallidas = [];
+        $omitidas = 0;
+        $omitidasDetalle = [];
+        $proformasListas = [];
+        $cobrosEncontradosEnLoop = 0;
+        $storeInvocations = 0;
+        $pendientesFacturacion = [];
+
+        foreach ($candidatos as $candidato) {
+            $idCobro = (int) ($candidato->id_cobro ?? 0);
+            $codigoCliente = trim((string) ($candidato->codigo ?? 'Sin codigo'));
+            $empresaCliente = trim((string) ($candidato->empresa ?? $candidato->nombre ?? 'Sin nombre'));
+
+            if ($idCobro <= 0) {
+                $omitidas++;
+                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Datos incompletos');
+                continue;
+            }
+
+            if ($this->clienteTieneFacturacionPendiente($candidato)) {
+                $omitidas++;
+                $detalle = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Estado Facturacion = PENDIENTE', [
+                    'cliente_id' => (int) ($candidato->cliente_id ?? $candidato->id_cliente ?? 0),
+                    'id_cobro' => $idCobro,
+                    'fecha_arriendo' => $candidato->fecha_arriendo ?? null,
+                    'fecha_creacion_cliente' => $candidato->cliente_fecha_creacion ?? null,
+                    'valor_total_actual' => (float) ($candidato->valor_total ?? 0),
+                    'estado_facturacion' => ClientePotencial::normalizeEstadoFacturacion($candidato->estado_facturacion ?? null),
+                    'grupo' => $grupo,
+                ]);
+                $omitidasDetalle[] = $detalle;
+                $pendientesFacturacion[] = $detalle;
+                continue;
+            }
+
+            if ($this->clienteRetiradoService->estaRetirado($candidato)) {
+                $omitidas++;
+                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Cliente retirado');
+                continue;
+            }
+
+            $cobro = $this->cobrosService->findCobroById((int) $idCobro);
+
+            if (!$cobro) {
+                Log::warning('Generacion masiva grupo: cobro no encontrado en loop.', [
+                    'grupo' => $grupo,
+                    'id_cobro' => $idCobro,
+                ]);
+                $omitidas++;
+                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Datos incompletos');
+                continue;
+            }
+
+            $cobrosEncontradosEnLoop++;
+
+            try {
+                $storeInvocations++;
+                $resultado = $this->proformaStoreService->storeFromCobro($cobro);
+
+                Log::info('Generacion masiva grupo: resultado storeFromCobro.', [
+                    'grupo' => $grupo,
+                    'id_cobro' => $idCobro,
+                    'resultado' => $resultado,
+                ]);
+
+                if (($resultado['blocked'] ?? false) === true) {
+                    $motivoOmitida = (string) ($resultado['message'] ?? 'No se pudo generar la proforma.');
+                    $omitidas++;
+                    $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, $motivoOmitida);
+                    continue;
+                }
+
+                $proformaId = (int) ($resultado['proforma_id'] ?? 0);
+
+                if (($resultado['duplicated'] ?? false) === true) {
+                    $actualizadas++;
+                } else {
+                    $creadas++;
+                }
+
+                if ($proformaId > 0) {
+                    $this->asegurarPdfDeProforma($proformaId);
+
+                    $proformasListas[] = [
+                        'id' => $proformaId,
+                        'empresa' => trim((string) ($cobro->cliente_empresa ?? $cobro->cliente_nombre ?? 'Sin nombre')),
+                    ];
+                }
+            } catch (\Throwable $exception) {
+                Log::error('Error en generacion masiva de proformas desde cobros.', [
+                    'grupo' => $grupo,
+                    'id_cobro' => $idCobro,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                report($exception);
+
+                $fallidas[] = [
+                    'id_cobro' => $idCobro,
+                    'error' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        Log::info('Generacion masiva grupo: resumen final.', [
+            'grupo' => $grupo,
+            'total_candidatos' => $candidatos->count(),
+            'total_ids_cobro' => $idsCobro->count(),
+            'cobros_encontrados_en_loop' => $cobrosEncontradosEnLoop,
+            'store_invocations' => $storeInvocations,
+            'creadas' => $creadas,
+            'actualizadas' => $actualizadas,
+            'omitidas' => $omitidas,
+            'omitidas_detalle' => $omitidasDetalle,
+            'fallidas' => count($fallidas),
+            'fallidas_detalle' => array_slice($fallidas, 0, 10),
+        ]);
+
+        $statusType = count($fallidas) > 0 ? 'warning' : 'success';
+        $message = "Generacion masiva grupo {$grupo} finalizada. Creadas: {$creadas}. Actualizadas: {$actualizadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
+
+        if ($fallidas !== []) {
+            $message .= ' Errores: '.collect($fallidas)
+                ->take(3)
+                ->map(fn (array $fallida) => sprintf('cobro #%s (%s)', $fallida['id_cobro'], $fallida['error']))
+                ->implode(' | ');
+        }
+
+        return [
+            'status_type' => $statusType,
+            'message' => $message,
+            'creadas' => $creadas,
+            'actualizadas' => $actualizadas,
+            'omitidas' => $omitidas,
+            'fallidas' => count($fallidas),
+            'fallidas_detalle' => $fallidas,
+            'omitidas_detalle' => $omitidasDetalle,
+            'pendientes_facturacion' => $pendientesFacturacion,
+            'proformas_listas' => array_values($proformasListas),
+        ];
+    }
+
+    private function buildMassGenerationRedirect(int $grupo, array $filters, array $resultado): RedirectResponse
+    {
+        $proformasListas = array_values($resultado['proformas_listas'] ?? []);
+        $existingLote = session('cobros.proformas_listas_para_envio');
+
+        if ($proformasListas !== []) {
+            $proformasListas = $this->mergePendingProformasForEnvio(
+                is_array($existingLote) ? $existingLote : null,
+                $grupo,
+                $proformasListas,
+            );
+
+            session()->put('cobros.proformas_listas_para_envio', [
+                'grupo' => $grupo,
+                'filters' => $filters,
+                'proformas' => $proformasListas,
+            ]);
+        } elseif (!is_array($existingLote) || (int) ($existingLote['grupo'] ?? 0) !== $grupo) {
+            session()->forget('cobros.proformas_listas_para_envio');
+        }
+
+        if (($resultado['pendientes_facturacion'] ?? []) !== []) {
+            session()->put('cobros.proformas_masivo_pendientes_facturacion', [
+                'grupo' => $grupo,
+                'filters' => $filters,
+                'items' => array_values($resultado['pendientes_facturacion'] ?? []),
+            ]);
+        } else {
+            session()->forget('cobros.proformas_masivo_pendientes_facturacion');
+        }
+
+        $redirect = redirect()
+            ->route('cobros.index', array_filter($filters, fn ($value) => $value !== null && $value !== ''))
+            ->with('status', $resultado['message'] ?? 'Proceso finalizado.')
+            ->with('status_type', $resultado['status_type'] ?? 'success');
+
+        if (($resultado['omitidas_detalle'] ?? []) !== []) {
+            $redirect->with('cobros_proformas_masivo_omitidas', $resultado['omitidas_detalle']);
+        }
+
+        return $redirect;
+    }
+
+    private function resolveMassActionUser(): string
+    {
+        $usuario = trim((string) session('usuario', 'usuario'));
+        $idUsuario = session()->has('idusuario') ? (string) session('idusuario') : null;
+
+        return $idUsuario ? "{$usuario} ({$idUsuario})" : $usuario;
+    }
+
+    private function mergePendingProformasForEnvio(?array $existingLote, int $grupo, array $nuevasProformas): array
+    {
+        $existingProformas = [];
+
+        if (is_array($existingLote) && (int) ($existingLote['grupo'] ?? 0) === $grupo) {
+            $existingProformas = is_array($existingLote['proformas'] ?? null)
+                ? $existingLote['proformas']
+                : [];
+        }
+
+        return collect(array_merge($existingProformas, $nuevasProformas))
+            ->filter(fn ($item) => is_array($item) && (int) ($item['id'] ?? 0) > 0)
+            ->keyBy(fn (array $item) => (int) $item['id'])
+            ->values()
+            ->all();
     }
 }

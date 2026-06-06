@@ -8,6 +8,13 @@
         $proformasListasParaEnvio = session('cobros.proformas_listas_para_envio');
         $proformasListas = is_array($proformasListasParaEnvio['proformas'] ?? null) ? $proformasListasParaEnvio['proformas'] : [];
         $grupoListoParaEnvio = (int) ($proformasListasParaEnvio['grupo'] ?? 0);
+        $proformasMasivoOmitidas = is_array(session('cobros_proformas_masivo_omitidas')) ? session('cobros_proformas_masivo_omitidas') : [];
+        $pendientesFacturacionPayload = session('cobros.proformas_masivo_pendientes_facturacion');
+        $pendientesFacturacionItems = is_array($pendientesFacturacionPayload['items'] ?? null) ? $pendientesFacturacionPayload['items'] : [];
+        $pendientesFacturacionGrupo = (int) ($pendientesFacturacionPayload['grupo'] ?? 0);
+        $regeneracionPendientesPayload = session('cobros.proformas_masivo_regenerar_pendientes');
+        $regeneracionPendientesGrupo = (int) ($regeneracionPendientesPayload['grupo'] ?? 0);
+        $activacionPendientesResult = is_array(session('cobros_proformas_masivo_activados')) ? session('cobros_proformas_masivo_activados') : null;
     @endphp
 
     <div class="mb-6 flex items-center justify-between gap-3">
@@ -67,6 +74,52 @@
         </div>
     @endif
 
+    @if($proformasMasivoOmitidas !== [])
+        <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <h2 class="font-semibold">Clientes omitidos</h2>
+                @if($pendientesFacturacionItems !== [] && in_array($pendientesFacturacionGrupo, [7, 27], true))
+                    <button
+                        type="button"
+                        id="open-pendientes-facturacion-modal"
+                        class="inline-flex items-center rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                    >
+                        Revisar pendientes
+                    </button>
+                @endif
+            </div>
+            <div class="mt-3 space-y-3">
+                @foreach($proformasMasivoOmitidas as $omitida)
+                    <div class="rounded border border-amber-100 bg-white/70 px-3 py-2">
+                        <p class="font-medium">&bull; {{ $omitida['codigo'] ?? 'Sin codigo' }} - {{ $omitida['empresa'] ?? 'Sin nombre' }}</p>
+                        <p class="mt-1 text-amber-800">{{ $omitida['motivo'] ?? 'Motivo no especificado' }}</p>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
+    @if($activacionPendientesResult && is_array($regeneracionPendientesPayload) && in_array($regeneracionPendientesGrupo, [7, 27], true))
+        <div class="mb-4 rounded border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+            <p class="font-semibold">Se activaron {{ (int) ($activacionPendientesResult['count'] ?? 0) }} clientes.</p>
+            <p class="mt-1">Desea regenerar automaticamente las proformas omitidas?</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <form method="POST" action="{{ route('cobros.proformas-masivo.pendientes.regenerar', ['grupo' => $regeneracionPendientesGrupo]) }}">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                        Si, generar ahora
+                    </button>
+                </form>
+                <form method="POST" action="{{ route('cobros.proformas-masivo.pendientes.descartar', ['grupo' => $regeneracionPendientesGrupo]) }}">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
+                        No
+                    </button>
+                </form>
+            </div>
+        </div>
+    @endif
+
     @if($proformasListas !== [] && in_array($grupoListoParaEnvio, [7, 27], true))
         <div class="mb-4 rounded border border-cyan-200 bg-cyan-50 px-4 py-4">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -90,6 +143,86 @@
             <p class="mt-3 text-xs text-cyan-700">
                 Empresas listas: {{ collect($proformasListas)->pluck('empresa')->take(8)->implode(', ') }}{{ count($proformasListas) > 8 ? '...' : '' }}
             </p>
+        </div>
+    @endif
+
+    @if($pendientesFacturacionItems !== [] && in_array($pendientesFacturacionGrupo, [7, 27], true))
+        <div
+            id="pendientes-facturacion-modal"
+            class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 px-4 py-6"
+            aria-hidden="true"
+        >
+            <div class="w-full max-w-5xl rounded-xl bg-white shadow-2xl">
+                <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900">Pendientes de facturacion</h2>
+                        <p class="mt-1 text-sm text-slate-500">Seleccione los clientes que desea activar sin salir del modulo de Cobros.</p>
+                    </div>
+                    <button
+                        type="button"
+                        id="close-pendientes-facturacion-modal"
+                        class="rounded p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        aria-label="Cerrar modal"
+                    >
+                        &times;
+                    </button>
+                </div>
+
+                <form method="POST" action="{{ route('cobros.proformas-masivo.pendientes.activar', ['grupo' => $pendientesFacturacionGrupo]) }}" class="px-5 py-4">
+                    @csrf
+
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <p class="text-sm text-slate-600">Clientes pendientes encontrados: {{ count($pendientesFacturacionItems) }}</p>
+                        <button type="button" id="select-all-pendientes-facturacion" class="inline-flex items-center rounded bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
+                            Seleccionar todos
+                        </button>
+                    </div>
+
+                    <div class="max-h-[60vh] overflow-auto rounded-lg border border-slate-200">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="px-3 py-3 text-left font-semibold text-slate-700">Sel.</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-slate-700">Codigo</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-slate-700">Empresa</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-slate-700">Fecha arriendo</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-slate-700">Fecha creacion cliente</th>
+                                    <th class="px-3 py-3 text-right font-semibold text-slate-700">Valor total actual</th>
+                                    <th class="px-3 py-3 text-left font-semibold text-slate-700">Estado Facturacion</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 bg-white">
+                                @foreach($pendientesFacturacionItems as $item)
+                                    <tr>
+                                        <td class="px-3 py-3 align-top">
+                                            <input type="checkbox" name="clientes[]" value="{{ (int) ($item['cliente_id'] ?? 0) }}" class="pendiente-facturacion-checkbox h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                                        </td>
+                                        <td class="px-3 py-3 align-top">{{ $item['codigo'] ?? 'Sin codigo' }}</td>
+                                        <td class="px-3 py-3 align-top">{{ $item['empresa'] ?? 'Sin nombre' }}</td>
+                                        <td class="px-3 py-3 align-top">{{ $item['fecha_arriendo'] ?? 'N/D' }}</td>
+                                        <td class="px-3 py-3 align-top">{{ $item['fecha_creacion_cliente'] ?? 'N/D' }}</td>
+                                        <td class="px-3 py-3 align-top text-right">{{ number_format((float) ($item['valor_total_actual'] ?? 0), 2, ',', '.') }}</td>
+                                        <td class="px-3 py-3 align-top">
+                                            <span class="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                                                {{ $item['estado_facturacion'] ?? 'PENDIENTE' }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+                        <button type="button" id="cancel-pendientes-facturacion-modal" class="inline-flex items-center rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">
+                            Cerrar
+                        </button>
+                        <button type="submit" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                            Activar seleccionados
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     @endif
 
@@ -510,6 +643,57 @@
         notaModal.addEventListener('click', (event) => {
             if (event.target === notaModal) {
                 closeNotaModal();
+            }
+        });
+    });
+</script>
+@endpush
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('pendientes-facturacion-modal');
+        const openButton = document.getElementById('open-pendientes-facturacion-modal');
+        const closeButton = document.getElementById('close-pendientes-facturacion-modal');
+        const cancelButton = document.getElementById('cancel-pendientes-facturacion-modal');
+        const selectAllButton = document.getElementById('select-all-pendientes-facturacion');
+        const checkboxes = Array.from(document.querySelectorAll('.pendiente-facturacion-checkbox'));
+
+        if (!modal || !openButton || !closeButton || !cancelButton || !selectAllButton || checkboxes.length === 0) {
+            return;
+        }
+
+        let allSelected = false;
+
+        const openModal = () => {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('overflow-hidden');
+        };
+
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('overflow-hidden');
+        };
+
+        openButton.addEventListener('click', openModal);
+        closeButton.addEventListener('click', closeModal);
+        cancelButton.addEventListener('click', closeModal);
+
+        selectAllButton.addEventListener('click', () => {
+            allSelected = !allSelected;
+            checkboxes.forEach((checkbox) => {
+                checkbox.checked = allSelected;
+            });
+            selectAllButton.textContent = allSelected ? 'Limpiar seleccion' : 'Seleccionar todos';
+        });
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
             }
         });
     });

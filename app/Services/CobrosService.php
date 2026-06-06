@@ -84,7 +84,7 @@ return $query
         $ordenFecha,
         fn ($q, $direccion) => $q->orderBy('cp.fecha_arriendo', $direccion),
         fn ($q) => $q
-            ->orderByRaw('ve.`año` DESC')
+            ->orderByRaw($this->valoresExternosYearSql().' DESC')
             ->orderByRaw($this->ordenMesSql() . ' DESC')
             ->orderByDesc('ve.id_cobro'),
     )
@@ -313,6 +313,9 @@ return $query
         $filters['exclude_retirados'] = true;
         $filters['only_facturacion_activa'] = true;
 
+        $massDebug = $this->buildMassGenerationDebugSnapshot($filters, $grupoFecha);
+        Log::info('Cobros masivos debug snapshot.', $massDebug);
+
         $query = $this->buildCobrosQuery($filters);
         $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
 
@@ -321,7 +324,7 @@ return $query
                 $ordenFecha,
                 fn ($q, $direccion) => $q->orderBy('cp.fecha_arriendo', $direccion),
                 fn ($q) => $q
-                    ->orderByRaw('ve.`año` DESC')
+                    ->orderByRaw($this->valoresExternosYearSql().' DESC')
                     ->orderByRaw($this->ordenMesSql() . ' DESC')
                     ->orderByDesc('ve.id_cobro'),
             )
@@ -329,6 +332,68 @@ return $query
             ->map(fn ($idCobro) => (int) $idCobro)
             ->filter(fn (int $idCobro) => $idCobro > 0)
             ->values();
+    }
+
+    public function findCobroCandidatesForMassGeneration(array $filters, int $grupoFecha): Collection
+    {
+        $filters['grupo_fecha'] = (string) $grupoFecha;
+        unset($filters['exclude_retirados'], $filters['only_facturacion_activa']);
+
+        $query = $this->buildCobrosQuery($filters);
+        $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
+
+        return $query
+            ->when(
+                $ordenFecha,
+                fn ($q, $direccion) => $q->orderBy('cp.fecha_arriendo', $direccion),
+                fn ($q) => $q
+                    ->orderByRaw($this->valoresExternosYearSql().' DESC')
+                    ->orderByRaw($this->ordenMesSql() . ' DESC')
+                    ->orderByDesc('ve.id_cobro'),
+            )
+            ->get();
+    }
+
+    public function buildMassGenerationDebugSnapshot(array $filters, int $grupoFecha): array
+    {
+        $normalizedFilters = $filters;
+        $normalizedFilters['grupo_fecha'] = (string) $grupoFecha;
+
+        $baseFilters = $normalizedFilters;
+        unset($baseFilters['grupo_fecha'], $baseFilters['only_facturacion_activa'], $baseFilters['exclude_retirados']);
+
+        $baseQuery = $this->buildCobrosQuery($baseFilters);
+
+        $groupFilters = $baseFilters;
+        $groupFilters['grupo_fecha'] = (string) $grupoFecha;
+        $groupQuery = $this->buildCobrosQuery($groupFilters);
+
+        $activeFilters = $groupFilters;
+        $activeFilters['only_facturacion_activa'] = true;
+        $activeQuery = $this->buildCobrosQuery($activeFilters);
+
+        $finalFilters = $activeFilters;
+        $finalFilters['exclude_retirados'] = true;
+        $finalQuery = $this->buildCobrosQuery($finalFilters);
+
+        $groupCount = (clone $groupQuery)->count();
+        $activeCount = (clone $activeQuery)->count();
+        $finalCount = (clone $finalQuery)->count();
+
+        return [
+            'grupo' => $grupoFecha,
+            'filters' => $normalizedFilters,
+            'database' => DB::connection()->getDatabaseName(),
+            'valores_externos_encontrados' => (clone $baseQuery)->count(),
+            'registros_grupo' => $groupCount,
+            'descartados_por_estado_facturacion' => max(0, $groupCount - $activeCount),
+            'descartados_por_retirado' => max(0, $activeCount - $finalCount),
+            'llegan_a_generacion' => $finalCount,
+            'muestra_ids_grupo' => (clone $groupQuery)->limit(10)->pluck('ve.id_cobro')->map(fn ($id) => (int) $id)->values()->all(),
+            'muestra_ids_finales' => (clone $finalQuery)->limit(10)->pluck('ve.id_cobro')->map(fn ($id) => (int) $id)->values()->all(),
+            'sql_final' => $finalQuery->toSql(),
+            'bindings_final' => $finalQuery->getBindings(),
+        ];
     }
 
 private function buildCobrosQuery(array $filters)
@@ -340,14 +405,8 @@ private function buildCobrosQuery(array $filters)
     $buscar = $this->normalizeTextFilter($filters['buscar'] ?? '');
     $grupoFecha = $this->normalizarGrupoFecha($filters['grupo_fecha'] ?? null);
 
-    $query = DB::table('valores_externos as ve')
-        ->leftJoin(
-            'clientes_potenciales as cp',
-            've.id_cliente',
-            '=',
-            'cp.idclientes_potenciales'
-        )
-        ->select([
+    $select = $this->clienteRetiradoService->addSelectColumns(
+        [
             've.id_cobro',
             've.id_cliente',
             've.valor_total',
@@ -359,7 +418,20 @@ private function buildCobrosQuery(array $filters)
             'cp.empresa',
             'cp.regimen',
             'cp.nota_cobro',
-        ]);
+        ],
+        'cp',
+        'cliente_fecha_retiro',
+        'cliente_retiro_flag',
+    );
+
+    $query = DB::table('valores_externos as ve')
+        ->leftJoin(
+            'clientes_potenciales as cp',
+            've.id_cliente',
+            '=',
+            'cp.idclientes_potenciales'
+        )
+        ->select($select);
 
     if (Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
         $query->addSelect(DB::raw($this->billingStatusSql('cp.estado_facturacion').' as estado_facturacion'));
@@ -373,6 +445,18 @@ private function buildCobrosQuery(array $filters)
         $query->addSelect(DB::raw('NULL as fecha_inicio_facturacion'));
     }
 
+    if (Schema::hasColumn('clientes_potenciales', 'fecha_llegada')) {
+        $query->addSelect('cp.fecha_llegada as cliente_fecha_creacion');
+    } elseif (Schema::hasColumn('clientes_potenciales', 'fecha_inicio')) {
+        $query->addSelect('cp.fecha_inicio as cliente_fecha_creacion');
+    } elseif (Schema::hasColumn('clientes_potenciales', 'fechainicio')) {
+        $query->addSelect('cp.fechainicio as cliente_fecha_creacion');
+    } elseif (Schema::hasColumn('clientes_potenciales', 'fecha_cotizacion')) {
+        $query->addSelect('cp.fecha_cotizacion as cliente_fecha_creacion');
+    } else {
+        $query->addSelect(DB::raw('NULL as cliente_fecha_creacion'));
+    }
+
     // 🔥 FILTRO MES
     if (!empty($filters['mes'])) {
         $query->whereRaw('LOWER(TRIM(ve.mes)) = ?', [strtolower(trim($filters['mes']))]);
@@ -380,7 +464,7 @@ private function buildCobrosQuery(array $filters)
 
     // 🔥 FILTRO AÑO
 if (!empty($filters['anio'])) {
-    $query->where('ve.año', (string)$filters['anio']);
+    $query->whereRaw($this->valoresExternosYearSql().' = ?', [(string) $filters['anio']]);
 }
 
     // 🔥 FILTRO PROFORMA
@@ -411,7 +495,7 @@ if (!empty($filters['anio'])) {
 
     // 🔥 GRUPO FECHA
     if ($grupoFecha !== null) {
-        $query->whereRaw("CAST(SUBSTRING_INDEX(cp.fecha_arriendo, '-', 1) AS UNSIGNED) = ?", [$grupoFecha]);
+        $query->whereRaw($this->arriendoCutDaySql('cp.fecha_arriendo').' = ?', [$grupoFecha]);
     }
 
     if (($filters['exclude_retirados'] ?? false) === true) {
@@ -441,7 +525,7 @@ if (!empty($filters['anio'])) {
                     ->from('sg_proform as sp')
                     ->whereRaw('BINARY sp.nit = BINARY cp.nit')
                     ->whereRaw('sp.mes = '.$this->ordenMesSql())
-                    ->whereRaw('sp.anio = ve.`año`')
+                    ->whereRaw('sp.anio = '.$this->valoresExternosYearSql())
                     ->whereRaw(
                         "sp.emisora = CASE UPPER(TRIM(cp.regimen))
                             WHEN 'PCS' THEN 'PCS'
@@ -458,7 +542,7 @@ if (!empty($filters['anio'])) {
                     ->from('sg_proform as sp')
                     ->whereRaw('BINARY sp.nit = BINARY cp.nit')
                     ->whereRaw('sp.mes = '.$this->ordenMesSql())
-                    ->whereRaw('sp.anio = ve.`año`')
+                    ->whereRaw('sp.anio = '.$this->valoresExternosYearSql())
                     ->whereRaw(
                         "sp.emisora = CASE UPPER(TRIM(cp.regimen))
                             WHEN 'PCS' THEN 'PCS'
@@ -591,6 +675,23 @@ if (!empty($filters['anio'])) {
     private function billingStatusSql(string $column): string
     {
         return "CASE WHEN UPPER(TRIM(COALESCE({$column}, ''))) = 'PENDIENTE' THEN 'PENDIENTE' ELSE 'ACTIVO' END";
+    }
+
+    private function valoresExternosYearSql(string $alias = 've'): string
+    {
+        return "{$alias}.`año`";
+    }
+
+    private function arriendoCutDaySql(string $column): string
+    {
+        $firstSegment = "SUBSTRING_INDEX(TRIM(COALESCE({$column}, '')), '-', 1)";
+        $lastSegment = "SUBSTRING_INDEX(TRIM(COALESCE({$column}, '')), '-', -1)";
+
+        return "CASE
+            WHEN CHAR_LENGTH({$firstSegment}) = 4
+                THEN CAST({$lastSegment} AS UNSIGNED)
+            ELSE CAST({$firstSegment} AS UNSIGNED)
+        END";
     }
 
     private function normalizarOrdenFecha(null|string $orden): ?string
