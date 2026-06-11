@@ -92,22 +92,70 @@
                     'precio_soporte' => 'Precio soporte',
                     'precio_acuse' => 'Precio acuse',
                 ];
+
+                $inputGroups = [
+                    'Equipos' => [
+                        'numero_equipos',
+                        'valor_principal',
+                        'valor_terminal',
+                        'numero_equipos_extra',
+                        'valor_equipo_extra',
+                    ],
+                    'Nomina y moviles' => [
+                        'empleados',
+                        'valor_nomina',
+                        'numero_moviles',
+                        'valor_movil',
+                    ],
+                    'Facturacion' => [
+                        'facturas',
+                        'precio_factura',
+                    ],
+                    'Soporte y documentos' => [
+                        'soporte',
+                        'precio_soporte',
+                        'acuse',
+                        'precio_acuse',
+                    ],
+                    'Notas' => [
+                        'nota_debito',
+                        'nota_credito',
+                        'nota_ajuste',
+                    ],
+                    'Extras' => [
+                        'otro_valor_extra',
+                        'otro_valor_extra_2',
+                    ],
+                ];
             @endphp
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                @foreach($inputLabels as $key => $label)
-                    <label class="block">
-                        <span class="text-slate-500">{{ $label }}</span>
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            name="{{ $key }}"
-                            value="{{ old($key, $reviewValues[$key] ?? ($formData[$key] ?? 0)) }}"
-                            data-revision-input="{{ $key }}"
-                            class="mt-1 w-full rounded border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
-                        >
-                    </label>
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                @foreach($inputGroups as $groupTitle => $groupFields)
+                    <section class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm">
+                        <div class="mb-4 flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                            <h3 class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-700">{{ $groupTitle }}</h3>
+                            <span class="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-500">
+                                {{ count($groupFields) }} campos
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            @foreach($groupFields as $key)
+                                <label class="block rounded-lg bg-white p-3 shadow-sm ring-1 ring-slate-200">
+                                    <span class="text-slate-500">{{ $inputLabels[$key] }}</span>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        name="{{ $key }}"
+                                        value="{{ old($key, $reviewValues[$key] ?? ($formData[$key] ?? 0)) }}"
+                                        data-revision-input="{{ $key }}"
+                                        class="mt-2 w-full rounded border-slate-300 bg-slate-50 focus:border-indigo-500 focus:ring-indigo-500"
+                                    >
+                                </label>
+                            @endforeach
+                        </div>
+                    </section>
                 @endforeach
             </div>
 

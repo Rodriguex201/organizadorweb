@@ -43,6 +43,50 @@
             <div class="mt-6 border-t border-slate-200 pt-4">
                 <h3 class="font-semibold mb-3">Campos numéricos y monetarios de valores_externos</h3>
                 @php
+                    $numericFieldLabels = [
+                        'id_cobro' => 'ID Cobro',
+                        'id_cliente' => 'ID Cliente',
+                        'año' => 'Año',
+                        'aÃ±o' => 'Año',
+                        'aÃƒÂ±o' => 'Año',
+                        'aÃƒÆ’Ã‚Â±o' => 'Año',
+                        'numero_facturas' => 'Número Facturas',
+                        'numero_nota_debito' => 'Número Notas Débito',
+                        'numero_nota_credito' => 'Número Notas Crédito',
+                        'numero_documento_soporte' => 'Número Documentos Soporte',
+                        'numero_nota_ajuste' => 'Número Notas Ajuste',
+                        'numero_acuse' => 'Número Acuses',
+                        'valor_extra' => 'Valor Extra',
+                        'valor_extra2' => 'Valor Extra 2',
+                        'valor_facturas' => 'Valor Facturas',
+                        'valor_documentos' => 'Valor Documentos',
+                        'valor_acuse' => 'Valor Acuses',
+                        'valor_mensualidad' => 'Valor Mensualidad',
+                        'valor_total' => 'Valor Total',
+                        'Proforma' => 'Estado Proforma',
+                        'mes' => 'Mes',
+                        'nit' => 'NIT',
+                        'email' => 'Correo Electrónico',
+                        'modalidad' => 'Modalidad',
+                        'departamento' => 'Ciudad / Departamento',
+                    ];
+
+                    $formatNumericFieldLabel = static function (string $field) use ($numericFieldLabels): string {
+                        if (isset($numericFieldLabels[$field])) {
+                            return $numericFieldLabels[$field];
+                        }
+
+                        $normalizedField = str_replace('_', ' ', $field);
+
+                        if (str_starts_with($field, 'numero_')) {
+                            $normalizedField = 'Número ' . substr($normalizedField, strlen('numero '));
+                        } elseif (str_starts_with($field, 'valor_')) {
+                            $normalizedField = 'Valor ' . substr($normalizedField, strlen('valor '));
+                        }
+
+                        return \Illuminate\Support\Str::title($normalizedField);
+                    };
+
                     $numericFields = collect(get_object_vars($cobro))
                         ->reject(fn ($value, $key) => str_starts_with($key, 'cliente_'))
                         ->filter(function ($value) {
@@ -68,7 +112,7 @@
                             <tbody class="divide-y divide-slate-100">
                             @foreach($numericFields as $field => $value)
                                 <tr>
-                                    <td class="px-3 py-2 font-mono text-xs text-slate-700">{{ $field }}</td>
+                                    <td class="px-3 py-2 text-slate-700">{{ $formatNumericFieldLabel($field) }}</td>
                                     <td class="px-3 py-2 text-right">{{ number_format((float) $value, 2, ',', '.') }}</td>
                                 </tr>
                             @endforeach
