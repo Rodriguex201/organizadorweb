@@ -13,11 +13,14 @@
         @php
             $cliente = null;
             $tarifasDefaults = $tarifasDefaults ?? [];
+            $errors = $errors ?? new \Illuminate\Support\ViewErrorBag();
             $value = static function (string $input, ?string $column = null) use ($tarifasDefaults) {
                 return old($input, $tarifasDefaults[$input] ?? null);
             };
             $fieldUnavailable = static fn (?string $column): bool => $column === null;
-            $initialStep = old('wizard_step', $errors->any() ? '2' : '1');
+            $stepOneFields = ['nit', 'dv', 'nombre', 'codigo', 'empresa', 'celular1', 'email', 'departamento', 'ciudad_codigo', 'fecha_inicio', 'fecha_arriendo', 'ip_empresa', 'clase', 'modalidad', 'regimen', 'tipo_cliente_id', 'llego', 'estado_facturacion'];
+            $stepOneHasErrors = collect($stepOneFields)->contains(fn (string $field): bool => $errors->has($field));
+            $initialStep = old('wizard_step', $errors->any() && !$stepOneHasErrors ? '2' : '1');
         @endphp
 
         @if($errors->has('general'))
@@ -69,6 +72,7 @@
                     'value' => $value,
                     'fieldUnavailable' => $fieldUnavailable,
                     'estadosFacturacion' => $estadosFacturacion,
+                    'selectedCity' => $selectedCity,
                 ])
 
                 <p class="mt-4 text-xs text-slate-500">Los campos deshabilitados no existen aún en la tabla <code>clientes_potenciales</code> de esta instancia y se muestran como fallback visual.</p>

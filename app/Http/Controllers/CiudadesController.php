@@ -22,23 +22,24 @@ class CiudadesController extends Controller
         try {
             $resultados = DB::table('xxxxcity')
                 ->select([
-
-                'citynomb',
-                'citydepto',
-            ])
+                    'citycodigo',
+                    'citynomb',
+                    'citydepto',
+                    'cityNdepto',
+                ])
             ->where(function ($query) use ($termino): void {
                 $query->where('citynomb', 'like', "%{$termino}%")
-                    ->orWhere('citydepto', 'like', "%{$termino}%");
+                    ->orWhere('citydepto', 'like', "%{$termino}%")
+                    ->orWhere('cityNdepto', 'like', "%{$termino}%");
             })
             ->orderBy('citynomb')
             ->limit(10)
             ->get()
-            ->map(static function ($city) {
+            ->map(function ($city) {
                 return [
-
+                    'code' => (string) $city->citycodigo,
                     'citynomb' => $city->citynomb,
-                    'label' => $city->citynomb,
-
+                    'label' => $this->formatCityLabel($city->citynomb, $city->cityNdepto ?: $city->citydepto),
                 ];
             })
                 ->values();
@@ -52,5 +53,28 @@ class CiudadesController extends Controller
         return response()->json([
             'results' => $resultados,
         ]);
+    }
+
+    private function formatCityLabel(mixed $cityName, mixed $departmentName): string
+    {
+        $cityName = trim((string) $cityName);
+        $departmentName = trim((string) $departmentName);
+
+        if ($cityName === '') {
+            return $departmentName;
+        }
+
+        if ($departmentName === '') {
+            return $cityName;
+        }
+
+        $cityNameUpper = mb_strtoupper($cityName, 'UTF-8');
+        $departmentNameUpper = mb_strtoupper($departmentName, 'UTF-8');
+
+        if (str_ends_with($cityNameUpper, ', ' . $departmentNameUpper)) {
+            return $cityName;
+        }
+
+        return "{$cityName}, {$departmentName}";
     }
 }

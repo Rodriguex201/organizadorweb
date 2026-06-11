@@ -131,6 +131,7 @@ class ClientesController extends Controller
             'catalogos' => $this->loadFormCatalogs(),
             'tarifasDefaults' => $this->tarifaConfigService->clientCreateDefaults(),
             'estadosFacturacion' => ClientePotencial::estadosFacturacion(),
+            'selectedCity' => null,
         ]);
     }
 
@@ -201,6 +202,7 @@ class ClientesController extends Controller
             $this->rules($catalogos, $mapping, true),
             $this->validationMessages()
         );
+        $validated = $this->synchronizeSelectedCity($validated);
         $validated = $this->normalizeClientTextInputs($validated);
 
         if (($validated['codigo'] ?? '') !== '') {
@@ -271,6 +273,9 @@ class ClientesController extends Controller
             'motivosReactivacion' => $this->loadReactivationReasons(),
             'motivosRetiro' => $motivosRetiro,
             'estadosFacturacion' => ClientePotencial::estadosFacturacion(),
+            'selectedCity' => $this->resolveSelectedCityFromStoredValue(
+                $mapping['departamento'] ? ($cliente->{$mapping['departamento']} ?? null) : null
+            ),
         ]);
     }
 
@@ -286,6 +291,7 @@ class ClientesController extends Controller
             $this->rules($catalogos, $mapping),
             $this->validationMessages()
         );
+        $validated = $this->synchronizeSelectedCity($validated);
         $validated = $this->normalizeClientTextInputs($validated);
 
         if (($validated['codigo'] ?? '') !== '') {
@@ -667,6 +673,21 @@ class ClientesController extends Controller
         return $validated;
     }
 
+    private function synchronizeSelectedCity(array $validated): array
+    {
+        if (!array_key_exists('ciudad_codigo', $validated)) {
+            return $validated;
+        }
+
+        $selectedCity = $this->findCityByCode((string) $validated['ciudad_codigo']);
+
+        if ($selectedCity !== null) {
+            $validated['departamento'] = $selectedCity['label'];
+        }
+
+        return $validated;
+    }
+
     private function clientTextInputsToUppercase(): array
     {
         return [
@@ -732,13 +753,13 @@ class ClientesController extends Controller
     private function rules(array $catalogos, array $mapping, bool $withUnique = false): array
     {
         $rules = [
-            'nit' => ['nullable', 'string', 'max:30'],
-            'dv' => ['nullable', 'string', 'max:3', 'regex:/^[0-9xX]+$/'],
-            'nombre' => ['nullable', 'string', 'max:150'],
-            'empresa' => ['nullable', 'string', 'max:150'],
-            'celular1' => ['nullable', 'string', 'max:30'],
+            'nit' => $this->requiredTextRules($mapping['nit'], ['max:30']),
+            'dv' => $this->requiredTextRules($mapping['dv'], ['max:3', 'regex:/^[0-9xX]+$/']),
+            'nombre' => $this->requiredTextRules($mapping['nombre'], ['max:150']),
+            'empresa' => $this->requiredTextRules($mapping['empresa'], ['max:150']),
+            'celular1' => $this->requiredTextRules($mapping['celular1'], ['max:30']),
             'email' => [
-                'nullable',
+                ...$this->requiredRule($mapping['email']),
                 'string',
                 'max:255',
                 function (string $attribute, mixed $value, \Closure $fail): void {
@@ -747,13 +768,31 @@ class ClientesController extends Controller
                     }
                 },
             ],
-            'codigo' => ['nullable', 'string', 'max:50'],
-            'fecha_inicio' => ['nullable', 'date'],
-            'fecha_arriendo' => ['nullable', 'date'],
-            'ip_empresa' => ['nullable', 'string', 'max:255'],
-            'departamento' => ['nullable', 'string', 'max:150'],
-            'regimen' => ['nullable', Rule::in(['SAS', 'PCS', 'SMP'])],
-            'estado_facturacion' => ['nullable', Rule::in(ClientePotencial::estadosFacturacion())],
+            'codigo' => $this->requiredTextRules($mapping['codigo'], ['max:50']),
+            'fecha_inicio' => $this->requiredRule($mapping['fecha_llegada'], ['date']),
+            'fecha_arriendo' => $this->requiredRule($mapping['fecha_arriendo'], ['date']),
+            'ip_empresa' => $this->requiredTextRules($mapping['ip_empresa'], ['max:255']),
+            'departamento' => array_merge(
+                $this->requiredTextRules($mapping['departamento'], ['max:150']),
+                [
+                    function (string $attribute, mixed $value, \Closure $fail): void {
+                        $requestCityCode = request()->input('ciudad_codigo');
+                        $selectedCity = $this->findCityByCode((string) $requestCityCode);
+                        $expectedLabel = $selectedCity['label'] ?? null;
+
+                        if ($expectedLabel === null) {
+                            return;
+                        }
+
+                        if ($this->normalizeComparableText((string) $value) !== $this->normalizeComparableText($expectedLabel)) {
+                            $fail('La ciudad seleccionada no coincide con el catalogo oficial.');
+                        }
+                    },
+                ]
+            ),
+            'ciudad_codigo' => $this->citySelectionRules($mapping['departamento']),
+            'regimen' => $this->requiredRule($mapping['regimen'], [Rule::in(['SAS', 'PCS', 'SMP'])]),
+            'estado_facturacion' => $this->requiredRule($mapping['estado_facturacion'], [Rule::in(ClientePotencial::estadosFacturacion())]),
             'vlrprincipal' => ['nullable', 'numeric', 'min:0'],
             'numequipos' => ['nullable', 'numeric', 'min:0'],
             'vlrterminal' => ['nullable', 'numeric', 'min:0'],
@@ -771,10 +810,10 @@ class ClientesController extends Controller
             'numextra' => ['nullable', 'numeric', 'min:0'],
             'vlrextrae' => ['nullable', 'numeric', 'min:0'],
             'valor_total' => ['nullable', 'numeric', 'min:0'],
-            'clase' => $this->catalogRule($catalogos['clases']),
-            'modalidad' => $this->catalogRule($catalogos['modalidad']),
-            'llego' => $this->catalogRule($catalogos['llego']),
-            'tipo_cliente_id' => $this->catalogRule($catalogos['tipos_cliente']),
+            'clase' => $this->catalogRule($catalogos['clases'], $mapping['clase']),
+            'modalidad' => $this->catalogRule($catalogos['modalidad'], $mapping['modalidad']),
+            'llego' => $this->catalogRule($catalogos['llego'], $mapping['llego']),
+            'tipo_cliente_id' => $this->catalogRule($catalogos['tipos_cliente'], $mapping['tipo_cliente']),
         ];
 
         if ($withUnique) {
@@ -790,6 +829,8 @@ class ClientesController extends Controller
     {
         return [
             'nit.unique' => 'El NIT ingresado ya existe en clientes potenciales.',
+            'ciudad_codigo.required' => 'Debes buscar y seleccionar una ciudad valida del catalogo.',
+            'ciudad_codigo.exists' => 'Debes buscar y seleccionar una ciudad valida del catalogo.',
             'dv.max' => 'El DV no puede tener más de 3 caracteres.',
             'dv.regex' => 'El DV solo permite números y la letra X.',
             'regimen.in' => 'Selecciona un regimen válido: SAS, PCS o SMP.',
@@ -931,13 +972,159 @@ class ClientesController extends Controller
         ];
     }
 
-    private function catalogRule(array $catalogo): array
+    private function catalogRule(array $catalogo, ?string $mappedColumn = null): array
     {
+        if ($mappedColumn === null) {
+            return ['nullable'];
+        }
+
         if ($catalogo['ids'] === []) {
             return ['nullable'];
         }
 
-        return ['nullable', Rule::in($catalogo['ids'])];
+        return ['required', Rule::in($catalogo['ids'])];
+    }
+
+    private function requiredRule(?string $mappedColumn, array $extraRules = []): array
+    {
+        return array_merge($mappedColumn ? ['required'] : ['nullable'], $extraRules);
+    }
+
+    private function requiredTextRules(?string $mappedColumn, array $extraRules = []): array
+    {
+        return $this->requiredRule($mappedColumn, array_merge(['string'], $extraRules));
+    }
+
+    private function citySelectionRules(?string $mappedColumn): array
+    {
+        if ($mappedColumn === null) {
+            return ['nullable'];
+        }
+
+        if (
+            !Schema::hasTable('xxxxcity')
+            || !Schema::hasColumn('xxxxcity', 'citycodigo')
+            || !Schema::hasColumn('xxxxcity', 'citynomb')
+            || !Schema::hasColumn('xxxxcity', 'citydepto')
+        ) {
+            return [
+                'required',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $fail('El catalogo oficial de ciudades no esta disponible.');
+                },
+            ];
+        }
+
+        return ['required', Rule::exists('xxxxcity', 'citycodigo')];
+    }
+
+    private function findCityByCode(string $cityCode): ?array
+    {
+        $cityCode = trim($cityCode);
+
+        if (
+            $cityCode === ''
+            || !Schema::hasTable('xxxxcity')
+            || !Schema::hasColumn('xxxxcity', 'citycodigo')
+            || !Schema::hasColumn('xxxxcity', 'citynomb')
+            || !Schema::hasColumn('xxxxcity', 'citydepto')
+        ) {
+            return null;
+        }
+
+        $city = DB::table('xxxxcity')
+            ->select(['citycodigo', 'citynomb', 'citydepto', 'cityNdepto'])
+            ->where('citycodigo', $cityCode)
+            ->first();
+
+        if (!$city) {
+            return null;
+        }
+
+        return [
+            'code' => (string) $city->citycodigo,
+            'label' => $this->formatCityLabel($city->citynomb, $city->cityNdepto ?? $city->citydepto),
+        ];
+    }
+
+    private function resolveSelectedCityFromStoredValue(mixed $storedValue): ?array
+    {
+        $storedValue = (string) $storedValue;
+        $normalizedStoredValue = $this->normalizeComparableText($storedValue);
+
+        if ($normalizedStoredValue === '') {
+            return null;
+        }
+
+        if (
+            !Schema::hasTable('xxxxcity')
+            || !Schema::hasColumn('xxxxcity', 'citycodigo')
+            || !Schema::hasColumn('xxxxcity', 'citynomb')
+            || !Schema::hasColumn('xxxxcity', 'citydepto')
+        ) {
+            return null;
+        }
+
+        [$cityTerm, $departmentTerm] = array_pad(array_map('trim', explode(',', $storedValue, 2)), 2, '');
+
+        $cities = DB::table('xxxxcity')
+            ->select(['citycodigo', 'citynomb', 'citydepto', 'cityNdepto'])
+            ->where(function ($query) use ($storedValue, $cityTerm, $departmentTerm): void {
+                $query->where('citynomb', $storedValue)
+                    ->orWhere('citydepto', $storedValue)
+                    ->orWhere('cityNdepto', $storedValue);
+
+                if ($cityTerm !== '') {
+                    $query->orWhere('citynomb', $cityTerm);
+                }
+
+                if ($departmentTerm !== '') {
+                    $query->orWhere('citydepto', $departmentTerm)
+                        ->orWhere('cityNdepto', $departmentTerm);
+                }
+            })
+            ->get();
+
+        foreach ($cities as $city) {
+            $formattedLabel = $this->formatCityLabel($city->citynomb, $city->cityNdepto ?? $city->citydepto);
+
+            if (
+                $this->normalizeComparableText((string) $city->citynomb) === $normalizedStoredValue
+                || $this->normalizeComparableText($formattedLabel) === $normalizedStoredValue
+            ) {
+                return [
+                    'code' => (string) $city->citycodigo,
+                    'label' => $formattedLabel,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    private function formatCityLabel(mixed $cityName, mixed $departmentName): string
+    {
+        $cityName = trim($this->toUppercase((string) $cityName));
+        $departmentName = trim($this->toUppercase((string) $departmentName));
+
+        if ($cityName === '') {
+            return $departmentName;
+        }
+
+        if ($departmentName === '') {
+            return $cityName;
+        }
+
+        if (str_ends_with($cityName, ', ' . $departmentName)) {
+            return $cityName;
+        }
+
+        return "{$cityName}, {$departmentName}";
+    }
+
+    private function normalizeComparableText(string $value): string
+    {
+        return preg_replace('/\s+/', ' ', trim($this->toUppercase($value))) ?? '';
     }
 
     private function loadFormCatalogs(): array

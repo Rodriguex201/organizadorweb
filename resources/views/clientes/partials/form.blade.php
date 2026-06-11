@@ -1,7 +1,10 @@
 @php
     $cliente = $cliente ?? null;
     $catalogos = $catalogos ?? [];
-    $initialStep = old('wizard_step', $errors->any() ? '2' : '1');
+    $errors = $errors ?? new \Illuminate\Support\ViewErrorBag();
+    $stepOneFields = ['nit', 'dv', 'nombre', 'codigo', 'empresa', 'celular1', 'email', 'departamento', 'ciudad_codigo', 'fecha_inicio', 'fecha_arriendo', 'ip_empresa', 'clase', 'modalidad', 'regimen', 'tipo_cliente_id', 'llego', 'estado_facturacion'];
+    $stepOneHasErrors = collect($stepOneFields)->contains(fn (string $field): bool => $errors->has($field));
+    $initialStep = old('wizard_step', $errors->any() && !$stepOneHasErrors ? '2' : '1');
 
     $value = static function (string $input, ?string $column = null) use ($cliente) {
         $fallback = $column && $cliente ? ($cliente->{$column} ?? null) : null;
@@ -59,6 +62,7 @@
         'value' => $value,
         'fieldUnavailable' => $fieldUnavailable,
         'estadosFacturacion' => $estadosFacturacion,
+        'selectedCity' => $selectedCity ?? null,
     ])
 
     <p class="mt-4 text-xs text-slate-500">Los campos deshabilitados no existen aÃºn en la tabla <code>clientes_potenciales</code> de esta instancia y se muestran como fallback visual.</p>

@@ -235,14 +235,32 @@
                 const inputBusqueda = document.getElementById('ciudad_busqueda');
                 const botonBuscar = document.getElementById('ciudad_buscar_btn');
                 const inputDepartamento = document.getElementById('departamento');
+                const inputCiudadCodigo = document.getElementById('ciudad_codigo');
                 const estado = document.getElementById('ciudad_estado');
                 const resultados = document.getElementById('ciudad_resultados');
 
-                if (inputBusqueda && botonBuscar && inputDepartamento && estado && resultados) {
+                if (inputBusqueda && botonBuscar && inputDepartamento && inputCiudadCodigo && estado && resultados) {
                     const setEstado = (texto, error = false) => {
                         estado.textContent = texto;
                         estado.classList.toggle('text-rose-600', error);
                         estado.classList.toggle('text-slate-500', !error);
+                    };
+
+                    const syncCityValidity = () => {
+                        const hasSearchText = inputBusqueda.value.trim() !== '';
+                        const hasSelectedCity = inputCiudadCodigo.value.trim() !== '';
+
+                        if (!hasSearchText) {
+                            inputBusqueda.setCustomValidity('Selecciona una ciudad del catalogo.');
+                            return;
+                        }
+
+                        if (!hasSelectedCity) {
+                            inputBusqueda.setCustomValidity('Debes buscar y seleccionar una ciudad valida de la lista.');
+                            return;
+                        }
+
+                        inputBusqueda.setCustomValidity('');
                     };
 
                     const limpiarResultados = () => {
@@ -270,7 +288,9 @@
                             opcion.addEventListener('click', () => {
                                 inputBusqueda.value = toUppercase(item.label);
                                 inputDepartamento.value = toUppercase(item.label);
+                                inputCiudadCodigo.value = String(item.code ?? '').trim();
                                 setEstado('Ciudad seleccionada.');
+                                syncCityValidity();
                                 limpiarResultados();
                             });
 
@@ -280,14 +300,18 @@
 
                     inputBusqueda.addEventListener('input', () => {
                         inputBusqueda.value = toUppercase(inputBusqueda.value);
-                        inputDepartamento.value = inputBusqueda.value.trim();
+                        inputDepartamento.value = '';
+                        inputCiudadCodigo.value = '';
                         limpiarResultados();
                         setEstado('Usa buscar para seleccionar una ciudad.');
+                        syncCityValidity();
                     });
 
                     botonBuscar.addEventListener('click', async () => {
                         const termino = inputBusqueda.value.trim();
-                        inputDepartamento.value = termino;
+                        inputDepartamento.value = '';
+                        inputCiudadCodigo.value = '';
+                        syncCityValidity();
 
                         if (termino.length < 3) {
                             limpiarResultados();
@@ -315,6 +339,8 @@
                             setEstado('Error consultando ciudades. Intenta de nuevo.', true);
                         }
                     });
+
+                    syncCityValidity();
                 }
 
                 const proformaInputs = Array.from(document.querySelectorAll('[data-proforma-input]'));
