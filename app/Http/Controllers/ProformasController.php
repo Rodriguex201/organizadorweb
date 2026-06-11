@@ -231,6 +231,28 @@ class ProformasController extends Controller
 
     public function dashboard(Request $request): View
     {
+        $hasFilterQuery = collect(['mes', 'anio', 'estado'])->contains(
+            fn (string $key) => $request->query->has($key)
+        );
+
+        $defaultFilters = [
+            'mes' => (int) now()->format('n'),
+            'anio' => (int) now()->format('Y'),
+            'estado' => null,
+        ];
+
+        if (!$hasFilterQuery) {
+            return view('proformas.dashboard', [
+                'dashboard' => $this->emptyDashboardData(),
+                'filters' => $defaultFilters,
+                'meses' => ProformasService::MESES,
+                'estados' => ProformasService::ESTADOS,
+                'exportOptions' => $this->proformaDashboardExportService->getModalOptions($defaultFilters),
+                'proformasService' => $this->proformasService,
+                'hasSearched' => false,
+            ]);
+        }
+
         $validated = $request->validate([
             'mes' => ['nullable', 'string', 'max:20'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
@@ -258,6 +280,7 @@ class ProformasController extends Controller
             'estados' => ProformasService::ESTADOS,
             'exportOptions' => $this->proformaDashboardExportService->getModalOptions(array_merge($periodo, ['estado' => $estado])),
             'proformasService' => $this->proformasService,
+            'hasSearched' => true,
         ]);
     }
 
@@ -684,6 +707,21 @@ class ProformasController extends Controller
                 'pageName' => 'page',
             ],
         );
+    }
+
+    private function emptyDashboardData(): array
+    {
+        return [
+            'total_proformas' => 0,
+            'total_generadas' => 0,
+            'total_enviadas' => 0,
+            'total_pagadas' => 0,
+            'total_facturadas' => 0,
+            'suma_total_vtotal' => 0,
+            'suma_total_por_estado' => [],
+            'total_periodo_filtrado' => 0,
+            'ultimas_proformas' => collect(),
+        ];
     }
 
     private function getStoredReturnFilters(): array

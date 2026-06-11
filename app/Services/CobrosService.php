@@ -104,6 +104,37 @@ return $query
         }
     }
 
+    public function getPeriodSummary(array $filters = []): object
+    {
+        return $this->buildFilteredCobrosQuery($filters)
+            ->selectRaw('
+                COALESCE(SUM(ve.numero_facturas), 0) as total_facturas,
+                COALESCE(SUM(ve.numero_nota_debito), 0) as total_notas_debito,
+                COALESCE(SUM(ve.numero_nota_credito), 0) as total_notas_credito,
+                COALESCE(SUM(ve.numero_documento_soporte), 0) as total_documentos_soporte,
+                COALESCE(SUM(ve.numero_nota_ajuste), 0) as total_notas_ajuste,
+                COALESCE(SUM(ve.numero_acuse), 0) as total_acuses,
+                COALESCE(SUM(ve.valor_facturas), 0) as valor_facturas,
+                COALESCE(SUM(ve.valor_documentos), 0) as valor_documentos,
+                COALESCE(SUM(ve.valor_acuse), 0) as valor_acuse,
+                COALESCE(SUM(ve.valor_mensualidad), 0) as valor_mensualidad,
+                COALESCE(SUM(ve.valor_total), 0) as valor_total
+            ')
+            ->first() ?? (object) [
+                'total_facturas' => 0,
+                'total_notas_debito' => 0,
+                'total_notas_credito' => 0,
+                'total_documentos_soporte' => 0,
+                'total_notas_ajuste' => 0,
+                'total_acuses' => 0,
+                'valor_facturas' => 0,
+                'valor_documentos' => 0,
+                'valor_acuse' => 0,
+                'valor_mensualidad' => 0,
+                'valor_total' => 0,
+            ];
+    }
+
 
     public function debugSnapshot(array $filters = []): array
     {
@@ -398,13 +429,6 @@ return $query
 
 private function buildCobrosQuery(array $filters)
 {
-    $filters = array_map(function ($value) {
-        return $value === '' ? null : $value;
-    }, $filters);
-    $codigo = $this->normalizeTextFilter($filters['codigo'] ?? '');
-    $buscar = $this->normalizeTextFilter($filters['buscar'] ?? '');
-    $grupoFecha = $this->normalizarGrupoFecha($filters['grupo_fecha'] ?? null);
-
     $select = $this->clienteRetiradoService->addSelectColumns(
         [
             've.id_cobro',
@@ -424,13 +448,7 @@ private function buildCobrosQuery(array $filters)
         'cliente_retiro_flag',
     );
 
-    $query = DB::table('valores_externos as ve')
-        ->leftJoin(
-            'clientes_potenciales as cp',
-            've.id_cliente',
-            '=',
-            'cp.idclientes_potenciales'
-        )
+    $query = $this->buildFilteredCobrosQuery($filters)
         ->select($select);
 
     if (Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
@@ -458,6 +476,8 @@ private function buildCobrosQuery(array $filters)
     }
 
     // 🔥 FILTRO MES
+    return $query;
+
     if (!empty($filters['mes'])) {
         $query->whereRaw('LOWER(TRIM(ve.mes)) = ?', [strtolower(trim($filters['mes']))]);
     }
@@ -557,6 +577,118 @@ if (!empty($filters['anio'])) {
 
     return $query;
 }
+
+    private function buildFilteredCobrosQuery(array $filters)
+    {
+        $filters = array_map(function ($value) {
+            return $value === '' ? null : $value;
+        }, $filters);
+        $codigo = $this->normalizeTextFilter($filters['codigo'] ?? '');
+        $buscar = $this->normalizeTextFilter($filters['buscar'] ?? '');
+        $grupoFecha = $this->normalizarGrupoFecha($filters['grupo_fecha'] ?? null);
+
+        $query = DB::table('valores_externos as ve')
+            ->leftJoin(
+                'clientes_potenciales as cp',
+                've.id_cliente',
+                '=',
+                'cp.idclientes_potenciales'
+            );
+
+        if (!empty($filters['mes'])) {
+            $query->whereRaw('LOWER(TRIM(ve.mes)) = ?', [strtolower(trim($filters['mes']))]);
+        }
+
+        if (!empty($filters['anio'])) {
+            $query->whereRaw($this->valoresExternosYearSql().' = ?', [(string) $filters['anio']]);
+        }
+
+        if (!is_null($filters['proforma'] ?? null)) {
+            $query->where('ve.Proforma', $filters['proforma']);
+        }
+
+        if ($codigo !== '') {
+            $query->whereRaw(
+                $this->normalizedSqlExpression('cp.codigo').' LIKE ?',
+                ['%'.$codigo.'%']
+            );
+        }
+
+        if ($buscar !== '') {
+            foreach ($this->splitSearchTerms($buscar) as $term) {
+                $like = '%'.$term.'%';
+
+                $query->where(function ($q) use ($like) {
+                    $q->whereRaw($this->normalizedSqlExpression('cp.nombre').' LIKE ?', [$like])
+                        ->orWhereRaw($this->normalizedSqlExpression('cp.empresa').' LIKE ?', [$like])
+                        ->orWhereRaw($this->normalizedSqlExpression('cp.email').' LIKE ?', [$like])
+                        ->orWhereRaw($this->normalizedSqlExpression('cp.codigo').' LIKE ?', [$like]);
+                });
+            }
+        }
+
+        if ($grupoFecha !== null) {
+            $query->whereRaw($this->arriendoCutDaySql('cp.fecha_arriendo').' = ?', [$grupoFecha]);
+        }
+
+        if (($filters['exclude_retirados'] ?? false) === true) {
+            $this->clienteRetiradoService->applyNoRetiradosConstraint($query, 'cp');
+        }
+
+        if (($filters['only_facturacion_activa'] ?? false) === true && Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+            $query->whereRaw($this->billingStatusSql('cp.estado_facturacion').' = ?', [
+                ClientePotencial::ESTADO_FACTURACION_ACTIVO,
+            ]);
+        }
+
+        if (!empty($filters['filtro_nota'])) {
+            if ($filters['filtro_nota'] === 'con') {
+                $query->whereNotNull('cp.nota_cobro');
+            } elseif ($filters['filtro_nota'] === 'sin') {
+                $query->whereNull('cp.nota_cobro');
+            }
+        }
+
+        if (!empty($filters['filtro_envio'])) {
+            if ($filters['filtro_envio'] === 'enviadas') {
+                $query->whereExists(function ($subquery) {
+                    $subquery
+                        ->select(DB::raw(1))
+                        ->from('sg_proform as sp')
+                        ->whereRaw('BINARY sp.nit = BINARY cp.nit')
+                        ->whereRaw('sp.mes = '.$this->ordenMesSql())
+                        ->whereRaw('sp.anio = '.$this->valoresExternosYearSql())
+                        ->whereRaw(
+                            "sp.emisora = CASE UPPER(TRIM(cp.regimen))
+                                WHEN 'PCS' THEN 'PCS'
+                                WHEN 'SMP' THEN 'SMP'
+                                ELSE 'SAS'
+                            END"
+                        )
+                        ->where('sp.enviado', 1);
+                });
+            } elseif ($filters['filtro_envio'] === 'no_enviadas') {
+                $query->whereNotExists(function ($subquery) {
+                    $subquery
+                        ->select(DB::raw(1))
+                        ->from('sg_proform as sp')
+                        ->whereRaw('BINARY sp.nit = BINARY cp.nit')
+                        ->whereRaw('sp.mes = '.$this->ordenMesSql())
+                        ->whereRaw('sp.anio = '.$this->valoresExternosYearSql())
+                        ->whereRaw(
+                            "sp.emisora = CASE UPPER(TRIM(cp.regimen))
+                                WHEN 'PCS' THEN 'PCS'
+                                WHEN 'SMP' THEN 'SMP'
+                                ELSE 'SAS'
+                            END"
+                        )
+                        ->where('sp.enviado', 1);
+                });
+            }
+        }
+
+        return $query;
+    }
 
     private function ordenMesSql(): string
     {

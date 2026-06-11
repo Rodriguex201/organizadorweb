@@ -7,6 +7,7 @@ use App\Services\ProformaDashboardExportService;
 use App\Services\ProformaEmailService;
 use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
+use App\Services\EmpresaActivacionService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Mockery;
@@ -15,12 +16,71 @@ use Tests\TestCase;
 
 class ProformasDashboardExportTest extends TestCase
 {
+    public function test_dashboard_inicial_no_ejecuta_consultas_y_muestra_estado_vacio(): void
+    {
+        $service = Mockery::mock(ProformasService::class);
+        $pdfService = Mockery::mock(ProformaPdfService::class);
+        $emailService = Mockery::mock(ProformaEmailService::class);
+        $exportService = Mockery::mock(ProformaDashboardExportService::class);
+        $activacionService = Mockery::mock(EmpresaActivacionService::class);
+        $service->shouldIgnoreMissing();
+
+        $service->shouldNotReceive('normalizePeriodoFilters');
+        $service->shouldNotReceive('getDashboardData');
+
+        $exportService->shouldReceive('getModalOptions')
+            ->once()
+            ->withArgs(function (array $filters): bool {
+                return isset($filters['mes'], $filters['anio'])
+                    && is_int($filters['mes'])
+                    && is_int($filters['anio'])
+                    && array_key_exists('estado', $filters)
+                    && $filters['estado'] === null;
+            })
+            ->andReturn([
+                'column_groups' => [],
+                'defaults' => [
+                    'summary' => [],
+                    'detailed' => [],
+                ],
+                'filters' => [
+                    'mes' => (int) now()->format('n'),
+                    'anio' => (int) now()->format('Y'),
+                    'estado' => null,
+                ],
+                'scopes' => [],
+                'modes' => [],
+                'formats' => [],
+            ]);
+
+        $request = Request::create(route('proformas.dashboard'), 'GET');
+
+        $controller = new ProformasController(
+            $service,
+            $pdfService,
+            $emailService,
+            $exportService,
+            $activacionService,
+        );
+
+        $view = $controller->dashboard($request);
+
+        $this->assertInstanceOf(View::class, $view);
+        $this->assertSame('proformas.dashboard', $view->name());
+        $this->assertFalse($view->getData()['hasSearched']);
+        $this->assertSame((int) now()->format('n'), $view->getData()['filters']['mes']);
+        $this->assertSame((int) now()->format('Y'), $view->getData()['filters']['anio']);
+        $this->assertNull($view->getData()['filters']['estado']);
+        $this->assertSame(0, $view->getData()['dashboard']['total_proformas']);
+    }
+
     public function test_dashboard_aplica_filtro_estado_y_expone_opciones_de_exportacion(): void
     {
         $service = Mockery::mock(ProformasService::class);
         $pdfService = Mockery::mock(ProformaPdfService::class);
         $emailService = Mockery::mock(ProformaEmailService::class);
         $exportService = Mockery::mock(ProformaDashboardExportService::class);
+        $activacionService = Mockery::mock(EmpresaActivacionService::class);
         $service->shouldIgnoreMissing();
 
         $service->shouldReceive('normalizePeriodoFilters')
@@ -80,6 +140,7 @@ class ProformasDashboardExportTest extends TestCase
             $pdfService,
             $emailService,
             $exportService,
+            $activacionService,
         );
 
         $view = $controller->dashboard($request);
@@ -91,6 +152,7 @@ class ProformasDashboardExportTest extends TestCase
             'anio' => 2026,
             'estado' => 3,
         ], $view->getData()['filters']);
+        $this->assertTrue($view->getData()['hasSearched']);
         $this->assertArrayHasKey('exportOptions', $view->getData());
     }
 

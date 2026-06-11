@@ -17,7 +17,7 @@
     </div>
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
-        <form method="GET" action="{{ route('proformas.dashboard') }}" class="grid grid-cols-1 gap-4 md:grid-cols-5">
+        <form id="dashboard-filter-form" method="GET" action="{{ route('proformas.dashboard') }}" class="grid grid-cols-1 gap-4 md:grid-cols-5">
             <div>
                 <label for="mes" class="mb-1 block text-sm font-medium">Mes</label>
                 <select id="mes" name="mes" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -40,13 +40,29 @@
                 </select>
             </div>
             <div class="md:col-span-2 flex items-end gap-2">
-                <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Aplicar filtro</button>
+                <button type="submit" id="dashboard-apply-filter-button" class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70">
+                    <span id="dashboard-apply-filter-spinner" class="mr-2 hidden h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                    <span id="dashboard-apply-filter-label">Aplicar filtro</span>
+                </button>
                 <a href="{{ route('proformas.dashboard') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Periodo actual</a>
-                <button type="button" id="open-export-modal" class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Exportar Excel</button>
+                <button type="button" id="open-export-modal" class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60" @disabled(!($hasSearched ?? false)) title="{{ ($hasSearched ?? false) ? 'Exportar Excel' : 'Aplica filtros para habilitar la exportación' }}">Exportar Excel</button>
             </div>
         </form>
     </div>
 
+    <div id="dashboard-results-area" class="relative">
+        <div id="dashboard-results-loading-overlay" class="pointer-events-none absolute inset-0 z-20 hidden items-center justify-center rounded-lg bg-white/75 backdrop-blur-[1px]">
+            <div class="rounded-xl border border-slate-200 bg-white px-5 py-4 text-center shadow-lg">
+                <div class="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600"></div>
+                <p class="text-sm font-medium text-slate-700">Generando informe, por favor espere...</p>
+            </div>
+        </div>
+
+    @if(!($hasSearched ?? false))
+        <div class="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-slate-600 shadow-sm">
+            Seleccione los filtros y pulse Aplicar filtro para generar el informe.
+        </div>
+    @else
     <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div class="rounded-lg bg-white p-4 shadow">
             <p class="text-xs uppercase text-slate-500">Total proformas</p>
@@ -72,9 +88,20 @@
 
     <div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div class="rounded-lg bg-white p-4 shadow">
+            @php
+                $totalPagado = (float) (
+                    ($dashboard['suma_total_por_estado'][\App\Services\ProformasService::ESTADO_PAGADA]['total'] ?? 0)
+                    + ($dashboard['suma_total_por_estado'][\App\Services\ProformasService::ESTADO_FACTURADA]['total'] ?? 0)
+                );
+            @endphp
             <h2 class="text-sm font-semibold uppercase text-slate-600">Suma total del periodo</h2>
             <p class="mt-2 text-2xl font-bold">$ {{ number_format((float) $dashboard['suma_total_vtotal'], 2, ',', '.') }}</p>
             <p class="mt-1 text-xs text-slate-500">Total del periodo filtrado: {{ number_format((int) $dashboard['total_periodo_filtrado'], 0, ',', '.') }}</p>
+            <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Pagado</p>
+                <p class="mt-1 text-xl font-bold text-emerald-700">$ {{ number_format($totalPagado, 2, ',', '.') }}</p>
+                <p class="mt-1 text-xs text-emerald-600">Pagada + Facturada</p>
+            </div>
         </div>
 
         <div class="rounded-lg bg-white p-4 shadow">
@@ -137,6 +164,8 @@
                 </tbody>
             </table>
         </div>
+    </div>
+    @endif
     </div>
 </div>
 
@@ -320,8 +349,22 @@
 @endsection
 
 @push('scripts')
+@include('partials.filter-submit-loading-script')
 <script>
     (() => {
+        window.initFilterSubmitLoading({
+            formId: 'dashboard-filter-form',
+            submitButtonId: 'dashboard-apply-filter-button',
+            submitLabelId: 'dashboard-apply-filter-label',
+            submitSpinnerId: 'dashboard-apply-filter-spinner',
+            idleText: 'Aplicar filtro',
+            loadingText: 'Cargando...',
+            resultsAreaId: 'dashboard-results-area',
+            resultsOverlayId: 'dashboard-results-loading-overlay',
+            overlayMessage: 'Generando informe, por favor espere...',
+            overlayDelayMs: 500,
+        });
+
         const STORAGE_KEY = 'proformas-dashboard-export-columns';
         const DEFAULTS = @json($exportOptions['defaults']);
         const modal = document.getElementById('export-modal');
@@ -587,5 +630,3 @@
     })();
 </script>
 @endpush
-
-

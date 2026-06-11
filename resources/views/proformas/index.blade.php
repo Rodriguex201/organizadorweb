@@ -12,7 +12,7 @@
 
         <div class="flex flex-wrap gap-2">
             <a href="{{ route('proformas.dashboard') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
-                Ver dashboard
+                Ver Informe
             </a>
             <a href="{{ route('proformas.cartera.index') }}" class="inline-flex items-center rounded bg-rose-100 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-200">
                 &#128203; Cartera pendiente
@@ -98,11 +98,22 @@
                 </select>
             </div>
             <div class="acciones-filtros flex items-end gap-[10px] self-end">
-                <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Filtrar</button>
-                <a href="{{ route('proformas.clear-filters') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Limpiar</a>
+                <button type="submit" id="proformas-apply-filter-button" class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70">
+                    <span id="proformas-apply-filter-spinner" class="mr-2 hidden h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                    <span id="proformas-apply-filter-label">Filtrar</span>
+                </button>
+                <a id="proformas-clear-filters-button" href="{{ route('proformas.clear-filters') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Limpiar</a>
             </div>
         </form>
     </div>
+
+    <div id="proformas-results-area" class="relative">
+        <div id="proformas-results-loading-overlay" class="pointer-events-none absolute inset-0 z-20 hidden items-center justify-center rounded-lg bg-white/75 backdrop-blur-[1px]">
+            <div class="rounded-xl border border-slate-200 bg-white px-5 py-4 text-center shadow-lg">
+                <div class="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600"></div>
+                <p class="text-sm font-medium text-slate-700">Consultando proformas, por favor espere...</p>
+            </div>
+        </div>
 
     <div class="overflow-hidden rounded-lg bg-white shadow">
         <div class="overflow-x-auto">
@@ -242,6 +253,7 @@
                 {{ $proformas->links() }}
             </div>
         @endif
+    </div>
     </div>
 </div>
 
@@ -393,8 +405,23 @@
 @endsection
 
 @push('scripts')
+@include('partials.filter-submit-loading-script')
 <script>
     (() => {
+        window.initFilterSubmitLoading({
+            formId: 'proformas-filter-form',
+            submitButtonId: 'proformas-apply-filter-button',
+            submitLabelId: 'proformas-apply-filter-label',
+            submitSpinnerId: 'proformas-apply-filter-spinner',
+            idleText: 'Filtrar',
+            loadingText: 'Cargando...',
+            disableTargetIds: ['proformas-clear-filters-button'],
+            resultsAreaId: 'proformas-results-area',
+            resultsOverlayId: 'proformas-results-loading-overlay',
+            overlayMessage: 'Consultando proformas, por favor espere...',
+            overlayDelayMs: 500,
+        });
+
         const ESTADO_GENERADA = {{ \App\Services\ProformasService::ESTADO_GENERADA }};
         const ESTADO_ENVIADA = {{ \App\Services\ProformasService::ESTADO_ENVIADA }};
         const ESTADO_PAGADA = {{ \App\Services\ProformasService::ESTADO_PAGADA }};

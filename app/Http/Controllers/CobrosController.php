@@ -82,7 +82,7 @@ $filters = [
         'cobros' => $cobros,
         'filters' => $filters,
         'meses' => $this->cobrosService::MESES,
-        'periodSummary' => $this->buildPeriodSummary($filters),
+        'periodSummary' => $this->cobrosService->getPeriodSummary($filters),
         'canClearPendingBatch' => $this->canManagePendingBatchCleanup(),
     ]);
 }

@@ -65,6 +65,10 @@ class CobrosIndexFiltersTest extends TestCase
             ->once()
             ->with($expectedFilters)
             ->andReturn(new LengthAwarePaginator([], 0, 15));
+        $cobrosService->shouldReceive('getPeriodSummary')
+            ->once()
+            ->with($expectedFilters)
+            ->andReturn($this->emptySummary());
 
         $this->app->instance(CobrosService::class, $cobrosService);
         $this->app->instance(ProformaPreviewService::class, $previewService);
@@ -105,6 +109,10 @@ class CobrosIndexFiltersTest extends TestCase
             ->once()
             ->with($expectedFilters)
             ->andReturn(new LengthAwarePaginator([], 0, 15));
+        $cobrosService->shouldReceive('getPeriodSummary')
+            ->once()
+            ->with($expectedFilters)
+            ->andReturn($this->emptySummary());
 
         $this->app->instance(CobrosService::class, $cobrosService);
         $this->app->instance(ProformaPreviewService::class, $previewService);
@@ -141,6 +149,10 @@ class CobrosIndexFiltersTest extends TestCase
             ->once()
             ->with($expectedFilters)
             ->andReturn(new LengthAwarePaginator([], 0, 15));
+        $cobrosService->shouldReceive('getPeriodSummary')
+            ->once()
+            ->with($expectedFilters)
+            ->andReturn($this->emptySummary());
 
         $this->bindCobrosControllerDependencies($cobrosService);
 
@@ -165,6 +177,9 @@ class CobrosIndexFiltersTest extends TestCase
         $cobrosService->shouldReceive('paginateCobros')
             ->once()
             ->andReturn(new LengthAwarePaginator([], 0, 15));
+        $cobrosService->shouldReceive('getPeriodSummary')
+            ->once()
+            ->andReturn($this->emptySummary());
 
         $this->bindCobrosControllerDependencies($cobrosService);
 
@@ -187,6 +202,9 @@ class CobrosIndexFiltersTest extends TestCase
         $cobrosService->shouldReceive('paginateCobros')
             ->once()
             ->andReturn(new LengthAwarePaginator([], 0, 15));
+        $cobrosService->shouldReceive('getPeriodSummary')
+            ->once()
+            ->andReturn($this->emptySummary());
 
         $this->bindCobrosControllerDependencies($cobrosService);
 
@@ -218,5 +236,22 @@ class CobrosIndexFiltersTest extends TestCase
         $this->app->instance(ProformasService::class, Mockery::mock(ProformasService::class));
         $this->app->instance(ProformaEmailService::class, Mockery::mock(ProformaEmailService::class));
         $this->app->instance(RevisarProformaCalculator::class, Mockery::mock(RevisarProformaCalculator::class));
+    }
+
+    private function emptySummary(): object
+    {
+        return (object) [
+            'total_facturas' => 0,
+            'total_notas_debito' => 0,
+            'total_notas_credito' => 0,
+            'total_documentos_soporte' => 0,
+            'total_notas_ajuste' => 0,
+            'total_acuses' => 0,
+            'valor_facturas' => 0,
+            'valor_documentos' => 0,
+            'valor_acuse' => 0,
+            'valor_mensualidad' => 0,
+            'valor_total' => 0,
+        ];
     }
 }
