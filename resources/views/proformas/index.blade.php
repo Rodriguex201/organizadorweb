@@ -46,15 +46,11 @@
                 <input id="nro_prof" name="nro_prof" value="{{ $filters['nro_prof'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div class="min-w-[120px] max-w-[180px] w-full">
-                <label for="codigo" class="mb-1 block text-sm font-medium">Código</label>
-                <input id="codigo" name="codigo" value="{{ $filters['codigo'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="nit" class="mb-1 block text-sm font-medium">NIT</label>
                 <input id="nit" name="nit" value="{{ $filters['nit'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div class="min-w-[120px] max-w-[180px] w-full">
-                <label for="empresa" class="mb-1 block text-sm font-medium">Empresa</label>
+                <label for="empresa" class="mb-1 block text-sm font-medium">Código o Empresa</label>
                 <input id="empresa" name="empresa" value="{{ $filters['empresa'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div class="min-w-[120px] max-w-[180px] w-full">
@@ -127,6 +123,11 @@
                 </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
+                @if(!($hasSearched ?? true))
+                    <tr>
+                        <td colspan="11" class="px-4 py-8 text-center text-slate-500">Seleccione los filtros y pulse Filtrar para consultar proformas.</td>
+                    </tr>
+                @else
                 @forelse($proformas as $proforma)
                     @php
                         $estadoCodigo = (int) ($proforma->estado ?? 0);
@@ -178,11 +179,11 @@
                             @if($clientePotencialId > 0)
                                 <button
                                     type="button"
-                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-base transition hover:bg-slate-100 {{ $notaCobro !== '' ? 'text-amber-600' : 'text-slate-400' }}"
+                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border text-base transition {{ $notaCobro !== '' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-slate-300 text-slate-400 hover:bg-slate-100' }}"
                                     data-cliente-id="{{ $clientePotencialId }}"
                                     data-cliente-nombre="{{ $proforma->emp ?: 'Sin nombre' }}"
                                     data-nota="{{ $notaCobro }}"
-                                    title="{{ $notaResumen }}"
+                                    title="{{ $notaCobro !== '' ? 'Tiene nota registrada' : 'Sin nota de cobro' }}"
                                     aria-label="Editar nota de cobro"
                                 >&#128221;</button>
                             @else
@@ -231,13 +232,16 @@
                         <td colspan="11" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
+                @endif
                 </tbody>
             </table>
         </div>
 
-        <div class="border-t border-slate-200 px-4 py-3">
-            {{ $proformas->links() }}
-        </div>
+        @if($hasSearched ?? true)
+            <div class="border-t border-slate-200 px-4 py-3">
+                {{ $proformas->links() }}
+            </div>
+        @endif
     </div>
 </div>
 

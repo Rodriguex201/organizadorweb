@@ -434,11 +434,11 @@
                             @if($clienteId > 0)
                                 <button
                                     type="button"
-                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-base transition hover:bg-slate-100 {{ $notaCobro !== '' ? 'text-amber-600' : 'text-slate-400' }}"
+                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border text-base transition {{ $notaCobro !== '' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-slate-300 text-slate-400 hover:bg-slate-100' }}"
                                     data-cliente-id="{{ $clienteId }}"
                                     data-cliente-nombre="{{ $cobro->nombre ?: 'Sin nombre' }}"
                                     data-nota="{{ $notaCobro }}"
-                                    title="{{ $notaResumen }}"
+                                    title="{{ $notaCobro !== '' ? 'Tiene nota registrada' : 'Sin nota de cobro' }}"
                                     aria-label="Editar nota de cobro"
                                 >
                                     📝
@@ -567,8 +567,13 @@
 
             const hasNota = (nota || '').trim().length > 0;
             selectedButton.dataset.nota = nota || '';
-            selectedButton.title = resumenNota(nota || '');
-            selectedButton.classList.toggle('text-amber-600', hasNota);
+            selectedButton.title = hasNota ? 'Tiene nota registrada' : 'Sin nota de cobro';
+            selectedButton.classList.toggle('border-emerald-200', hasNota);
+            selectedButton.classList.toggle('bg-emerald-50', hasNota);
+            selectedButton.classList.toggle('hover:bg-emerald-100', hasNota);
+            selectedButton.classList.toggle('text-emerald-700', hasNota);
+            selectedButton.classList.toggle('border-slate-300', !hasNota);
+            selectedButton.classList.toggle('hover:bg-slate-100', !hasNota);
             selectedButton.classList.toggle('text-slate-400', !hasNota);
         };
 

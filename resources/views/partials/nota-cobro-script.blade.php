@@ -61,8 +61,13 @@
 
             const hasNota = (nota || '').trim().length > 0;
             selectedButton.dataset.nota = nota || '';
-            selectedButton.title = resumenNota(nota || '');
-            selectedButton.classList.toggle('text-amber-600', hasNota);
+            selectedButton.title = hasNota ? 'Tiene nota registrada' : 'Sin nota de cobro';
+            selectedButton.classList.toggle('border-emerald-200', hasNota);
+            selectedButton.classList.toggle('bg-emerald-50', hasNota);
+            selectedButton.classList.toggle('hover:bg-emerald-100', hasNota);
+            selectedButton.classList.toggle('text-emerald-700', hasNota);
+            selectedButton.classList.toggle('border-slate-300', !hasNota);
+            selectedButton.classList.toggle('hover:bg-slate-100', !hasNota);
             selectedButton.classList.toggle('text-slate-400', !hasNota);
         };
 

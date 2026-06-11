@@ -70,7 +70,6 @@ class ProformasService
             ->selectRaw($this->clienteResolutionSourceExpression().' as cliente_resolution_source');
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
-        $codigo = trim((string) ($filters['codigo'] ?? ''));
         $nit = trim((string) ($filters['nit'] ?? ''));
         $empresa = $this->normalizeTextFilter($filters['empresa'] ?? '');
         $emisora = trim((string) ($filters['emisora'] ?? ''));
@@ -82,23 +81,14 @@ class ProformasService
 
         $paginator = $query
             ->when($nroProf !== '', fn ($q) => $q->where('p.nro_prof', 'like', "%{$nroProf}%"))
-
-            ->when($codigo !== '', function ($q) use ($codigo) {
-                $codigoLike = '%'.mb_strtolower($codigo).'%';
-
-                $q->whereRaw(
-                    $this->normalizedSqlExpression($this->joinedClienteFieldExpression('codigo')).' LIKE ?',
-                    [$codigoLike]
-                );
-            })
-
             ->when($nit !== '', fn ($q) => $q->where('p.nit', 'like', "%{$nit}%"))
             ->when($empresa !== '', function ($q) use ($empresa) {
                 $empresaLike = '%'.$empresa.'%';
 
-                $q->where(function ($empresaQuery) use ($empresaLike) {
-                    $empresaQuery
-                        ->whereRaw($this->normalizedSqlExpression('p.emp').' LIKE ?', [$empresaLike])
+                $q->where(function ($clienteQuery) use ($empresaLike) {
+                    $clienteQuery
+                        ->whereRaw($this->normalizedSqlExpression($this->joinedClienteFieldExpression('codigo')).' LIKE ?', [$empresaLike])
+                        ->orWhereRaw($this->normalizedSqlExpression('p.emp').' LIKE ?', [$empresaLike])
                         ->orWhereRaw($this->normalizedSqlExpression($this->joinedClienteFieldExpression('nombre')).' LIKE ?', [$empresaLike])
                         ->orWhereRaw($this->normalizedSqlExpression($this->joinedClienteFieldExpression('empresa')).' LIKE ?', [$empresaLike]);
                 });

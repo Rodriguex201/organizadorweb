@@ -75,6 +75,13 @@
         'vlrterminal_recepcion' => 'Terminal recepcion',
     ];
 
+    $quantityFields = [
+        'numequipos',
+        'numextra',
+        'nominaterminal',
+        'numeromoviles',
+    ];
+
     $tarifasByKey = $tarifas->keyBy('clave');
     $assignedKeys = collect($categoryConfig)
         ->flatMap(fn (array $config) => $config['fields'])
@@ -167,7 +174,9 @@
                             @foreach($categoryTarifas as $tarifa)
                                 @php
                                     $baseKey = 'tarifas.'.$tarifa->clave;
+                                    $inputBaseName = 'tarifas['.$tarifa->clave.']';
                                     $label = $friendlyLabels[$tarifa->clave] ?? Str::of($tarifa->clave)->replace('_', ' ')->title();
+                                    $isQuantityField = in_array($tarifa->clave, $quantityFields, true);
                                 @endphp
                                 <div class="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
                                     <div class="mb-3 flex items-start justify-between gap-3">
@@ -184,9 +193,9 @@
                                             <input
                                                 id="tarifa_{{ $tarifa->clave }}"
                                                 type="number"
-                                                name="{{ $baseKey }}[valor]"
+                                                name="{{ $inputBaseName }}[valor]"
                                                 min="0"
-                                                step="0.01"
+                                                step="{{ $isQuantityField ? '1' : '0.01' }}"
                                                 value="{{ old($baseKey.'.valor', $tarifa->valor) }}"
                                                 data-tarifa-field="{{ $tarifa->clave }}"
                                                 class="h-10 w-full rounded border border-slate-300 bg-white px-3 text-sm text-slate-800"
@@ -194,12 +203,12 @@
                                         </div>
 
                                         <div class="sm:w-[8.5rem]">
-                                            <input type="hidden" name="{{ $baseKey }}[activo]" value="0">
+                                            <input type="hidden" name="{{ $inputBaseName }}[activo]" value="0">
                                             <label class="flex h-10 items-center justify-between rounded border border-slate-300 bg-white px-3 text-sm text-slate-700">
                                                 <span class="font-medium">Activa</span>
                                                 <input
                                                     type="checkbox"
-                                                    name="{{ $baseKey }}[activo]"
+                                                    name="{{ $inputBaseName }}[activo]"
                                                     value="1"
                                                     data-tarifa-active="{{ $tarifa->clave }}"
                                                     class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"

@@ -21,7 +21,6 @@ class ProformasIndexFiltersTest extends TestCase
 
         $expectedFilters = [
             'nro_prof' => null,
-            'codigo' => null,
             'nit' => null,
             'empresa' => null,
             'emisora' => null,
@@ -32,19 +31,6 @@ class ProformasIndexFiltersTest extends TestCase
             'filtro_nota' => null,
         ];
 
-        $service->shouldReceive('normalizePeriodoFilters')
-            ->once()
-            ->with(null, null)
-            ->andReturn([
-                'mes' => $expectedFilters['mes'],
-                'anio' => $expectedFilters['anio'],
-            ]);
-
-        $service->shouldReceive('paginateProformas')
-            ->once()
-            ->with($expectedFilters)
-            ->andReturn(new LengthAwarePaginator([], 0, 15));
-
         $this->app->instance(ProformasService::class, $service);
         $this->app->instance(ProformaPdfService::class, $pdfService);
         $this->app->instance(ProformaEmailService::class, $emailService);
@@ -53,6 +39,8 @@ class ProformasIndexFiltersTest extends TestCase
 
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);
+        $response->assertViewHas('hasSearched', false);
+        $response->assertSee('Seleccione los filtros y pulse Filtrar para consultar proformas.');
     }
 
     public function test_respeta_mes_y_anio_seleccionados_por_el_usuario(): void
@@ -65,7 +53,6 @@ class ProformasIndexFiltersTest extends TestCase
 
         $expectedFilters = [
             'nro_prof' => null,
-            'codigo' => null,
             'nit' => null,
             'empresa' => null,
             'emisora' => null,
@@ -180,7 +167,6 @@ class ProformasIndexFiltersTest extends TestCase
 
         $expectedFilters = [
             'nro_prof' => null,
-            'codigo' => null,
             'nit' => null,
             'empresa' => null,
             'emisora' => null,
@@ -225,7 +211,6 @@ class ProformasIndexFiltersTest extends TestCase
 
         $expectedFilters = [
             'nro_prof' => null,
-            'codigo' => null,
             'nit' => null,
             'empresa' => null,
             'emisora' => null,
@@ -235,19 +220,6 @@ class ProformasIndexFiltersTest extends TestCase
             'envio' => null,
             'filtro_nota' => null,
         ];
-
-        $service->shouldReceive('normalizePeriodoFilters')
-            ->once()
-            ->with(null, null)
-            ->andReturn([
-                'mes' => $expectedFilters['mes'],
-                'anio' => $expectedFilters['anio'],
-            ]);
-
-        $service->shouldReceive('paginateProformas')
-            ->once()
-            ->with($expectedFilters)
-            ->andReturn(new LengthAwarePaginator([], 0, 15));
 
         $this->app->instance(ProformasService::class, $service);
         $this->app->instance(ProformaPdfService::class, $pdfService);
@@ -265,6 +237,7 @@ class ProformasIndexFiltersTest extends TestCase
 
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);
+        $response->assertViewHas('hasSearched', false);
         $this->assertTrue(session()->exists('proformas.numero'));
         $this->assertTrue(session()->exists('proformas.empresa'));
         $this->assertTrue(session()->exists('proformas.estado'));
@@ -287,7 +260,6 @@ class ProformasIndexFiltersTest extends TestCase
 
         $expectedFilters = [
             'nro_prof' => null,
-            'codigo' => null,
             'nit' => null,
             'empresa' => null,
             'emisora' => null,

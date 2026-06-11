@@ -10,6 +10,7 @@ use App\Services\ProformasService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +21,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ProformasController extends Controller
 {
-    private const FILTER_KEYS = ['nro_prof', 'codigo', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio', 'filtro_nota'];
+    private const FILTER_KEYS = ['nro_prof', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio', 'filtro_nota'];
 
     public function __construct(
         private readonly ProformasService $proformasService,
@@ -37,13 +38,27 @@ class ProformasController extends Controller
             fn (string $key) => $request->query->has($key)
         );
 
+        $defaultFilters = $this->defaultFilters();
+
+        if (!$hasFilterQuery) {
+            $this->storeFilterSession($defaultFilters);
+
+            return view('proformas.index', [
+                'proformas' => $this->emptyProformasPaginator($request),
+                'filters' => $defaultFilters,
+                'estados' => ProformasService::ESTADOS,
+                'meses' => ProformasService::MESES,
+                'proformasService' => $this->proformasService,
+                'hasSearched' => false,
+            ]);
+        }
+
         $rawFilters = $hasFilterQuery
             ? $request->only(self::FILTER_KEYS)
             : [];
 
         $validated = Validator::make($rawFilters, [
             'nro_prof' => ['nullable', 'string', 'max:100'],
-            'codigo' => ['nullable', 'string', 'max:50'],
             'nit' => ['nullable', 'string', 'max:60'],
             'empresa' => ['nullable', 'string', 'max:200'],
             'emisora' => ['nullable', 'string', 'max:20'],
@@ -61,7 +76,6 @@ class ProformasController extends Controller
 
         $filters = [
             'nro_prof' => $validated['nro_prof'] ?? null,
-            'codigo' => $validated['codigo'] ?? null,
             'nit' => $validated['nit'] ?? null,
             'empresa' => $validated['empresa'] ?? null,
             'emisora' => $validated['emisora'] ?? null,
@@ -80,12 +94,14 @@ class ProformasController extends Controller
             'estados' => ProformasService::ESTADOS,
             'meses' => ProformasService::MESES,
             'proformasService' => $this->proformasService,
+            'hasSearched' => true,
         ]);
     }
 
     public function clearFilters(): RedirectResponse
     {
         session()->forget(['proformas', 'proformas.filtros_originales']);
+        session()->forget('proformas.codigo');
 
         return redirect()->route('proformas.index');
     }
@@ -626,9 +642,10 @@ class ProformasController extends Controller
 
     private function storeFilterSession(array $filters): void
     {
+        session()->forget('proformas.codigo');
+
         session([
             'proformas.numero' => $filters['nro_prof'],
-            'proformas.codigo' => $filters['codigo'],
             'proformas.nit' => $filters['nit'],
             'proformas.empresa' => $filters['empresa'],
             'proformas.emisora' => $filters['emisora'],
@@ -638,6 +655,35 @@ class ProformasController extends Controller
             'proformas.envio' => $filters['envio'],
             'proformas.filtro_nota' => $filters['filtro_nota'],
         ]);
+    }
+
+    private function defaultFilters(): array
+    {
+        return [
+            'nro_prof' => null,
+            'nit' => null,
+            'empresa' => null,
+            'emisora' => null,
+            'mes' => (int) now()->format('n'),
+            'anio' => (int) now()->format('Y'),
+            'estado' => null,
+            'envio' => null,
+            'filtro_nota' => null,
+        ];
+    }
+
+    private function emptyProformasPaginator(Request $request): LengthAwarePaginator
+    {
+        return new LengthAwarePaginator(
+            items: [],
+            total: 0,
+            perPage: 15,
+            currentPage: 1,
+            options: [
+                'path' => $request->url(),
+                'pageName' => 'page',
+            ],
+        );
     }
 
     private function getStoredReturnFilters(): array
@@ -650,7 +696,6 @@ class ProformasController extends Controller
 
         return $this->sanitizeFilterArray([
             'nro_prof' => session('proformas.numero'),
-            'codigo' => session('proformas.codigo'),
             'nit' => session('proformas.nit'),
             'empresa' => session('proformas.empresa'),
             'emisora' => session('proformas.emisora'),
