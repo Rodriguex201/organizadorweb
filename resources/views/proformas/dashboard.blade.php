@@ -119,7 +119,7 @@
 
     <div class="overflow-hidden rounded-lg bg-white shadow">
         <div class="border-b border-slate-200 px-4 py-3">
-            <h2 class="font-semibold">Últimas proformas del periodo</h2>
+            <h2 class="font-semibold">{{ ($hasSearched ?? false) ? 'Proformas encontradas' : 'Últimas proformas del periodo' }}</h2>
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full text-sm">
@@ -137,7 +137,7 @@
                 </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                @forelse($dashboard['ultimas_proformas'] as $proforma)
+                @forelse($proformas as $proforma)
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3 font-medium">{{ $proforma->nro_prof ?: ('#'.$proforma->id) }}</td>
                         <td class="px-4 py-3">{{ $proforma->emp ?: 'N/D' }}</td>
@@ -164,6 +164,11 @@
                 </tbody>
             </table>
         </div>
+        @if($hasSearched ?? false)
+            <div class="border-t border-slate-200 px-4 py-3">
+                {{ $proformas->links() }}
+            </div>
+        @endif
     </div>
     @endif
     </div>

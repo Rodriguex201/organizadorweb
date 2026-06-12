@@ -244,6 +244,7 @@ class ProformasController extends Controller
         if (!$hasFilterQuery) {
             return view('proformas.dashboard', [
                 'dashboard' => $this->emptyDashboardData(),
+                'proformas' => $this->emptyProformasPaginator($request),
                 'filters' => $defaultFilters,
                 'meses' => ProformasService::MESES,
                 'estados' => ProformasService::ESTADOS,
@@ -275,6 +276,11 @@ class ProformasController extends Controller
 
         return view('proformas.dashboard', [
             'dashboard' => $dashboard,
+            'proformas' => $this->proformasService->paginateDashboardProformas(
+                $periodo['mes'],
+                $periodo['anio'],
+                $estado,
+            ),
             'filters' => array_merge($periodo, ['estado' => $estado]),
             'meses' => ProformasService::MESES,
             'estados' => ProformasService::ESTADOS,
@@ -720,7 +726,6 @@ class ProformasController extends Controller
             'suma_total_vtotal' => 0,
             'suma_total_por_estado' => [],
             'total_periodo_filtrado' => 0,
-            'ultimas_proformas' => collect(),
         ];
     }
 

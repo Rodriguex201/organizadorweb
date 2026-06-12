@@ -134,10 +134,6 @@ class ProformasService
             ];
         }
 
-        $ultimasProformas = (clone $basePeriodo)
-            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado'])
-            ->orderByDesc('p.id')->limit(15)->get();
-
         return [
             'periodo' => ['mes' => $mes, 'anio' => $anio],
             'total_proformas' => $totalProformas,
@@ -148,8 +144,19 @@ class ProformasService
             'suma_total_vtotal' => $sumaTotal,
             'suma_total_por_estado' => $totalesPorEstado,
             'total_periodo_filtrado' => $totalProformas,
-            'ultimas_proformas' => $ultimasProformas,
         ];
+    }
+
+    public function paginateDashboardProformas(int $mes, int $anio, ?int $estado = null, int $perPage = 15): LengthAwarePaginator
+    {
+        return DB::table('sg_proform as p')
+            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado'])
+            ->where('p.mes', $mes)
+            ->where('p.anio', $anio)
+            ->when($estado !== null, fn ($query) => $query->where('p.estado', $estado))
+            ->orderByDesc('p.id')
+            ->paginate($perPage)
+            ->withQueryString();
     }
 
     public function normalizePeriodoFilters(null|string|int $mes, null|string|int $anio): array

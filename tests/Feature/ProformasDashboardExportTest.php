@@ -9,6 +9,7 @@ use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
 use App\Services\EmpresaActivacionService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 use Mockery;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -27,6 +28,7 @@ class ProformasDashboardExportTest extends TestCase
 
         $service->shouldNotReceive('normalizePeriodoFilters');
         $service->shouldNotReceive('getDashboardData');
+        $service->shouldNotReceive('paginateDashboardProformas');
 
         $exportService->shouldReceive('getModalOptions')
             ->once()
@@ -103,8 +105,15 @@ class ProformasDashboardExportTest extends TestCase
                 'suma_total_vtotal' => 0,
                 'suma_total_por_estado' => [],
                 'total_periodo_filtrado' => 0,
-                'ultimas_proformas' => collect(),
             ]);
+
+        $service->shouldReceive('paginateDashboardProformas')
+            ->once()
+            ->with(5, 2026, 3)
+            ->andReturn(new LengthAwarePaginator([], 0, 15, 1, [
+                'path' => route('proformas.dashboard'),
+                'pageName' => 'page',
+            ]));
 
         $exportService->shouldReceive('getModalOptions')
             ->once()
