@@ -15,6 +15,8 @@ class ConfiguracionEstadoProformaController extends Controller
 
     public function index(): View
     {
+        $this->configService->syncDefaults();
+
         return view('configuracion.estados-proforma', [
             'estadosConfig' => $this->configService->all(),
         ]);

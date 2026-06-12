@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -55,16 +56,26 @@ public function index(Request $request): View
     ]);
 
     // 🔥 SOLO ESTE FILTER
-    $isFirstCleanVisit = $request->query() === [];
+    $hasFilterQuery = collect([
+        'mes',
+        'anio',
+        'ano',
+        'proforma',
+        'codigo',
+        'buscar',
+        'grupo_fecha',
+        'filtro_nota',
+        'filtro_envio',
+    ])->contains(fn (string $key) => $request->query->has($key));
     $now = Carbon::now();
 
 $filters = [
     'mes' => isset($validated['mes'])
         ? strtolower(trim($validated['mes']))
-        : ($isFirstCleanVisit ? (CobrosService::MESES[(int) $now->month] ?? null) : null),
+        : (CobrosService::MESES[(int) $now->month] ?? null),
     'anio' => isset($validated['anio'])
         ? (int) $validated['anio']
-        : ($isFirstCleanVisit ? (int) $now->year : null),
+        : (int) $now->year,
     'proforma' => $request->filled('proforma') ? $validated['proforma'] : null,
     'codigo' => $validated['codigo'] ?? null,
     'buscar' => $validated['buscar'] ?? null,
@@ -76,6 +87,17 @@ $filters = [
 
     $this->sanitizePendingProformasForEnvioSession();
 
+    if (!$hasFilterQuery) {
+        return view('cobros.index', [
+            'cobros' => $this->emptyCobrosPaginator($request),
+            'filters' => $filters,
+            'meses' => $this->cobrosService::MESES,
+            'periodSummary' => null,
+            'canClearPendingBatch' => $this->canManagePendingBatchCleanup(),
+            'hasSearched' => false,
+        ]);
+    }
+
     $cobros = $this->cobrosService->paginateCobros($filters);
 
     return view('cobros.index', [
@@ -84,6 +106,7 @@ $filters = [
         'meses' => $this->cobrosService::MESES,
         'periodSummary' => $this->cobrosService->getPeriodSummary($filters),
         'canClearPendingBatch' => $this->canManagePendingBatchCleanup(),
+        'hasSearched' => true,
     ]);
 }
 
@@ -1303,6 +1326,20 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
     private function canManagePendingBatchCleanup(): bool
     {
         return app()->environment(['local', 'testing']) || esAdmin();
+    }
+
+    private function emptyCobrosPaginator(Request $request): LengthAwarePaginator
+    {
+        return new LengthAwarePaginator(
+            items: [],
+            total: 0,
+            perPage: 15,
+            currentPage: 1,
+            options: [
+                'path' => $request->url(),
+                'pageName' => 'page',
+            ],
+        );
     }
 
     private function sanitizePendingProformasForEnvioSession(): void

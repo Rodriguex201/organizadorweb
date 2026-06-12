@@ -23,6 +23,12 @@ class CobrosIndexFiltersTest extends TestCase
     {
         parent::setUp();
 
+        $compiledPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'organizadorweb-cobros-views';
+        if (!is_dir($compiledPath)) {
+            mkdir($compiledPath, 0777, true);
+        }
+        config(['view.compiled' => $compiledPath]);
+
         Schema::dropIfExists('valores_externos');
         Schema::create('valores_externos', function (Blueprint $table): void {
             $table->string('mes')->nullable();
@@ -41,7 +47,7 @@ class CobrosIndexFiltersTest extends TestCase
         });
     }
 
-    public function test_aplica_mes_y_anio_actuales_por_defecto_si_no_vienen_en_request(): void
+    public function test_primera_visita_limpia_no_consulta_y_muestra_filtros_por_defecto(): void
     {
         $cobrosService = Mockery::mock(CobrosService::class);
         $previewService = Mockery::mock(ProformaPreviewService::class);
@@ -61,14 +67,8 @@ class CobrosIndexFiltersTest extends TestCase
             'filtro_envio' => null,
         ];
 
-        $cobrosService->shouldReceive('paginateCobros')
-            ->once()
-            ->with($expectedFilters)
-            ->andReturn(new LengthAwarePaginator([], 0, 15));
-        $cobrosService->shouldReceive('getPeriodSummary')
-            ->once()
-            ->with($expectedFilters)
-            ->andReturn($this->emptySummary());
+        $cobrosService->shouldNotReceive('paginateCobros');
+        $cobrosService->shouldNotReceive('getPeriodSummary');
 
         $this->app->instance(CobrosService::class, $cobrosService);
         $this->app->instance(ProformaPreviewService::class, $previewService);
@@ -83,6 +83,8 @@ class CobrosIndexFiltersTest extends TestCase
 
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);
+        $response->assertViewHas('hasSearched', false);
+        $response->assertSee('Seleccione los filtros y pulse Filtrar para consultar cobros.');
     }
 
     public function test_respeta_mes_y_anio_seleccionados_por_el_usuario(): void
@@ -127,6 +129,7 @@ class CobrosIndexFiltersTest extends TestCase
 
         $response->assertOk();
         $response->assertViewHas('filters', $expectedFilters);
+        $response->assertViewHas('hasSearched', true);
     }
 
     public function test_propaga_filtro_codigo_y_buscar_hacia_el_servicio(): void
@@ -134,8 +137,8 @@ class CobrosIndexFiltersTest extends TestCase
         $cobrosService = Mockery::mock(CobrosService::class);
 
         $expectedFilters = [
-            'mes' => null,
-            'anio' => null,
+            'mes' => 'junio',
+            'anio' => 2026,
             'proforma' => null,
             'codigo' => 'B340',
             'buscar' => 'Martha TF',
@@ -174,12 +177,8 @@ class CobrosIndexFiltersTest extends TestCase
         $this->app['env'] = 'production';
 
         $cobrosService = Mockery::mock(CobrosService::class);
-        $cobrosService->shouldReceive('paginateCobros')
-            ->once()
-            ->andReturn(new LengthAwarePaginator([], 0, 15));
-        $cobrosService->shouldReceive('getPeriodSummary')
-            ->once()
-            ->andReturn($this->emptySummary());
+        $cobrosService->shouldNotReceive('paginateCobros');
+        $cobrosService->shouldNotReceive('getPeriodSummary');
 
         $this->bindCobrosControllerDependencies($cobrosService);
 
@@ -199,12 +198,8 @@ class CobrosIndexFiltersTest extends TestCase
         $this->app['env'] = 'production';
 
         $cobrosService = Mockery::mock(CobrosService::class);
-        $cobrosService->shouldReceive('paginateCobros')
-            ->once()
-            ->andReturn(new LengthAwarePaginator([], 0, 15));
-        $cobrosService->shouldReceive('getPeriodSummary')
-            ->once()
-            ->andReturn($this->emptySummary());
+        $cobrosService->shouldNotReceive('paginateCobros');
+        $cobrosService->shouldNotReceive('getPeriodSummary');
 
         $this->bindCobrosControllerDependencies($cobrosService);
 
@@ -214,7 +209,6 @@ class CobrosIndexFiltersTest extends TestCase
         ])->get(route('cobros.index'));
 
         $response->assertOk();
-        $response->assertSee('Limpiar lote pendiente de envio');
         $response->assertViewHas('canClearPendingBatch', true);
     }
 

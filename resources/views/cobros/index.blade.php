@@ -4,6 +4,7 @@
 
 @section('content')
 <div class="max-w-7xl mx-auto px-4 py-8">
+    @if($hasSearched ?? false)
     @php
         $proformasListasParaEnvio = session('cobros.proformas_listas_para_envio');
         $proformasListas = is_array($proformasListasParaEnvio['proformas'] ?? null) ? $proformasListasParaEnvio['proformas'] : [];
@@ -365,6 +366,7 @@
             @endforeach
         </div>
     </div>
+    @endif
 
     <div class="bg-white rounded-lg shadow overflow-hidden">
         <div class="overflow-x-auto">
@@ -455,7 +457,13 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="px-4 py-8 text-center text-slate-500">No hay cobros disponibles para los filtros seleccionados.</td>
+                        <td colspan="7" class="px-4 py-8 text-center text-slate-500">
+                            @if($hasSearched ?? false)
+                                No hay cobros disponibles para los filtros seleccionados.
+                            @else
+                                Seleccione los filtros y pulse Filtrar para consultar cobros.
+                            @endif
+                        </td>
                     </tr>
                 @endforelse
                 </tbody>

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 class ProformasService
 {
     private ?bool $sgProformHasIdCobroColumn = null;
+    private ?array $estadoConfigMap = null;
 
     public const ESTADO_GENERADA = 2;
     public const ESTADO_ENVIADA = 3;
@@ -43,10 +44,7 @@ class ProformasService
 
     public function paginateProformas(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = DB::table('sg_proform as p');
-        $this->applyClienteJoins($query);
-
-        $query->select([
+        $select = [
             'p.id',
             'p.nro_prof',
             'p.emp',
@@ -62,12 +60,16 @@ class ProformasService
             'p.enviado',
             'p.fecha_envio',
             'p.intentos_envio',
-        ])->selectRaw($this->joinedClienteFieldExpression('codigo').' as codigo')
-            ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as id_cliente')
-            ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as cliente_potencial_id')
-            ->selectRaw($this->joinedClienteFieldExpression('nota_cobro').' as nota_cobro')
-            ->selectRaw($this->joinedClienteFieldExpression('fecha_arriendo').' as cliente_fecha_arriendo')
-            ->selectRaw($this->clienteResolutionSourceExpression().' as cliente_resolution_source');
+        ];
+
+        if ($this->hasSgProformIdCobroColumn()) {
+            $select[] = 'p.id_cobro';
+        } else {
+            $select[] = DB::raw('NULL as id_cobro');
+        }
+
+        $query = DB::table('sg_proform as p')
+            ->select($select);
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
         $nit = trim((string) ($filters['nit'] ?? ''));
@@ -79,40 +81,30 @@ class ProformasService
         $mes = $this->normalizarMes($filters['mes'] ?? null);
         $filtroNota = trim((string) ($filters['filtro_nota'] ?? ''));
 
-        $paginator = $query
+        $query
             ->when($nroProf !== '', fn ($q) => $q->where('p.nro_prof', 'like', "%{$nroProf}%"))
             ->when($nit !== '', fn ($q) => $q->where('p.nit', 'like', "%{$nit}%"))
-            ->when($empresa !== '', function ($q) use ($empresa) {
-                $empresaLike = '%'.$empresa.'%';
-
-                $q->where(function ($clienteQuery) use ($empresaLike) {
-                    $clienteQuery
-                        ->whereRaw($this->normalizedSqlExpression($this->joinedClienteFieldExpression('codigo')).' LIKE ?', [$empresaLike])
-                        ->orWhereRaw($this->normalizedSqlExpression('p.emp').' LIKE ?', [$empresaLike])
-                        ->orWhereRaw($this->normalizedSqlExpression($this->joinedClienteFieldExpression('nombre')).' LIKE ?', [$empresaLike])
-                        ->orWhereRaw($this->normalizedSqlExpression($this->joinedClienteFieldExpression('empresa')).' LIKE ?', [$empresaLike]);
-                });
-            })
             ->when($emisora !== '', fn ($q) => $q->where('p.emisora', $emisora))
             ->when($estado !== null, fn ($q) => $q->where('p.estado', $estado))
             ->when($envio !== null, fn ($q) => $q->where('p.enviado', $envio))
             ->when($anio !== null, fn ($q) => $q->where('p.anio', $anio))
-            ->when($mes !== null, fn ($q) => $q->where('p.mes', $mes))
-            ->when($filtroNota !== '', function ($q) use ($filtroNota) {
-                $notaExpression = "TRIM(COALESCE(".$this->joinedClienteFieldExpression('nota_cobro').", ''))";
+            ->when($mes !== null, fn ($q) => $q->where('p.mes', $mes));
 
-                if ($filtroNota === 'con') {
-                    $q->whereRaw($notaExpression." <> ''");
+        if ($empresa !== '') {
+            $this->applyEmpresaFilterConstraint($query, $empresa);
+        }
 
-                    return;
-                }
+        if ($filtroNota !== '') {
+            $this->applyNotaFilterConstraint($query, $filtroNota);
+        }
 
-                if ($filtroNota === 'sin') {
-                    $q->whereRaw($notaExpression." = ''");
-                }
-            })
+        $paginator = $query
             ->orderByDesc('p.anio')->orderByDesc('p.mes')->orderByDesc('p.id')
             ->paginate($perPage)->withQueryString();
+
+        $paginator->setCollection(
+            $this->enrichPaginatedProformas($paginator->getCollection())
+        );
 
         return $paginator;
     }
@@ -123,15 +115,22 @@ class ProformasService
             ->where('p.mes', $mes)
             ->where('p.anio', $anio)
             ->when($estado !== null, fn ($query) => $query->where('p.estado', $estado));
-        $totalProformas = (clone $basePeriodo)->count();
-        $sumaTotal = (float) ((clone $basePeriodo)->sum('p.vtotal') ?? 0);
+        $totalesAgrupados = (clone $basePeriodo)
+            ->selectRaw('p.estado, COUNT(*) as cantidad, COALESCE(SUM(p.vtotal), 0) as total')
+            ->groupBy('p.estado')
+            ->get()
+            ->keyBy(fn (object $row) => (int) ($row->estado ?? 0));
+
+        $totalProformas = (int) $totalesAgrupados->sum(fn (object $row) => (int) ($row->cantidad ?? 0));
+        $sumaTotal = (float) $totalesAgrupados->sum(fn (object $row) => (float) ($row->total ?? 0));
 
         $totalesPorEstado = [];
         foreach (self::ESTADOS as $estadoCodigo => $estadoLabel) {
+            $estadoRow = $totalesAgrupados->get($estadoCodigo);
             $totalesPorEstado[$estadoCodigo] = [
                 'label' => $this->estadoLabel($estadoCodigo),
-                'cantidad' => (clone $basePeriodo)->where('p.estado', $estadoCodigo)->count(),
-                'total' => (float) ((clone $basePeriodo)->where('p.estado', $estadoCodigo)->sum('p.vtotal') ?? 0),
+                'cantidad' => (int) ($estadoRow->cantidad ?? 0),
+                'total' => (float) ($estadoRow->total ?? 0),
             ];
         }
 
@@ -465,14 +464,14 @@ class ProformasService
     {
         $estadoInt = $this->normalizarEntero($estado);
         if ($estadoInt === null) return 'N/D';
-        $config = $this->estadoConfigService->getMap()[$estadoInt] ?? null;
+        $config = $this->getEstadoConfigMap()[$estadoInt] ?? null;
         return $config['estado_nombre'] ?? (self::ESTADOS[$estadoInt] ?? "Estado {$estadoInt}");
     }
 
     public function estadoBadgeStyle(null|string|int $estado): string
     {
         $estadoInt = $this->normalizarEntero($estado);
-        $config = $estadoInt !== null ? ($this->estadoConfigService->getMap()[$estadoInt] ?? null) : null;
+        $config = $estadoInt !== null ? ($this->getEstadoConfigMap()[$estadoInt] ?? null) : null;
         $fondo = $config['color_fondo'] ?? '#E2E8F0';
         $texto = $config['color_texto'] ?? '#334155';
 
@@ -483,6 +482,216 @@ class ProformasService
     {
         $mesInt = $this->normalizarMes($mes);
         return $mesInt === null ? 'N/D' : ucfirst(self::MESES[$mesInt] ?? (string) $mesInt);
+    }
+
+    private function getEstadoConfigMap(): array
+    {
+        if ($this->estadoConfigMap !== null) {
+            return $this->estadoConfigMap;
+        }
+
+        return $this->estadoConfigMap = $this->estadoConfigService->getMap();
+    }
+
+    private function applyEmpresaFilterConstraint(Builder $query, string $empresa): void
+    {
+        $empresaLike = '%'.$empresa.'%';
+
+        $query->where(function (Builder $empresaQuery) use ($empresaLike): void {
+            $empresaQuery
+                ->whereRaw($this->normalizedSqlExpression('p.emp').' LIKE ?', [$empresaLike])
+                ->orWhereExists(
+                    $this->buildClienteRelacionSubquery()
+                        ->selectRaw('1')
+                        ->where(function (Builder $clienteQuery) use ($empresaLike): void {
+                            $clienteQuery
+                                ->whereRaw($this->normalizedSqlExpression('cp.codigo').' LIKE ?', [$empresaLike])
+                                ->orWhereRaw($this->normalizedSqlExpression('cp.nombre').' LIKE ?', [$empresaLike])
+                                ->orWhereRaw($this->normalizedSqlExpression('cp.empresa').' LIKE ?', [$empresaLike]);
+                        })
+                );
+        });
+    }
+
+    private function applyNotaFilterConstraint(Builder $query, string $filtroNota): void
+    {
+        if ($filtroNota === 'con') {
+            $query->whereExists(
+                $this->buildClienteRelacionSubquery()
+                    ->selectRaw('1')
+                    ->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) <> ''")
+            );
+
+            return;
+        }
+
+        if ($filtroNota === 'sin') {
+            $query->whereNotExists(
+                $this->buildClienteRelacionSubquery()
+                    ->selectRaw('1')
+                    ->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) <> ''")
+            );
+        }
+    }
+
+    private function enrichPaginatedProformas(Collection $proformas): Collection
+    {
+        if ($proformas->isEmpty()) {
+            return $proformas;
+        }
+
+        $byCobro = [];
+        $idCobros = $proformas
+            ->pluck('id_cobro')
+            ->map(fn ($idCobro) => (int) ($idCobro ?? 0))
+            ->filter(fn (int $idCobro) => $idCobro > 0)
+            ->unique()
+            ->values();
+
+        if ($idCobros->isNotEmpty()) {
+            $byCobro = DB::table('valores_externos as ve')
+                ->joinSub(
+                    DB::table('valores_externos as ve_match')
+                        ->selectRaw('ve_match.id_cobro, MAX(CAST(TRIM(ve_match.id_cliente) AS UNSIGNED)) as id_cliente')
+                        ->whereIn('ve_match.id_cobro', $idCobros->all())
+                        ->whereRaw("TRIM(COALESCE(ve_match.id_cliente, '')) <> ''")
+                        ->groupBy('ve_match.id_cobro'),
+                    've_cobro_match',
+                    fn ($join) => $join->on('ve_cobro_match.id_cobro', '=', 've.id_cobro')
+                )
+                ->leftJoin('clientes_potenciales as cp', 'cp.idclientes_potenciales', '=', 've_cobro_match.id_cliente')
+                ->whereIn('ve.id_cobro', $idCobros->all())
+                ->select([
+                    've.id_cobro',
+                    'cp.idclientes_potenciales',
+                    'cp.codigo',
+                    'cp.nota_cobro',
+                    'cp.fecha_arriendo',
+                ])
+                ->get()
+                ->keyBy(fn (object $row) => (int) ($row->id_cobro ?? 0))
+                ->all();
+        }
+
+        $fallbackBySignature = $this->resolveFallbackClientesForProformas(
+            $proformas->filter(fn (object $proforma) => (int) ($proforma->id_cobro ?? 0) <= 0)->values()
+        );
+
+        return $proformas->map(function (object $proforma) use ($byCobro): object {
+            $cliente = null;
+            $resolutionSource = null;
+            $idCobro = (int) ($proforma->id_cobro ?? 0);
+
+            if ($idCobro > 0 && isset($byCobro[$idCobro])) {
+                $cliente = $byCobro[$idCobro];
+                $resolutionSource = 'id_cobro';
+            } elseif ($idCobro <= 0) {
+                $cliente = $fallbackBySignature[$this->fallbackClienteSignature($proforma)] ?? null;
+                $resolutionSource = $cliente ? 'fallback' : null;
+            }
+
+            $proforma->codigo = $cliente->codigo ?? null;
+            $proforma->id_cliente = $cliente->idclientes_potenciales ?? null;
+            $proforma->cliente_potencial_id = $cliente->idclientes_potenciales ?? null;
+            $proforma->nota_cobro = $cliente->nota_cobro ?? null;
+            $proforma->cliente_fecha_arriendo = $cliente->fecha_arriendo ?? null;
+            $proforma->cliente_resolution_source = $resolutionSource;
+
+            return $proforma;
+        });
+    }
+
+    private function resolveFallbackClientesForProformas(Collection $proformas): array
+    {
+        if ($proformas->isEmpty()) {
+            return [];
+        }
+
+        $targets = $proformas
+            ->map(function (object $proforma): ?array {
+                $mesTexto = self::MESES[(int) ($proforma->mes ?? 0)] ?? null;
+
+                if ($mesTexto === null) {
+                    return null;
+                }
+
+                return [
+                    'signature' => $this->fallbackClienteSignature($proforma),
+                    'nit' => trim((string) ($proforma->nit ?? '')),
+                    'mes' => $mesTexto,
+                    'anio' => (int) ($proforma->anio ?? 0),
+                    'emisora' => strtoupper(trim((string) ($proforma->emisora ?? 'SAS'))),
+                ];
+            })
+            ->filter()
+            ->unique('signature')
+            ->values();
+
+        if ($targets->isEmpty()) {
+            return [];
+        }
+
+        $rows = DB::table('valores_externos as ve')
+            ->leftJoin('clientes_potenciales as cp', 'cp.idclientes_potenciales', '=', DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)'))
+            ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
+            ->where(function (Builder $outerQuery) use ($targets): void {
+                foreach ($targets as $target) {
+                    $outerQuery->orWhere(function (Builder $targetQuery) use ($target): void {
+                        $targetQuery
+                            ->whereRaw('BINARY TRIM(cp.nit) = BINARY ?', [$target['nit']])
+                            ->whereRaw('BINARY LOWER(TRIM(ve.mes)) = BINARY ?', [$target['mes']])
+                            ->whereRaw($this->valoresExternosYearSql().' = ?', [$target['anio']])
+                            ->whereRaw(
+                                'BINARY '.$this->normalizedRegimenSql('cp.regimen').' = BINARY ?',
+                                [$target['emisora']],
+                            );
+                    });
+                }
+            })
+            ->orderByDesc('ve.id_cobro')
+            ->select([
+                'cp.idclientes_potenciales',
+                'cp.codigo',
+                'cp.nota_cobro',
+                'cp.fecha_arriendo',
+                DB::raw('TRIM(cp.nit) as nit_normalized'),
+                DB::raw('LOWER(TRIM(ve.mes)) as mes_normalized'),
+                DB::raw($this->valoresExternosYearSql().' as anio_normalized'),
+                DB::raw($this->normalizedRegimenSql('cp.regimen').' as emisora_normalized'),
+            ])
+            ->get();
+
+        $resolved = [];
+
+        foreach ($rows as $row) {
+            $signature = $this->fallbackClienteSignatureFromParts(
+                (string) ($row->nit_normalized ?? ''),
+                (string) ($row->mes_normalized ?? ''),
+                (int) ($row->anio_normalized ?? 0),
+                (string) ($row->emisora_normalized ?? 'SAS'),
+            );
+
+            if (!isset($resolved[$signature])) {
+                $resolved[$signature] = $row;
+            }
+        }
+
+        return $resolved;
+    }
+
+    private function fallbackClienteSignature(object $proforma): string
+    {
+        return $this->fallbackClienteSignatureFromParts(
+            trim((string) ($proforma->nit ?? '')),
+            self::MESES[(int) ($proforma->mes ?? 0)] ?? '',
+            (int) ($proforma->anio ?? 0),
+            strtoupper(trim((string) ($proforma->emisora ?? 'SAS'))),
+        );
+    }
+
+    private function fallbackClienteSignatureFromParts(string $nit, string $mes, int $anio, string $emisora): string
+    {
+        return implode('|', [$nit, mb_strtolower(trim($mes)), $anio, strtoupper(trim($emisora))]);
     }
 
     private function normalizarEntero(null|string|int $valor): ?int

@@ -35,8 +35,6 @@ class EstadoProformaConfigService
 
     public function all(): Collection
     {
-        $this->syncDefaults();
-
         return DB::table('configuracion_estados_proforma')
             ->whereIn('estado_codigo', array_keys(self::DEFAULTS))
             ->orderBy('estado_codigo')
