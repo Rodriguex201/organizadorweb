@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iniciar sesi&oacute;n</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/logos/LogoRM.png') }}">
+    <link rel="shortcut icon" href="{{ asset('images/logos/LogoRM.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('images/logos/LogoRM.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen overflow-x-hidden bg-linear-to-br from-slate-100 via-indigo-50 to-fuchsia-100 text-slate-800">
@@ -58,9 +61,16 @@
                 <div class="flex min-h-screen items-center justify-center px-4 py-8 sm:px-8 lg:px-12 xl:min-h-0 xl:px-16">
                     <section class="w-full max-w-md rounded-[2rem] border border-slate-200/80 bg-white p-8 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.35)] sm:p-10">
                         <div class="mb-8 space-y-3">
-                            <span class="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-indigo-700">
-                                Acceso seguro
-                            </span>
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-indigo-700">
+                                    Acceso seguro
+                                </span>
+                                <img
+                                    src="{{ asset('images/logos/rmsoft.png') }}"
+                                    alt="RM Soft"
+                                    class="h-[52px] w-auto shrink-0"
+                                >
+                            </div>
                             <div class="space-y-2">
                                 <h2 class="text-3xl font-semibold tracking-tight text-slate-950">Iniciar sesi&oacute;n</h2>
                                 <p class="text-sm leading-6 text-slate-500">

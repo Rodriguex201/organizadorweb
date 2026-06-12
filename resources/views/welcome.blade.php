@@ -5,6 +5,9 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title>{{ config('app.name', 'Laravel') }}</title>
+        <link rel="icon" type="image/png" href="{{ asset('images/logos/LogoRM.png') }}">
+        <link rel="shortcut icon" href="{{ asset('images/logos/LogoRM.png') }}">
+        <link rel="apple-touch-icon" href="{{ asset('images/logos/LogoRM.png') }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

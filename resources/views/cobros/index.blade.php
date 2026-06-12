@@ -309,8 +309,21 @@
             <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
 
             <div class="flex gap-2">
-                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Filtrar</button>
-                <a href="{{ route('cobros.index') }}" class="bg-slate-200 text-slate-700 px-4 py-2 rounded hover:bg-slate-300">Limpiar</a>
+                <button
+                    type="submit"
+                    id="cobros-apply-filter-button"
+                    class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                    <span id="cobros-apply-filter-spinner" class="mr-2 hidden h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                    <span id="cobros-apply-filter-label">Filtrar</span>
+                </button>
+                <a
+                    id="cobros-clear-filters-button"
+                    href="{{ route('cobros.index') }}"
+                    class="rounded bg-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-300"
+                >
+                    Limpiar
+                </a>
             </div>
         </form>
     </div>
@@ -367,6 +380,14 @@
         </div>
     </div>
     @endif
+
+    <div id="cobros-results-area" class="relative">
+        <div id="cobros-results-loading-overlay" class="pointer-events-none absolute inset-0 z-20 hidden items-center justify-center rounded-lg bg-white/75 backdrop-blur-[1px]">
+            <div class="rounded-xl border border-slate-200 bg-white px-5 py-4 text-center shadow-lg">
+                <div class="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600"></div>
+                <p class="text-sm font-medium text-slate-700">Consultando cobros, por favor espere...</p>
+            </div>
+        </div>
 
     <div class="bg-white rounded-lg shadow overflow-hidden">
         <div class="overflow-x-auto">
@@ -474,14 +495,30 @@
             {{ $cobros->links() }}
         </div>
     </div>
+    </div>
 </div>
 
 @include('partials.nota-cobro-modal')
 @endsection
 
 @push('scripts')
+@include('partials.filter-submit-loading-script')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        window.initFilterSubmitLoading({
+            formId: 'cobros-filter-form',
+            submitButtonId: 'cobros-apply-filter-button',
+            submitLabelId: 'cobros-apply-filter-label',
+            submitSpinnerId: 'cobros-apply-filter-spinner',
+            idleText: 'Filtrar',
+            loadingText: 'Cargando...',
+            disableTargetIds: ['cobros-clear-filters-button'],
+            resultsAreaId: 'cobros-results-area',
+            resultsOverlayId: 'cobros-results-loading-overlay',
+            overlayMessage: 'Consultando cobros, por favor espere...',
+            overlayDelayMs: 500,
+        });
+
         const form = document.getElementById('cobros-filter-form');
         const grupoFechaInput = document.getElementById('grupo_fecha');
         const header = document.getElementById('fecha-arriendo-header');
