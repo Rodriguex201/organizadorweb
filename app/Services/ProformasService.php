@@ -556,35 +556,38 @@ class ProformasService
             ->values();
 
         if ($idCobros->isNotEmpty()) {
-            $byCobro = DB::table('valores_externos as ve')
-                ->joinSub(
-                    DB::table('valores_externos as ve_match')
-                        ->selectRaw('ve_match.id_cobro, MAX(CAST(TRIM(ve_match.id_cliente) AS UNSIGNED)) as id_cliente')
-                        ->whereIn('ve_match.id_cobro', $idCobros->all())
-                        ->whereRaw("TRIM(COALESCE(ve_match.id_cliente, '')) <> ''")
-                        ->groupBy('ve_match.id_cobro'),
-                    've_cobro_match',
-                    fn ($join) => $join->on('ve_cobro_match.id_cobro', '=', 've.id_cobro')
-                )
-                ->leftJoin('clientes_potenciales as cp', 'cp.idclientes_potenciales', '=', 've_cobro_match.id_cliente')
+            $rowsByCobro = DB::table('valores_externos as ve')
+                ->leftJoin('clientes_potenciales as cp', 'cp.idclientes_potenciales', '=', DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)'))
                 ->whereIn('ve.id_cobro', $idCobros->all())
+                ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
                 ->select([
                     've.id_cobro',
                     'cp.idclientes_potenciales',
                     'cp.codigo',
                     'cp.nota_cobro',
                     'cp.fecha_arriendo',
+                    DB::raw("CASE WHEN TRIM(COALESCE(cp.codigo, '')) <> '' THEN 1 ELSE 0 END as codigo_present"),
+                    DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED) as resolved_cliente_id'),
                 ])
-                ->get()
-                ->keyBy(fn (object $row) => (int) ($row->id_cobro ?? 0))
-                ->all();
+                ->orderBy('ve.id_cobro')
+                ->orderByDesc('codigo_present')
+                ->orderByDesc('resolved_cliente_id')
+                ->get();
+
+            foreach ($rowsByCobro as $row) {
+                $idCobro = (int) ($row->id_cobro ?? 0);
+
+                if ($idCobro > 0 && !isset($byCobro[$idCobro])) {
+                    $byCobro[$idCobro] = $row;
+                }
+            }
         }
 
         $fallbackBySignature = $this->resolveFallbackClientesForProformas(
             $proformas->filter(fn (object $proforma) => (int) ($proforma->id_cobro ?? 0) <= 0)->values()
         );
 
-        return $proformas->map(function (object $proforma) use ($byCobro): object {
+        return $proformas->map(function (object $proforma) use ($byCobro, $fallbackBySignature): object {
             $cliente = null;
             $resolutionSource = null;
             $idCobro = (int) ($proforma->id_cobro ?? 0);
@@ -661,6 +664,8 @@ class ProformasService
                 'cp.codigo',
                 'cp.nota_cobro',
                 'cp.fecha_arriendo',
+                DB::raw("CASE WHEN TRIM(COALESCE(cp.codigo, '')) <> '' THEN 1 ELSE 0 END as codigo_present"),
+                DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED) as resolved_cliente_id'),
                 DB::raw('TRIM(cp.nit) as nit_normalized'),
                 DB::raw('LOWER(TRIM(ve.mes)) as mes_normalized'),
                 DB::raw($this->valoresExternosYearSql().' as anio_normalized'),
@@ -670,7 +675,14 @@ class ProformasService
 
         $resolved = [];
 
-        foreach ($rows as $row) {
+        foreach ($rows->sortBy([
+            ['nit_normalized', 'asc'],
+            ['mes_normalized', 'asc'],
+            ['anio_normalized', 'asc'],
+            ['emisora_normalized', 'asc'],
+            ['codigo_present', 'desc'],
+            ['resolved_cliente_id', 'desc'],
+        ]) as $row) {
             $signature = $this->fallbackClienteSignatureFromParts(
                 (string) ($row->nit_normalized ?? ''),
                 (string) ($row->mes_normalized ?? ''),

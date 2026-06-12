@@ -4,7 +4,6 @@
 
 @section('content')
 <div class="max-w-7xl mx-auto px-4 py-8">
-    @if($hasSearched ?? false)
     @php
         $proformasListasParaEnvio = session('cobros.proformas_listas_para_envio');
         $proformasListas = is_array($proformasListasParaEnvio['proformas'] ?? null) ? $proformasListasParaEnvio['proformas'] : [];
@@ -316,6 +315,7 @@
         </form>
     </div>
 
+    @if($hasSearched ?? false)
     @php
         $periodSummaryMetrics = [
             ['label' => 'Total Facturas', 'value' => $periodSummary->total_facturas ?? 0, 'tone' => 'text-sky-700 bg-sky-50 border-sky-200', 'type' => 'count'],
