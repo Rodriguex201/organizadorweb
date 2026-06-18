@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exports\ProformasDashboardExcelExport;
+use App\Support\GrupoFechaHelper;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -64,6 +65,7 @@ class ProformaDashboardExportService
                 'mes' => $dashboardFilters['mes'] ?? (int) now()->format('n'),
                 'anio' => $dashboardFilters['anio'] ?? (int) now()->format('Y'),
                 'estado' => $dashboardFilters['estado'] ?? null,
+                'grupo_fecha' => $dashboardFilters['grupo_fecha'] ?? null,
             ],
             'scopes' => [
                 ['value' => self::SCOPE_CURRENT_FILTERS, 'label' => 'Respetar filtros actuales'],
@@ -205,15 +207,20 @@ class ProformaDashboardExportService
         $dashboardMes = $this->normalizarMes($dashboardFilters['mes'] ?? null) ?? (int) now()->format('n');
         $dashboardAnio = $this->normalizarEntero($dashboardFilters['anio'] ?? null) ?? (int) now()->format('Y');
         $dashboardEstado = $this->normalizarEntero($dashboardFilters['estado'] ?? null);
+        $dashboardGrupoFecha = $this->proformasService->normalizeGrupoFechaFilter($dashboardFilters['grupo_fecha'] ?? null);
         $anio = $this->normalizarEntero($input['anio'] ?? null) ?? $dashboardAnio;
         $estado = array_key_exists('estado', $input)
             ? $this->normalizarEntero($input['estado'])
             : $dashboardEstado;
+        $grupoFecha = array_key_exists('grupo_fecha', $input)
+            ? $this->proformasService->normalizeGrupoFechaFilter($input['grupo_fecha'])
+            : $dashboardGrupoFecha;
 
         $filters = [
             'scope' => $scope,
             'anio' => $anio,
             'estado' => $estado,
+            'grupo_fecha' => $grupoFecha,
             'mes' => $dashboardMes,
             'mes_desde' => $dashboardMes,
             'mes_hasta' => $dashboardMes,
@@ -254,16 +261,18 @@ class ProformaDashboardExportService
     {
         $definitions = $this->columnDefinitions();
         $query = DB::table('sg_proform as p');
+        $clienteJoinsApplied = false;
 
         if ($this->requiresClienteJoins($selectedColumns)) {
             $this->applyClienteJoins($query);
+            $clienteJoinsApplied = true;
         }
 
         foreach ($selectedColumns as $key) {
             ($definitions[$key]['select'])($query);
         }
 
-        $this->applyFilters($query, $filters);
+        $this->applyFilters($query, $filters, $clienteJoinsApplied);
         $orderedQuery = $query
             ->orderByDesc('p.anio')
             ->orderByDesc('p.mes')
@@ -327,7 +336,7 @@ class ProformaDashboardExportService
         ];
     }
 
-    private function applyFilters(Builder $query, array $filters): void
+    private function applyFilters(Builder $query, array $filters, bool $clienteJoinsApplied = false): void
     {
         $estado = $this->normalizarEntero($filters['estado'] ?? null);
         $anio = $this->normalizarEntero($filters['anio'] ?? null);
@@ -335,6 +344,18 @@ class ProformaDashboardExportService
         $mesDesde = $this->normalizarMes($filters['mes_desde'] ?? null);
         $mesHasta = $this->normalizarMes($filters['mes_hasta'] ?? null);
         $scope = $filters['scope'] ?? self::SCOPE_CURRENT_FILTERS;
+        $grupoFecha = $this->proformasService->normalizeGrupoFechaFilter($filters['grupo_fecha'] ?? null);
+
+        if ($grupoFecha !== null) {
+            if (!$clienteJoinsApplied) {
+                $this->applyClienteJoins($query);
+            }
+
+            $query->whereRaw(
+                GrupoFechaHelper::arriendoCutDaySql('COALESCE(cp_cobro.fecha_arriendo, cp_fallback.fecha_arriendo)').' = ?',
+                [$grupoFecha]
+            );
+        }
 
         if ($anio !== null) {
             $query->where('p.anio', $anio);
@@ -404,7 +425,11 @@ class ProformaDashboardExportService
             default => sprintf('mes-%02d-%s', $filters['mes'] ?? now()->format('n'), $anio),
         };
 
-        return "proformas-{$mode}-{$periodLabel}.{$format}";
+        $grupoLabel = ($filters['grupo_fecha'] ?? null) !== null
+            ? '-grupo-'.(int) $filters['grupo_fecha']
+            : '';
+
+        return "proformas-{$mode}-{$periodLabel}{$grupoLabel}.{$format}";
     }
 
     private function columnDefinitions(): array

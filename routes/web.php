@@ -75,6 +75,7 @@ Route::middleware('auth.custom')->group(function (): void {
         Route::post('/proformas/envio-masivo/{grupo}', [ProformasController::class, 'enviarMasivo'])->name('proformas.envio-masivo.enviar');
         Route::get('/proformas/{id}/activacion', [ProformasController::class, 'obtenerActivacion'])->name('proformas.activacion.show');
         Route::post('/proformas/{id}/activacion', [ProformasController::class, 'guardarActivacion'])->name('proformas.activacion.update');
+        Route::post('/proformas/{id}/activacion/eventos', [ProformasController::class, 'actualizarLicenciaEventos'])->name('proformas.activacion.eventos.update');
     });
 
     Route::get('/proformas/{id}', [ProformasController::class, 'show'])->name('proformas.show');

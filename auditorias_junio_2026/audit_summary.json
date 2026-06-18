@@ -1,0 +1,35 @@
+{
+    "periodo": {
+        "mes": "junio",
+        "anio": 2026,
+        "grupo": 7
+    },
+    "sql": {
+        "cobros": "select COALESCE(SUM(ve.valor_total),0) as valor_total\nfrom valores_externos as ve\nleft join clientes_potenciales as cp on ve.id_cliente = cp.idclientes_potenciales\nwhere LOWER(TRIM(ve.mes)) = 'junio'\n  and ve.`año` = 2026\n  and CASE WHEN CHAR_LENGTH(SUBSTRING_INDEX(TRIM(COALESCE(cp.fecha_arriendo, '')), '-', 1)) = 4 THEN CAST(SUBSTRING_INDEX(TRIM(COALESCE(cp.fecha_arriendo, '')), '-', -1) AS UNSIGNED) ELSE CAST(SUBSTRING_INDEX(TRIM(COALESCE(cp.fecha_arriendo, '')), '-', 1) AS UNSIGNED) END = 7;",
+        "dashboard": "select COALESCE(SUM(p.vtotal),0) as suma_total_vtotal\nfrom sg_proform as p\nwhere p.mes = 6\n  and p.anio = 2026;"
+    },
+    "totales": {
+        "cobros_grupo7": {
+            "cantidad": 87,
+            "total": 21550599
+        },
+        "dashboard_junio_2026": {
+            "cantidad": 92,
+            "total": 22337750
+        },
+        "dashboard_grupo7_resuelto_por_id_cobro": {
+            "cantidad": 87,
+            "total": 21550599
+        },
+        "dashboard_fuera_grupo7_o_sin_fecha": {
+            "cantidad": 5,
+            "total": 787151
+        }
+    },
+    "hallazgos": {
+        "cobros_grupo7_sin_proforma": 0,
+        "proformas_junio_con_vtotal_distinto_a_valor_total": 0,
+        "proformas_dashboard_fuera_grupo7": 5,
+        "diferencia_dashboard_vs_cobros": 787151
+    }
+}

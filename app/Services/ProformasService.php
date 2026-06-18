@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\GrupoFechaHelper;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -109,12 +110,9 @@ class ProformasService
         return $paginator;
     }
 
-    public function getDashboardData(int $mes, int $anio, ?int $estado = null): array
+    public function getDashboardData(int $mes, int $anio, ?int $estado = null, ?int $grupoFecha = null): array
     {
-        $basePeriodo = DB::table('sg_proform as p')
-            ->where('p.mes', $mes)
-            ->where('p.anio', $anio)
-            ->when($estado !== null, fn ($query) => $query->where('p.estado', $estado));
+        $basePeriodo = $this->buildDashboardBaseQuery($mes, $anio, $estado, $grupoFecha);
         $totalesAgrupados = (clone $basePeriodo)
             ->selectRaw('p.estado, COUNT(*) as cantidad, COALESCE(SUM(p.vtotal), 0) as total')
             ->groupBy('p.estado')
@@ -135,7 +133,7 @@ class ProformasService
         }
 
         return [
-            'periodo' => ['mes' => $mes, 'anio' => $anio],
+            'periodo' => ['mes' => $mes, 'anio' => $anio, 'grupo_fecha' => $grupoFecha],
             'total_proformas' => $totalProformas,
             'total_generadas' => $totalesPorEstado[self::ESTADO_GENERADA]['cantidad'] ?? 0,
             'total_enviadas' => $totalesPorEstado[self::ESTADO_ENVIADA]['cantidad'] ?? 0,
@@ -147,13 +145,10 @@ class ProformasService
         ];
     }
 
-    public function paginateDashboardProformas(int $mes, int $anio, ?int $estado = null, int $perPage = 15): LengthAwarePaginator
+    public function paginateDashboardProformas(int $mes, int $anio, ?int $estado = null, ?int $grupoFecha = null, int $perPage = 15): LengthAwarePaginator
     {
-        return DB::table('sg_proform as p')
+        return $this->buildDashboardBaseQuery($mes, $anio, $estado, $grupoFecha)
             ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado'])
-            ->where('p.mes', $mes)
-            ->where('p.anio', $anio)
-            ->when($estado !== null, fn ($query) => $query->where('p.estado', $estado))
             ->orderByDesc('p.id')
             ->paginate($perPage)
             ->withQueryString();
@@ -162,6 +157,11 @@ class ProformasService
     public function normalizePeriodoFilters(null|string|int $mes, null|string|int $anio): array
     {
         return ['mes' => $this->normalizarMes($mes) ?? (int) now()->format('n'), 'anio' => $this->normalizarEntero($anio) ?? (int) now()->format('Y')];
+    }
+
+    public function normalizeGrupoFechaFilter(null|string|int $grupoFecha): ?int
+    {
+        return GrupoFechaHelper::normalize($grupoFecha);
     }
 
     public function findProformaById(int $id): ?object
@@ -758,6 +758,28 @@ class ProformasService
         return $this->resolveInvalidReasonForBatch($proforma);
     }
 
+    public function applyGrupoFechaFilter(Builder $query, ?int $grupoFecha): void
+    {
+        if ($grupoFecha === null) {
+            return;
+        }
+
+        $this->applyClienteJoins($query);
+        $query->whereRaw($this->arriendoCutDaySql('COALESCE(cp_cobro.fecha_arriendo, cp_fallback.fecha_arriendo)').' = ?', [$grupoFecha]);
+    }
+
+    private function buildDashboardBaseQuery(int $mes, int $anio, ?int $estado = null, ?int $grupoFecha = null): Builder
+    {
+        $query = DB::table('sg_proform as p')
+            ->where('p.mes', $mes)
+            ->where('p.anio', $anio)
+            ->when($estado !== null, fn ($builder) => $builder->where('p.estado', $estado));
+
+        $this->applyGrupoFechaFilter($query, $grupoFecha);
+
+        return $query;
+    }
+
     private function queryProformasByGrupoFecha(int $grupoFecha, ?int $mes = null, ?int $anio = null)
     {
         $diaArriendo = $this->arriendoCutDaySql('cp.fecha_arriendo');
@@ -992,14 +1014,7 @@ class ProformasService
 
     private function arriendoCutDaySql(string $column): string
     {
-        $firstSegment = "SUBSTRING_INDEX(TRIM(COALESCE({$column}, '')), '-', 1)";
-        $lastSegment = "SUBSTRING_INDEX(TRIM(COALESCE({$column}, '')), '-', -1)";
-
-        return "CASE
-            WHEN CHAR_LENGTH({$firstSegment}) = 4
-                THEN CAST({$lastSegment} AS UNSIGNED)
-            ELSE CAST({$firstSegment} AS UNSIGNED)
-        END";
+        return GrupoFechaHelper::arriendoCutDaySql($column);
     }
 
     private function hasSgProformIdCobroColumn(): bool

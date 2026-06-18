@@ -231,7 +231,7 @@ class ProformasController extends Controller
 
     public function dashboard(Request $request): View
     {
-        $hasFilterQuery = collect(['mes', 'anio', 'estado'])->contains(
+        $hasFilterQuery = collect(['mes', 'anio', 'estado', 'grupo_fecha'])->contains(
             fn (string $key) => $request->query->has($key)
         );
 
@@ -239,6 +239,7 @@ class ProformasController extends Controller
             'mes' => (int) now()->format('n'),
             'anio' => (int) now()->format('Y'),
             'estado' => null,
+            'grupo_fecha' => null,
         ];
 
         if (!$hasFilterQuery) {
@@ -258,6 +259,7 @@ class ProformasController extends Controller
             'mes' => ['nullable', 'string', 'max:20'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'estado' => ['nullable', 'integer'],
+            'grupo_fecha' => ['nullable', 'in:7,27'],
         ]);
 
         $periodo = $this->proformasService->normalizePeriodoFilters(
@@ -267,11 +269,13 @@ class ProformasController extends Controller
         $estado = array_key_exists('estado', $validated)
             ? $this->normalizarEntero($validated['estado'])
             : null;
+        $grupoFecha = $this->proformasService->normalizeGrupoFechaFilter($validated['grupo_fecha'] ?? null);
 
         $dashboard = $this->proformasService->getDashboardData(
             $periodo['mes'],
             $periodo['anio'],
             $estado,
+            $grupoFecha,
         );
 
         return view('proformas.dashboard', [
@@ -280,11 +284,12 @@ class ProformasController extends Controller
                 $periodo['mes'],
                 $periodo['anio'],
                 $estado,
+                $grupoFecha,
             ),
-            'filters' => array_merge($periodo, ['estado' => $estado]),
+            'filters' => array_merge($periodo, ['estado' => $estado, 'grupo_fecha' => $grupoFecha !== null ? (string) $grupoFecha : null]),
             'meses' => ProformasService::MESES,
             'estados' => ProformasService::ESTADOS,
-            'exportOptions' => $this->proformaDashboardExportService->getModalOptions(array_merge($periodo, ['estado' => $estado])),
+            'exportOptions' => $this->proformaDashboardExportService->getModalOptions(array_merge($periodo, ['estado' => $estado, 'grupo_fecha' => $grupoFecha])),
             'proformasService' => $this->proformasService,
             'hasSearched' => true,
         ]);
@@ -296,11 +301,13 @@ class ProformasController extends Controller
             'dashboard_mes' => ['nullable', 'string', 'max:20'],
             'dashboard_anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'dashboard_estado' => ['nullable', 'integer'],
+            'dashboard_grupo_fecha' => ['nullable', 'in:7,27'],
             'scope' => ['required', 'in:current_filters,current_month,full_year,monthly_range'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'mes_desde' => ['nullable', 'integer', 'min:1', 'max:12'],
             'mes_hasta' => ['nullable', 'integer', 'min:1', 'max:12'],
             'estado' => ['nullable', 'integer'],
+            'grupo_fecha' => ['nullable', 'in:7,27'],
             'mode' => ['required', 'in:summary,detailed'],
             'format' => ['required', 'in:xlsx'],
             'columns' => ['required', 'array', 'min:1'],
@@ -311,6 +318,7 @@ class ProformasController extends Controller
             'mes' => $validated['dashboard_mes'] ?? null,
             'anio' => $validated['dashboard_anio'] ?? null,
             'estado' => $validated['dashboard_estado'] ?? null,
+            'grupo_fecha' => $validated['dashboard_grupo_fecha'] ?? null,
         ];
 
         try {
@@ -665,6 +673,48 @@ class ProformasController extends Controller
             return response()->json([
                 'ok' => false,
                 'message' => $exception->getMessage() ?: 'No fue posible guardar la activación de la empresa.',
+            ], 422);
+        }
+    }
+
+    public function actualizarLicenciaEventos(Request $request, int $id): JsonResponse
+    {
+        if ($response = $this->denyIfNotActivationAdmin()) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'fecha_fin' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        $proforma = $this->proformasService->findProformaById($id);
+
+        if (!$proforma) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'La proforma seleccionada no existe.',
+            ], 404);
+        }
+
+        try {
+            $codigoEmpresa = $this->resolverCodigoEmpresaActivacion($request, $id, $proforma);
+            $detalle = $this->empresaActivacionService->actualizarLicenciaEventos(
+                $codigoEmpresa,
+                $validated['fecha_fin'],
+                $this->resolverUsuarioLog(),
+            );
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'La licencia de Eventos se actualizó correctamente.',
+                'data' => $detalle,
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'ok' => false,
+                'message' => $exception->getMessage() ?: 'No fue posible actualizar la licencia de Eventos.',
             ], 422);
         }
     }

@@ -167,6 +167,7 @@
                         data-marcar-no-enviada-url="{{ route('proformas.marcar-no-enviada', $proforma->id) }}"
                         data-activacion-show-url="{{ $canManageActivation ? route('proformas.activacion.show', $proforma->id) : '' }}"
                         data-activacion-update-url="{{ $canManageActivation ? route('proformas.activacion.update', $proforma->id) : '' }}"
+                        data-activacion-eventos-update-url="{{ $canManageActivation ? route('proformas.activacion.eventos.update', $proforma->id) : '' }}"
                     >
                         <td class="px-3 py-2 whitespace-nowrap text-slate-700">{{ $fechaArriendo }}</td>
                         <td class="px-3 py-2">
@@ -328,6 +329,24 @@
                 <button id="activacion-guardar" type="submit" class="rounded bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700">Guardar activación</button>
             </div>
         </form>
+</div>
+</div>
+@endif
+
+@if($canManageActivation)
+<div id="activacion-eventos-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-900/50 px-4">
+    <div class="w-full max-w-lg rounded-lg bg-white shadow-xl">
+        <div class="border-b border-slate-200 px-5 py-4">
+            <h3 class="text-base font-semibold text-slate-900">Actualizar licencia de Eventos</h3>
+        </div>
+        <div class="space-y-3 px-5 py-5">
+            <p class="text-sm text-slate-700">Esta empresa también tiene licencia en Eventos. ¿Desea actualizar la licencia de Eventos con la misma fecha de vencimiento?</p>
+            <p id="activacion-eventos-detalle" class="text-sm text-slate-500"></p>
+        </div>
+        <div class="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+            <button id="activacion-eventos-no" type="button" class="rounded bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">No</button>
+            <button id="activacion-eventos-si" type="button" class="rounded bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-700">Sí, activar Eventos</button>
+        </div>
     </div>
 </div>
 @endif
@@ -450,6 +469,10 @@
         const activationFechaFinActual = document.getElementById('activacion-fecha-fin-actual');
         const activationFechaInicioInput = document.getElementById('activacion-fecha-inicio');
         const activationFechaFinInput = document.getElementById('activacion-fecha-fin');
+        const eventosModal = document.getElementById('activacion-eventos-modal');
+        const eventosDetalle = document.getElementById('activacion-eventos-detalle');
+        const eventosNoButton = document.getElementById('activacion-eventos-no');
+        const eventosSiButton = document.getElementById('activacion-eventos-si');
 
         if (!menu || !menuItems || tableRows.length === 0) {
             return;
@@ -604,6 +627,24 @@
             );
         };
 
+        const openEventosModal = () => {
+            if (!eventosModal) {
+                return;
+            }
+
+            eventosModal.classList.remove('hidden');
+            eventosModal.classList.add('flex');
+        };
+
+        const closeEventosModal = () => {
+            if (!eventosModal) {
+                return;
+            }
+
+            eventosModal.classList.add('hidden');
+            eventosModal.classList.remove('flex');
+        };
+
         const activationHasDifferences = (data) => data?.hay_diferencias_final === true;
         const activationHasMissingIndividualRecord = (data) => data?.registro_individual_existe === false;
 
@@ -621,6 +662,10 @@
                 : (activationHasDifferences(data)
                     ? 'Hay diferencias entre la base individual y la tabla global'
                     : 'Base individual y tabla global sincronizadas');
+            const eventosMensaje = data?.eventos_licencia?.mensaje || '';
+            if (eventosMensaje) {
+                activationSync.textContent = `${activationSync.textContent} · ${eventosMensaje}`;
+            }
             activationFechaInicioActual.textContent = data.fecha_inicio_actual || 'Sin fecha';
             activationFechaFinActual.textContent = data.fecha_fin_actual || 'Sin fecha';
             activationFechaInicioInput.value = data.fecha_inicio_actual || '';
@@ -682,6 +727,7 @@
             activationModal.classList.add('hidden');
             activationModal.classList.remove('flex');
             activationForm.dataset.updateUrl = '';
+            activationForm.dataset.eventosUpdateUrl = '';
             clearActivationFeedback();
             activationSubmitButton.disabled = false;
             activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
@@ -713,6 +759,7 @@
             activationForm.dataset.proformaId = proforma;
             activationForm.dataset.nit = nit;
             activationForm.dataset.clienteId = clienteId;
+            activationForm.dataset.eventosUpdateUrl = row.dataset.activacionEventosUpdateUrl || '';
             fillActivationModalHeaderFromRow(row);
             activationSubmitButton.disabled = true;
             activationSubmitButton.classList.add('opacity-60', 'cursor-not-allowed');
@@ -752,6 +799,59 @@
                 activationSubmitButton.disabled = false;
                 activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
             }
+        };
+
+        const promptEventosActivation = (eventosLicencia) => new Promise((resolve) => {
+            if (!eventosModal || !eventosDetalle || !eventosNoButton || !eventosSiButton) {
+                resolve(false);
+                return;
+            }
+
+            const empresa = eventosLicencia?.empresa || activationForm?.dataset.codigo || 'N/D';
+            const vencimientoActual = eventosLicencia?.fecha_vencimiento_actual || 'Sin fecha';
+
+            eventosDetalle.textContent = `Empresa: ${empresa} · Vencimiento actual en Eventos: ${vencimientoActual}`;
+            openEventosModal();
+
+            const onNo = () => {
+                closeEventosModal();
+                resolve(false);
+            };
+
+            const onYes = () => {
+                closeEventosModal();
+                resolve(true);
+            };
+
+            eventosNoButton.addEventListener('click', onNo, { once: true });
+            eventosSiButton.addEventListener('click', onYes, { once: true });
+        });
+
+        const syncEventosActivation = async ({ eventosUpdateUrl, codigo, idProforma, nit, clienteId, fechaFin }) => {
+            const response = await fetch(eventosUpdateUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    codigo,
+                    id_proforma: idProforma,
+                    nit,
+                    id_cliente: clienteId,
+                    fecha_fin: fechaFin,
+                }),
+            });
+
+            const payload = await response.json();
+
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || 'No fue posible actualizar la licencia de Eventos.');
+            }
+
+            return payload;
         };
 
         const saveActivationData = async () => {
@@ -804,6 +904,82 @@
             } catch (error) {
                 console.error(error);
                 setActivationFeedback(error.message || 'No fue posible guardar la activación.', 'error');
+            } finally {
+                activationSubmitButton.disabled = false;
+                activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
+        };
+
+        const saveActivationDataWithEventos = async () => {
+            if (!activationForm || !activationSubmitButton || !activationFechaInicioInput || !activationFechaFinInput) {
+                return;
+            }
+
+            const updateUrl = activationForm.dataset.updateUrl || '';
+            const codigo = activationForm.dataset.codigo || '';
+            const idProforma = activationForm.dataset.proformaId || '';
+            const nit = activationForm.dataset.nit || '';
+            const clienteId = activationForm.dataset.clienteId || '';
+            const eventosUpdateUrl = activationForm.dataset.eventosUpdateUrl || '';
+
+            if (!updateUrl) {
+                setActivationFeedback('No se encontrÃ³ la ruta para guardar la activaciÃ³n.', 'error');
+                return;
+            }
+
+            activationSubmitButton.disabled = true;
+            activationSubmitButton.classList.add('opacity-60', 'cursor-not-allowed');
+            clearActivationFeedback();
+
+            try {
+                const response = await fetch(updateUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        codigo,
+                        id_proforma: idProforma,
+                        nit,
+                        id_cliente: clienteId,
+                        fecha_inicio: activationFechaInicioInput.value,
+                        fecha_fin: activationFechaFinInput.value,
+                    }),
+                });
+
+                const payload = await response.json();
+
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || 'No fue posible guardar la activaciÃ³n.');
+                }
+
+                fillActivationModal(payload.data || {});
+                setActivationFeedback(payload.message || 'ActivaciÃ³n actualizada correctamente.', 'success');
+                showFeedback(payload.message || 'ActivaciÃ³n actualizada correctamente.', 'success');
+
+                if (payload.data?.eventos_licencia?.existe === true && eventosUpdateUrl) {
+                    const accepted = await promptEventosActivation(payload.data.eventos_licencia);
+
+                    if (accepted) {
+                        const eventosPayload = await syncEventosActivation({
+                            eventosUpdateUrl,
+                            codigo,
+                            idProforma,
+                            nit,
+                            clienteId,
+                            fechaFin: activationFechaFinInput.value,
+                        });
+
+                        setActivationFeedback(`${eventosPayload.message || 'La licencia de Eventos se actualizÃ³ correctamente.'} Vencimiento anterior: ${eventosPayload.data?.fecha_vencimiento_anterior || 'Sin fecha'} Â· nuevo: ${eventosPayload.data?.fecha_vencimiento_nueva || activationFechaFinInput.value}.`, 'success');
+                        showFeedback(eventosPayload.message || 'La licencia de Eventos se actualizÃ³ correctamente.', 'success');
+                    }
+                }
+            } catch (error) {
+                console.error(error);
+                setActivationFeedback(error.message || 'No fue posible guardar la activaciÃ³n.', 'error');
             } finally {
                 activationSubmitButton.disabled = false;
                 activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
@@ -1071,7 +1247,7 @@
 
         activationForm?.addEventListener('submit', async (event) => {
             event.preventDefault();
-            await saveActivationData();
+            await saveActivationDataWithEventos();
         });
     })();
 </script>
