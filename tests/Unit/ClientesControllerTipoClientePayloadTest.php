@@ -80,4 +80,42 @@ class ClientesControllerTipoClientePayloadTest extends TestCase
 
         $this->assertSame(1, $payload['tipo_cliente_id']);
     }
+
+    #[Test]
+    public function normaliza_cliente_antiguo_al_id_del_catalogo(): void
+    {
+        $controller = new ClientesController(
+            app(ClienteValorTotalCalculator::class),
+            app(TarifaConfigService::class),
+        );
+
+        $method = new ReflectionMethod($controller, 'buildPayload');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke(
+            $controller,
+            ['tipo_cliente_id' => 'CLIENTE ANTIGUO'],
+            ['tipo_cliente' => 'tipo_cliente_id'],
+            [
+                'clases' => ['options' => [], 'by_id' => [], 'ids' => []],
+                'modalidad' => ['options' => [], 'by_id' => [], 'ids' => []],
+                'llego' => ['options' => [], 'by_id' => [], 'ids' => []],
+                'tipos_cliente' => [
+                    'options' => [
+                        ['id' => 1, 'label' => 'Nuevo'],
+                        ['id' => 2, 'label' => 'Cambio de empresa'],
+                        ['id' => 3, 'label' => 'Cliente antiguo'],
+                    ],
+                    'by_id' => [
+                        '1' => ['id' => 1, 'label' => 'Nuevo'],
+                        '2' => ['id' => 2, 'label' => 'Cambio de empresa'],
+                        '3' => ['id' => 3, 'label' => 'Cliente antiguo'],
+                    ],
+                    'ids' => ['1', '2', '3'],
+                ],
+            ],
+        );
+
+        $this->assertSame(3, $payload['tipo_cliente_id']);
+    }
 }

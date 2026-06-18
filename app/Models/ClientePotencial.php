@@ -8,6 +8,7 @@ class ClientePotencial extends Model
 {
     public const ESTADO_FACTURACION_PENDIENTE = 'PENDIENTE';
     public const ESTADO_FACTURACION_ACTIVO = 'ACTIVO';
+    public const ESTADO_FACTURACION_INACTIVO = 'INACTIVO';
 
     protected $table = 'clientes_potenciales';
 
@@ -23,6 +24,7 @@ class ClientePotencial extends Model
         return [
             self::ESTADO_FACTURACION_PENDIENTE,
             self::ESTADO_FACTURACION_ACTIVO,
+            self::ESTADO_FACTURACION_INACTIVO,
         ];
     }
 
@@ -38,5 +40,15 @@ class ClientePotencial extends Model
     public static function isPendiente(?string $estado): bool
     {
         return self::normalizeEstadoFacturacion($estado) === self::ESTADO_FACTURACION_PENDIENTE;
+    }
+
+    public static function isActivo(?string $estado): bool
+    {
+        return self::normalizeEstadoFacturacion($estado) === self::ESTADO_FACTURACION_ACTIVO;
+    }
+
+    public static function isInactivo(?string $estado): bool
+    {
+        return self::normalizeEstadoFacturacion($estado) === self::ESTADO_FACTURACION_INACTIVO;
     }
 }

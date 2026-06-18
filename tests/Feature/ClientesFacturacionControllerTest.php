@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\ClientesController;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -111,6 +112,48 @@ class ClientesFacturacionControllerTest extends TestCase
         $this->assertNotNull($cliente);
         $this->assertSame('PENDIENTE', $cliente->estado_facturacion);
         $this->assertSame('2026-06-01', $cliente->fecha_inicio_facturacion);
+    }
+
+    public function test_update_acepta_estado_facturacion_inactivo(): void
+    {
+        $this->withoutMiddleware();
+        $this->createClientesTable();
+        $this->createCitiesTable();
+
+        DB::table('clientes_potenciales')->insert([
+            'idclientes_potenciales' => 13,
+            'nit' => '900000013',
+            'dv' => '3',
+            'nombre' => 'THETA CONTACTO',
+            'empresa' => 'THETA SAS',
+            'celular1' => '3000000013',
+            'departamento' => 'BOGOTA, CUNDINAMARCA',
+            'fecha_inicio' => '2026-06-01',
+            'fecha_arriendo' => '2026-06-02',
+            'ip_empresa' => '200.118.190.167',
+            'regimen' => 'SAS',
+            'codigo' => 'T130',
+            'estado_facturacion' => 'PENDIENTE',
+            'fecha_inicio_facturacion' => null,
+        ]);
+
+        $response = $this->put(route('clientes.update', ['id' => 13]), $this->validClientPayload([
+            'nit' => '900000013',
+            'dv' => '3',
+            'nombre' => 'THETA CONTACTO',
+            'empresa' => 'THETA SAS',
+            'celular1' => '3000000013',
+            'codigo' => 'T130',
+            'estado_facturacion' => 'INACTIVO',
+        ]));
+
+        $response->assertRedirect(route('clientes.index'));
+
+        $cliente = DB::table('clientes_potenciales')->where('idclientes_potenciales', 13)->first();
+
+        $this->assertNotNull($cliente);
+        $this->assertSame('INACTIVO', $cliente->estado_facturacion);
+        $this->assertNull($cliente->fecha_inicio_facturacion);
     }
 
     public function test_store_acepta_multiples_correos_separados_por_coma(): void
@@ -262,6 +305,95 @@ class ClientesFacturacionControllerTest extends TestCase
             'code' => '11001',
             'label' => 'BOGOTA, CUNDINAMARCA',
         ], $view->getData()['selectedCity']);
+    }
+
+    public function test_normalize_date_for_date_input_acepta_formatos_soportados(): void
+    {
+        $this->assertSame('2022-04-21', ClientesController::normalizeDateForDateInput('21-04-2022'));
+        $this->assertSame('2024-04-30', ClientesController::normalizeDateForDateInput('30/04/2024'));
+        $this->assertSame('2026-06-18', ClientesController::normalizeDateForDateInput('2026-06-18'));
+    }
+
+    public function test_normalize_date_for_date_input_conserva_vacio_y_valores_no_soportados(): void
+    {
+        $this->assertNull(ClientesController::normalizeDateForDateInput(null));
+        $this->assertNull(ClientesController::normalizeDateForDateInput(''));
+        $this->assertSame('2022/04/21', ClientesController::normalizeDateForDateInput('2022/04/21'));
+    }
+
+    public function test_company_ip_options_incluyen_ips_permitidas_y_agregan_historica_si_aplica(): void
+    {
+        $this->assertSame([
+            '200.118.190.167',
+            '200.118.190.213',
+            '168.232.32.74',
+        ], ClientesController::companyIpOptions());
+
+        $this->assertSame([
+            '200.118.190.167',
+            '200.118.190.213',
+            '168.232.32.74',
+            '10.0.0.20',
+        ], ClientesController::companyIpOptionsForForm('10.0.0.20'));
+    }
+
+    public function test_store_rechaza_ip_empresa_fuera_de_la_lista(): void
+    {
+        $this->withoutMiddleware();
+        $this->createClientesTable();
+        $this->createCitiesTable();
+
+        $response = $this->from(route('clientes.create'))->post(route('clientes.store'), $this->validClientPayload([
+            'codigo' => 'IP900',
+            'ip_empresa' => '10.0.0.99',
+        ]));
+
+        $response->assertRedirect(route('clientes.create'));
+        $response->assertSessionHasErrors('ip_empresa');
+    }
+
+    public function test_update_permite_conservar_ip_empresa_historica(): void
+    {
+        $this->withoutMiddleware();
+        $this->createClientesTable();
+        $this->createCitiesTable();
+
+        DB::table('clientes_potenciales')->insert([
+            'idclientes_potenciales' => 26,
+            'nit' => '900000026',
+            'dv' => '6',
+            'nombre' => 'CLIENTE IP HISTORICA',
+            'empresa' => 'RHO SAS',
+            'celular1' => '3000000026',
+            'email' => 'rho@empresa.com',
+            'departamento' => 'BOGOTA, CUNDINAMARCA',
+            'fecha_inicio' => '2026-06-01',
+            'fecha_arriendo' => '2026-06-02',
+            'ip_empresa' => '10.0.0.26',
+            'regimen' => 'SAS',
+            'codigo' => 'R260',
+            'estado_facturacion' => 'PENDIENTE',
+        ]);
+
+        $response = $this->put(route('clientes.update', ['id' => 26]), $this->validClientPayload([
+            'nit' => '900000026',
+            'dv' => '6',
+            'nombre' => 'CLIENTE IP HISTORICA',
+            'empresa' => 'RHO SAS',
+            'celular1' => '3000000026',
+            'email' => 'rho@empresa.com',
+            'codigo' => 'R260',
+            'departamento' => 'BOGOTA, CUNDINAMARCA',
+            'ciudad_codigo' => '11001',
+            'ip_empresa' => '10.0.0.26',
+        ]));
+
+        $response->assertRedirect(route('clientes.index'));
+
+        $cliente = DB::table('clientes_potenciales')->where('idclientes_potenciales', 26)->first();
+
+        $this->assertNotNull($cliente);
+        $this->assertSame('10.0.0.26', $cliente->ip_empresa);
     }
 
     public function test_update_permite_guardar_si_no_modifica_la_ciudad(): void
@@ -514,7 +646,7 @@ class ClientesFacturacionControllerTest extends TestCase
             'ciudad_codigo' => '11001',
             'fecha_inicio' => '2026-06-01',
             'fecha_arriendo' => '2026-06-02',
-            'ip_empresa' => '10.0.0.1',
+            'ip_empresa' => '200.118.190.167',
             'regimen' => 'SAS',
             'estado_facturacion' => 'PENDIENTE',
         ], $overrides);

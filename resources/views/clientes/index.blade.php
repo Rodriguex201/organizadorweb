@@ -98,6 +98,8 @@
                         <td class="px-3 py-3 align-top whitespace-nowrap">
                             @if(($cliente->estado_facturacion_normalizado ?? null) === \App\Models\ClientePotencial::ESTADO_FACTURACION_ACTIVO)
                                 <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">ACTIVO</span>
+                            @elseif(($cliente->estado_facturacion_normalizado ?? null) === \App\Models\ClientePotencial::ESTADO_FACTURACION_INACTIVO)
+                                <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700">INACTIVO</span>
                             @else
                                 <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">PENDIENTE</span>
                             @endif

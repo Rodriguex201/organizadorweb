@@ -11,8 +11,18 @@
 
         return old($input, $fallback);
     };
+    $dateValue = static function (string $input, ?string $column = null) use ($value): ?string {
+        return \App\Http\Controllers\ClientesController::normalizeDateForDateInput($value($input, $column));
+    };
 
     $fieldUnavailable = $fieldUnavailable ?? static fn (?string $column): bool => $column === null;
+    $normalizeSelectionValue = static function (mixed $value): string {
+        $value = trim((string) $value);
+
+        return function_exists('mb_strtoupper')
+            ? mb_strtoupper($value, 'UTF-8')
+            : strtoupper($value);
+    };
     $codigoAssistEnabled = $cliente === null && !$fieldUnavailable($mapping['codigo']);
     $codigoMode = old('codigo_mode', $codigoAssistEnabled ? 'secuencia' : 'manual');
 
@@ -21,6 +31,8 @@
     $selectedLlego = (string) $value('llego', $mapping['llego'] ?? null);
     $selectedTipoCliente = (string) $value('tipo_cliente_id', $mapping['tipo_cliente'] ?? null);
     $selectedRegimen = (string) $value('regimen', $mapping['regimen'] ?? null);
+    $selectedIpEmpresa = (string) $value('ip_empresa', $mapping['ip_empresa'] ?? null);
+    $companyIpOptions = \App\Http\Controllers\ClientesController::companyIpOptionsForForm($selectedIpEmpresa);
     $selectedEstadoFacturacion = (string) old(
         'estado_facturacion',
         $cliente?->estado_facturacion_normalizado
@@ -152,20 +164,30 @@
 
     <div>
         <label class="mb-1 block text-sm font-medium" for="fecha_inicio">Fecha inicio</label>
-        <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ $value('fecha_inicio', $mapping['fecha_llegada']) }}" @required(!$fieldUnavailable($mapping['fecha_llegada'])) @disabled($fieldUnavailable($mapping['fecha_llegada']))
+        <input id="fecha_inicio" name="fecha_inicio" type="date" value="{{ $dateValue('fecha_inicio', $mapping['fecha_llegada']) }}" @required(!$fieldUnavailable($mapping['fecha_llegada'])) @disabled($fieldUnavailable($mapping['fecha_llegada']))
                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
     </div>
 
     <div>
         <label class="mb-1 block text-sm font-medium" for="fecha_arriendo">Fecha arriendo</label>
-        <input id="fecha_arriendo" name="fecha_arriendo" type="date" value="{{ $value('fecha_arriendo', $mapping['fecha_arriendo']) }}" @required(!$fieldUnavailable($mapping['fecha_arriendo'])) @disabled($fieldUnavailable($mapping['fecha_arriendo']))
+        <input id="fecha_arriendo" name="fecha_arriendo" type="date" value="{{ $dateValue('fecha_arriendo', $mapping['fecha_arriendo']) }}" @required(!$fieldUnavailable($mapping['fecha_arriendo'])) @disabled($fieldUnavailable($mapping['fecha_arriendo']))
                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
     </div>
 
     <div>
         <label class="mb-1 block text-sm font-medium" for="ip_empresa">IP empresa</label>
-        <input id="ip_empresa" name="ip_empresa" type="text" value="{{ $value('ip_empresa', $mapping['ip_empresa'] ?? null) }}" @required(!$fieldUnavailable($mapping['ip_empresa'] ?? null)) @disabled($fieldUnavailable($mapping['ip_empresa'] ?? null))
-               class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
+        <select id="ip_empresa" name="ip_empresa" @required(!$fieldUnavailable($mapping['ip_empresa'] ?? null)) @disabled($fieldUnavailable($mapping['ip_empresa'] ?? null))
+                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
+            <option value="">Selecciona una opcion</option>
+            @foreach($companyIpOptions as $ipOption)
+                <option value="{{ $ipOption }}" @selected($selectedIpEmpresa === $ipOption)>
+                    {{ \App\Http\Controllers\ClientesController::isAllowedCompanyIp($ipOption) ? $ipOption : 'IP historica: '.$ipOption }}
+                </option>
+            @endforeach
+        </select>
+        @error('ip_empresa')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
     </div>
 
     <div>
@@ -174,7 +196,10 @@
                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
             <option value="">Selecciona una opcion</option>
             @foreach($clases as $opcion)
-                <option value="{{ $opcion['id'] }}" @selected($selectedClase === (string) $opcion['id'] || $selectedClase === $opcion['label'])>{{ $opcion['label'] }}</option>
+                <option value="{{ $opcion['id'] }}" @selected(
+                    $selectedClase === (string) $opcion['id']
+                    || $normalizeSelectionValue($selectedClase) === $normalizeSelectionValue($opcion['label'])
+                )>{{ $opcion['label'] }}</option>
             @endforeach
         </select>
     </div>
@@ -185,7 +210,10 @@
                 class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
             <option value="">Selecciona una opcion</option>
             @foreach($modalidades as $opcion)
-                <option value="{{ $opcion['id'] }}" @selected($selectedModalidad === (string) $opcion['id'] || $selectedModalidad === $opcion['label'])>{{ $opcion['label'] }}</option>
+                <option value="{{ $opcion['id'] }}" @selected(
+                    $selectedModalidad === (string) $opcion['id']
+                    || $normalizeSelectionValue($selectedModalidad) === $normalizeSelectionValue($opcion['label'])
+                )>{{ $opcion['label'] }}</option>
             @endforeach
         </select>
     </div>
@@ -224,7 +252,10 @@
                 class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
             <option value="">Selecciona una opcion</option>
             @foreach($llegos as $opcion)
-                <option value="{{ $opcion['id'] }}" @selected($selectedLlego === (string) $opcion['id'] || $selectedLlego === $opcion['label'])>{{ $opcion['label'] }}</option>
+                <option value="{{ $opcion['id'] }}" @selected(
+                    $selectedLlego === (string) $opcion['id']
+                    || $normalizeSelectionValue($selectedLlego) === $normalizeSelectionValue($opcion['label'])
+                )>{{ $opcion['label'] }}</option>
             @endforeach
         </select>
     </div>

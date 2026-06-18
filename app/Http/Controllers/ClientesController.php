@@ -19,6 +19,72 @@ use App\Services\TarifaConfigService;
 
 class ClientesController extends Controller
 {
+    private const COMPANY_IP_OPTIONS = [
+        '200.118.190.167',
+        '200.118.190.213',
+        '168.232.32.74',
+    ];
+
+    public static function normalizeDateForDateInput(mixed $value): ?string
+    {
+        $raw = trim((string) ($value ?? ''));
+
+        if ($raw === '') {
+            return null;
+        }
+
+        foreach (['Y-m-d', 'd-m-Y', 'd/m/Y'] as $format) {
+            try {
+                $date = Carbon::createFromFormat($format, $raw);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if ($date && $date->format($format) === $raw) {
+                return $date->format('Y-m-d');
+            }
+        }
+
+        return $raw;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function companyIpOptions(): array
+    {
+        return self::COMPANY_IP_OPTIONS;
+    }
+
+    public static function normalizeCompanyIp(mixed $value): ?string
+    {
+        $raw = trim((string) ($value ?? ''));
+
+        return $raw === '' ? null : $raw;
+    }
+
+    public static function isAllowedCompanyIp(mixed $value): bool
+    {
+        $ip = self::normalizeCompanyIp($value);
+
+        return $ip !== null && in_array($ip, self::companyIpOptions(), true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function companyIpOptionsForForm(mixed $selectedValue = null): array
+    {
+        $selectedIp = self::normalizeCompanyIp($selectedValue);
+        $options = self::companyIpOptions();
+
+        if ($selectedIp !== null && !in_array($selectedIp, $options, true)) {
+            $options[] = $selectedIp;
+        }
+
+        return $options;
+    }
+
     public function __construct(
         private readonly ClienteValorTotalCalculator $clienteValorTotalCalculator,
         private readonly TarifaConfigService $tarifaConfigService,
@@ -288,7 +354,7 @@ class ClientesController extends Controller
         abort_if(!$clienteActual, 404);
 
         $validated = $request->validate(
-            $this->rules($catalogos, $mapping),
+            $this->rules($catalogos, $mapping, false, $clienteActual->{$mapping['ip_empresa'] ?? 'ip_empresa'} ?? null),
             $this->validationMessages()
         );
         $validated = $this->synchronizeSelectedCity($validated);
@@ -392,6 +458,10 @@ class ClientesController extends Controller
             $payload[$mapping['tipo_retiro']] = $validated['motivo_retiro'];
         }
 
+        if ($mapping['estado_facturacion']) {
+            $payload[$mapping['estado_facturacion']] = ClientePotencial::ESTADO_FACTURACION_INACTIVO;
+        }
+
         if ($payload === []) {
             return back()->withErrors([
                 'general' => 'No existe una columna de retiro (fecha_retiro/retirado) en clientes_potenciales para aplicar retiro lógico.',
@@ -474,6 +544,10 @@ class ClientesController extends Controller
 
         if ($mapping['tipo_retiro']) {
             $payload[$mapping['tipo_retiro']] = null;
+        }
+
+        if ($mapping['estado_facturacion']) {
+            $payload[$mapping['estado_facturacion']] = ClientePotencial::ESTADO_FACTURACION_ACTIVO;
         }
 
         $observacion = trim((string) ($validated['observacion_reactivacion'] ?? ''));
@@ -750,7 +824,7 @@ class ClientesController extends Controller
         return $value;
     }
 
-    private function rules(array $catalogos, array $mapping, bool $withUnique = false): array
+    private function rules(array $catalogos, array $mapping, bool $withUnique = false, ?string $currentIpEmpresa = null): array
     {
         $rules = [
             'nit' => $this->requiredTextRules($mapping['nit'], ['max:30']),
@@ -771,7 +845,23 @@ class ClientesController extends Controller
             'codigo' => $this->requiredTextRules($mapping['codigo'], ['max:50']),
             'fecha_inicio' => $this->requiredRule($mapping['fecha_llegada'], ['date']),
             'fecha_arriendo' => $this->requiredRule($mapping['fecha_arriendo'], ['date']),
-            'ip_empresa' => $this->requiredTextRules($mapping['ip_empresa'], ['max:255']),
+            'ip_empresa' => [
+                ...$this->requiredTextRules($mapping['ip_empresa'], ['max:255']),
+                function (string $attribute, mixed $value, \Closure $fail) use ($currentIpEmpresa): void {
+                    $ip = self::normalizeCompanyIp($value);
+                    $currentIp = self::normalizeCompanyIp($currentIpEmpresa);
+
+                    if ($ip === null) {
+                        return;
+                    }
+
+                    if (self::isAllowedCompanyIp($ip) || ($currentIp !== null && $ip === $currentIp)) {
+                        return;
+                    }
+
+                    $fail('Selecciona una IP empresa valida de la lista disponible.');
+                },
+            ],
             'departamento' => array_merge(
                 $this->requiredTextRules($mapping['departamento'], ['max:150']),
                 [
