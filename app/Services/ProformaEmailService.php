@@ -17,60 +17,85 @@ class ProformaEmailService
         $destinatarios = $destinatariosData['emails'];
 
         $pdf = $this->resolvePdfPath($proforma);
-        $apiKey = trim((string) config('services.resend.key'));
-        $fromAddress = trim((string) config('services.resend.from_address'));
-        $fromName = trim((string) config('services.resend.from_name'));
-        $replyTo = trim((string) config('services.resend.reply_to'));
-        $missingConfig = $this->resolveMissingConfig($apiKey, $fromAddress, $replyTo);
+        $payload = $this->buildProformaPayload($proforma, $destinatarios, $pdf);
 
-        if ($logPrefix !== null) {
-            Log::info($logPrefix.' REENVIO INICIADO', [
+        $this->sendPayload(
+            $payload,
+            $destinatarios,
+            $logPrefix,
+            [
                 'proforma_id' => $proforma->id ?? null,
                 'proforma_numero' => $proforma->nro_prof ?? null,
-                'destinatarios' => $destinatarios,
-                'payload_resend' => $this->buildResendPayload($proforma, $destinatarios, $pdf, $fromAddress, $fromName, $replyTo),
-            ]);
-        }
+            ],
+        );
+    }
 
-        if ($missingConfig !== []) {
-            throw new RuntimeException(
-                'Falta configurar '.implode(', ', $missingConfig).'. '.
-                'Este envio usa RESEND_* y no las variables MAIL_*.'
-            );
-        }
+    public function sendDocument(array $documento, array $options = []): void
+    {
+        $logPrefix = $this->normalizeLogPrefix($options['log_prefix'] ?? null);
+        $destinatariosData = $options['destinatarios'] ?? $this->resolveDestinatariosFromRaw(
+            (string) ($options['destinatarios_raw'] ?? ''),
+            $logPrefix,
+        );
+        $destinatarios = $destinatariosData['emails'];
 
-        if ($this->isGmailAddress($fromAddress)) {
-            throw new RuntimeException('RESEND_FROM_ADDRESS no puede ser gmail.com. Use un dominio remitente valido.');
-        }
+        $payload = $this->buildDocumentPayload(
+            $destinatarios,
+            $documento,
+            [
+                'subject' => (string) ($options['subject'] ?? 'Documento adjunto'),
+                'text' => (string) ($options['text'] ?? 'Cordial saludo.'),
+            ],
+        );
 
-        $payload = $this->buildResendPayload($proforma, $destinatarios, $pdf, $fromAddress, $fromName, $replyTo);
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->post('https://api.resend.com/emails', $payload);
+        $this->sendPayload(
+            $payload,
+            $destinatarios,
+            $logPrefix,
+            [
+                'documento' => [
+                    'filename' => $documento['filename'] ?? null,
+                    'contexto' => $documento['contexto'] ?? null,
+                ],
+            ],
+        );
+    }
 
-        if ($response->failed()) {
-            $message = (string) data_get($response->json(), 'message', $response->body());
-
-            if ($logPrefix !== null) {
-                Log::error($logPrefix.' ERROR RESPUESTA RESEND', [
-                    'proforma_id' => $proforma->id ?? null,
-                    'payload' => $payload,
-                    'status' => $response->status(),
-                    'response_body' => $response->body(),
-                    'response_json' => $response->json(),
-                ]);
-            }
-
-            throw new RuntimeException('Resend no pudo enviar el correo: '.$message);
-        }
+    /**
+     * @return array{original:string,emails:array<int,string>,count:int,invalidos:array<int,string>}
+     */
+    public function resolveDestinatariosFromRaw(string $destinatariosRaw, ?string $logPrefix = null): array
+    {
+        $original = trim($destinatariosRaw);
+        $apiKey = trim((string) config('services.resend.key'));
+        $logPrefix = $this->normalizeLogPrefix($logPrefix);
+        ['emails' => $emails, 'invalidos' => $invalidos] = $this->parseDestinatarios($original);
 
         if ($logPrefix !== null) {
-            Log::info($logPrefix.' REENVIO OK', [
-                'proforma_id' => $proforma->id ?? null,
-                'response_resend' => $response->json(),
-                'message_id' => data_get($response->json(), 'id'),
+            Log::info($logPrefix.' DESTINATARIOS PROCESADOS', [
+                'destinatarios_originales' => $original,
+                'destinatarios_procesados' => $emails,
+                'correos_invalidos_descartados' => $invalidos,
+                'cantidad_validos' => count($emails),
             ]);
+
+            foreach ($invalidos as $emailInvalido) {
+                Log::warning($logPrefix.' EMAIL INVALIDO', [
+                    'email' => $emailInvalido,
+                ]);
+            }
         }
+
+        if ($emails === []) {
+            throw new RuntimeException('No se encontraron correos validos para el envio.');
+        }
+
+        return [
+            'original' => $original,
+            'emails' => $emails,
+            'count' => count($emails),
+            'invalidos' => $invalidos,
+        ];
     }
 
     /**
@@ -174,6 +199,103 @@ class ProformaEmailService
     }
 
     /**
+     * @param  array<int,string>  $destinatarios
+     * @param  array{filename:string,contents:string}  $pdf
+     * @return array<string,mixed>
+     */
+    private function buildProformaPayload(object $proforma, array $destinatarios, array $pdf): array
+    {
+        return $this->buildDocumentPayload($destinatarios, $pdf, [
+            'subject' => sprintf('Proforma #%s', (string) ($proforma->nro_prof ?: $proforma->id)),
+            'text' => "Cordial saludo,\n\nBuen dia,\n\nNos permitimos adjuntar la proforma correspondiente a los servicios contratados.\n\n*** RECUERDE HACER EL PAGO DE LA PROFORMA EN SU TOTALIDAD, NO PARCIALMENTE ***\n\nEnviar soporte de pago al correo cartera.rmsoft1@gmail.com o la linea telefonica de cartera por WhatsApp 3128133868, con sus datos y factura que se abona.\n\nCordialmente,\nRM Soft",
+        ]);
+    }
+
+    /**
+     * @param  array<int,string>  $destinatarios
+     * @param  array{filename:string,contents:string}  $documento
+     * @param  array{subject:string,text:string}  $meta
+     * @return array<string,mixed>
+     */
+    private function buildDocumentPayload(array $destinatarios, array $documento, array $meta): array
+    {
+        $fromAddress = trim((string) config('services.resend.from_address'));
+        $fromName = trim((string) config('services.resend.from_name'));
+        $replyTo = trim((string) config('services.resend.reply_to'));
+
+        return [
+            'from' => $fromName !== '' ? sprintf('%s <%s>', $fromName, $fromAddress) : $fromAddress,
+            'reply_to' => [$replyTo],
+            'to' => $destinatarios,
+            'subject' => $meta['subject'],
+            'text' => $meta['text'],
+            'attachments' => [
+                [
+                    'filename' => $documento['filename'],
+                    'content' => base64_encode($documento['contents']),
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @param  array<int,string>  $destinatarios
+     * @param  array<string,mixed>  $contexto
+     */
+    private function sendPayload(array $payload, array $destinatarios, ?string $logPrefix = null, array $contexto = []): void
+    {
+        $apiKey = trim((string) config('services.resend.key'));
+        $fromAddress = trim((string) config('services.resend.from_address'));
+        $replyTo = trim((string) config('services.resend.reply_to'));
+        $missingConfig = $this->resolveMissingConfig($apiKey, $fromAddress, $replyTo);
+
+        if ($logPrefix !== null) {
+            Log::info($logPrefix.' REENVIO INICIADO', $contexto + [
+                'destinatarios' => $destinatarios,
+                'payload_resend' => $payload,
+            ]);
+        }
+
+        if ($missingConfig !== []) {
+            throw new RuntimeException(
+                'Falta configurar '.implode(', ', $missingConfig).'. '.
+                'Este envio usa RESEND_* y no las variables MAIL_*.'
+            );
+        }
+
+        if ($this->isGmailAddress($fromAddress)) {
+            throw new RuntimeException('RESEND_FROM_ADDRESS no puede ser gmail.com. Use un dominio remitente valido.');
+        }
+
+        $response = Http::withToken($apiKey)
+            ->acceptJson()
+            ->post('https://api.resend.com/emails', $payload);
+
+        if ($response->failed()) {
+            $message = (string) data_get($response->json(), 'message', $response->body());
+
+            if ($logPrefix !== null) {
+                Log::error($logPrefix.' ERROR RESPUESTA RESEND', $contexto + [
+                    'payload' => $payload,
+                    'status' => $response->status(),
+                    'response_body' => $response->body(),
+                    'response_json' => $response->json(),
+                ]);
+            }
+
+            throw new RuntimeException('Resend no pudo enviar el correo: '.$message);
+        }
+
+        if ($logPrefix !== null) {
+            Log::info($logPrefix.' REENVIO OK', $contexto + [
+                'response_resend' => $response->json(),
+                'message_id' => data_get($response->json(), 'id'),
+            ]);
+        }
+    }
+
+    /**
      * @return array{filename:string,contents:string}
      */
     private function resolvePdfPath(object $proforma): array
@@ -224,34 +346,6 @@ class ProformaEmailService
         }
 
         return $missing;
-    }
-
-    /**
-     * @param  array<int,string>  $destinatarios
-     * @param  array{filename:string,contents:string}  $pdf
-     * @return array<string,mixed>
-     */
-    private function buildResendPayload(
-        object $proforma,
-        array $destinatarios,
-        array $pdf,
-        string $fromAddress,
-        string $fromName,
-        string $replyTo
-    ): array {
-        return [
-            'from' => $fromName !== '' ? sprintf('%s <%s>', $fromName, $fromAddress) : $fromAddress,
-            'reply_to' => [$replyTo],
-            'to' => $destinatarios,
-            'subject' => sprintf('Proforma #%s', (string) ($proforma->nro_prof ?: $proforma->id)),
-            'text' => "Cordial saludo,\n\nBuen dia,\n\nNos permitimos adjuntar la proforma correspondiente a los servicios contratados.\n\n*** RECUERDE HACER EL PAGO DE LA PROFORMA EN SU TOTALIDAD, NO PARCIALMENTE ***\n\nEnviar soporte de pago al correo cartera.rmsoft1@gmail.com o la linea telefonica de cartera por WhatsApp 3128133868, con sus datos y factura que se abona.\n\nCordialmente,\nRM Soft",
-            'attachments' => [
-                [
-                    'filename' => $pdf['filename'],
-                    'content' => base64_encode($pdf['contents']),
-                ],
-            ],
-        ];
     }
 
     private function normalizeLogPrefix(mixed $logPrefix): ?string

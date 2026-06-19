@@ -28,7 +28,7 @@
                         <span class="text-base">💰</span>
                         <span class="sidebar-label">Cobros</span>
                     </a>
-                    <a href="{{ route('proformas.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('proformas.index', 'proformas.show') ? 'bg-slate-800' : '' }}">
+                    <a href="{{ route('proformas.index') }}" class="group flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-slate-800 {{ request()->routeIs('proformas.index', 'proformas.show', 'proformas.estado-cuenta.*') ? 'bg-slate-800' : '' }}">
                         <span class="text-base">📄</span>
                         <span class="sidebar-label">Proformas</span>
                     </a>

@@ -14,6 +14,9 @@
             <a href="{{ route('proformas.dashboard') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
                 Ver Informe
             </a>
+            <a href="{{ route('proformas.estado-cuenta.index') }}" class="inline-flex items-center rounded bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200">
+                Estado de Cuenta
+            </a>
             <a href="{{ route('proformas.cartera.index') }}" class="inline-flex items-center rounded bg-rose-100 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-200">
                 &#128203; Cartera pendiente
             </a>

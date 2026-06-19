@@ -5,6 +5,7 @@ use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\DebugEmpresaServidorController;
+use App\Http\Controllers\EstadoCuentaProformasController;
 use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
 use App\Http\Controllers\ConfiguracionUsuarioController;
@@ -62,6 +63,8 @@ Route::middleware('auth.custom')->group(function (): void {
 
     Route::get('/proformas', [ProformasController::class, 'index'])->name('proformas.index');
     Route::get('/proformas/limpiar-filtros', [ProformasController::class, 'clearFilters'])->name('proformas.clear-filters');
+    Route::get('/proformas/estado-cuenta', [EstadoCuentaProformasController::class, 'index'])->name('proformas.estado-cuenta.index');
+    Route::post('/proformas/estado-cuenta/pdf', [EstadoCuentaProformasController::class, 'pdf'])->name('proformas.estado-cuenta.pdf');
     Route::get('/proformas/{id}/volver', [ProformasController::class, 'backToIndex'])->name('proformas.back-to-index');
 
     Route::get('/proformas/dashboard', [ProformasController::class, 'dashboard'])->name('proformas.dashboard');

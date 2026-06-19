@@ -25,6 +25,36 @@ class ProformaPdfService
         12 => 'diciembre',
     ];
 
+    private const EMISORAS = [
+        'SAS' => [
+            'logo' => 'rmsoft.png',
+            'razon_social' => 'RM SOFT Casa de Software SAS',
+            'nit' => '900770401-8',
+            'banco' => 'Bancolombia',
+            'cuenta_tipo' => 'Cuenta Ahorros',
+            'cuenta_numero' => '85131975584',
+            'cartera_email' => 'cartera.rmsoft1@gmail.com',
+        ],
+        'PCS' => [
+            'logo' => 'pcs.png',
+            'razon_social' => 'Maria Edilma Carranza Leon',
+            'nit' => '1004994836-0',
+            'banco' => 'Bancolombia',
+            'cuenta_tipo' => 'Cuenta Ahorros',
+            'cuenta_numero' => '851-0000-4419',
+            'cartera_email' => 'cartera.rmsoft1@gmail.com',
+        ],
+        'SMP' => [
+            'logo' => 'rmsoft.png',
+            'razon_social' => 'Raul Osvaldo Ramos M.',
+            'nit' => '75036432-7',
+            'banco' => 'Bancolombia',
+            'cuenta_tipo' => 'Cuenta Ahorros',
+            'cuenta_numero' => '851-0000-2888',
+            'cartera_email' => 'cartera.rmsoft1@gmail.com',
+        ],
+    ];
+
     public function __construct(
         private readonly NumeroALetrasService $numeroALetrasService,
     ) {
@@ -69,6 +99,7 @@ class ProformaPdfService
             'mes_nombre' => $this->resolverNombreMes((int) ($cabecera->mes ?? 0)),
             'fecha_emision' => now()->format('Y-m-d'),
             'logo_path' => $this->resolverLogoPath((string) ($cabecera->emisora ?? '')),
+            'emisor_pdf' => $this->resolveIssuerData((string) ($cabecera->emisora ?? '')),
             'total_en_letras' => $this->numeroALetrasService->toColombianPesos((float) ($cabecera->vtotal ?? 0)),
         ];
 
@@ -183,17 +214,27 @@ class ProformaPdfService
         return self::MESES_ES[$mes] ?? (string) $mes;
     }
 
+    public function resolveIssuerData(string $emisora): array
+    {
+        $emisoraNormalizada = strtoupper(trim($emisora));
+        $config = self::EMISORAS[$emisoraNormalizada] ?? self::EMISORAS['SAS'];
+
+        return [
+            'codigo' => $emisoraNormalizada !== '' ? $emisoraNormalizada : 'SAS',
+            'razon_social' => $config['razon_social'],
+            'nit' => $config['nit'],
+            'banco' => $config['banco'],
+            'cuenta_tipo' => $config['cuenta_tipo'],
+            'cuenta_numero' => $config['cuenta_numero'],
+            'cartera_email' => $config['cartera_email'],
+            'logo_path' => $this->resolverLogoPath($emisoraNormalizada),
+        ];
+    }
+
     private function resolverLogoPath(string $emisora): ?string
     {
         $em = strtoupper(trim($emisora));
-
-        $logoPorEmisora = [
-            'PCS' => 'pcs.png',
-            'SAS' => 'rmsoft.png',
-            'SMP' => 'rmsoft.png',
-        ];
-
-        $logo = $logoPorEmisora[$em] ?? 'rmsoft.png';
+        $logo = self::EMISORAS[$em]['logo'] ?? self::EMISORAS['SAS']['logo'];
         $path = public_path("images/logos/{$logo}");
 
 

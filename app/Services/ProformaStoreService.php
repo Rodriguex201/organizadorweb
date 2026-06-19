@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -37,6 +38,16 @@ class ProformaStoreService
 
     public function findExistingProformaIdFromCobro(object $cobro): ?int
     {
+        $resolved = $this->resolveExistingProforma($cobro);
+
+        if (($resolved['status'] ?? null) === 'found') {
+            return isset($resolved['proforma']->id) ? (int) $resolved['proforma']->id : null;
+        }
+
+        if (($resolved['status'] ?? null) === 'multiple_legacy') {
+            return null;
+        }
+
         $nit = trim((string) ($cobro->cliente_nit ?? ''));
         $mesTexto = trim((string) ($cobro->mes ?? ''));
         $mes = $this->normalizarMesParaProforma($mesTexto);
@@ -76,18 +87,47 @@ class ProformaStoreService
             $anio = (int) ($cobro->año ?? 0);
             $emisora = (string) ($preview['cabecera']['empresa_emisora'] ?? 'SAS');
             $idCobro = (int) ($cobro->id_cobro ?? 0);
+            $proformaExistente = null;
+            $resolved = $this->resolveExistingProforma($cobro, $emisora);
 
-            $proformaExistenteQuery = DB::table('sg_proform')
-                ->where('nit', $nit)
-                ->where('mes', $mes)
-                ->where('anio', $anio)
-                ->where('emisora', $emisora);
+            if (($resolved['status'] ?? null) === 'multiple_legacy') {
+                $legacyMatches = collect($resolved['legacy_matches'] ?? [])
+                    ->map(fn (object $proforma) => sprintf('#%s (id %s)', (string) ($proforma->nro_prof ?? 'N/D'), (string) ($proforma->id ?? 'N/D')))
+                    ->implode(', ');
 
-            if (Schema::hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
-                $proformaExistenteQuery->where('id_cobro', $idCobro);
+                return [
+                    'created' => false,
+                    'duplicated' => false,
+                    'blocked' => true,
+                    'proforma_id' => null,
+                    'message' => sprintf(
+                        'Se encontraron múltiples proformas legacy para NIT %s, %s %s y emisora %s. Requiere revisión manual. Coincidencias: %s.',
+                        $nit,
+                        $this->nombreMesParaMensaje($mes),
+                        $anio,
+                        $emisora,
+                        $legacyMatches,
+                    ),
+                ];
             }
 
-            $proformaExistente = $proformaExistenteQuery->first();
+            if (($resolved['status'] ?? null) === 'found') {
+                $proformaExistente = $resolved['proforma'] ?? null;
+            }
+
+            if ($proformaExistente === null) {
+                $proformaExistenteQuery = DB::table('sg_proform')
+                    ->where('nit', $nit)
+                    ->where('mes', $mes)
+                    ->where('anio', $anio)
+                    ->where('emisora', $emisora);
+
+                if (Schema::hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
+                    $proformaExistenteQuery->where('id_cobro', $idCobro);
+                }
+
+                $proformaExistente = $proformaExistenteQuery->first();
+            }
 
             if ($proformaExistente !== null) {
                 $extraConcepto = $this->completarConceptoExtraDesdeProformaExistente(
@@ -537,6 +577,130 @@ class ProformaStoreService
         }
 
         return $extraConcepto;
+    }
+
+    /**
+     * @return array{status:'found'|'none'|'multiple_legacy',proforma?:object|null,legacy_matches?:array<int,object>}
+     */
+    private function resolveExistingProforma(object $cobro, ?string $emisoraOverride = null): array
+    {
+        $nit = trim((string) ($cobro->cliente_nit ?? ''));
+        $mesTexto = trim((string) ($cobro->mes ?? ''));
+        $mes = $this->normalizarMesParaProforma($mesTexto);
+        $anio = (int) ($cobro->aÃ±o ?? 0);
+        $emisora = $emisoraOverride ?: $this->resolverEmpresaEmisoraDesdeRegimen($cobro);
+        $idCobro = (int) ($cobro->id_cobro ?? 0);
+
+        if ($nit === '' || $mes === null || $anio <= 0 || trim($emisora) === '') {
+            return ['status' => 'none'];
+        }
+
+        if (Schema::hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
+            $proforma = DB::table('sg_proform')
+                ->where('id_cobro', $idCobro)
+                ->first();
+
+            if ($proforma !== null) {
+                return [
+                    'status' => 'found',
+                    'proforma' => $proforma,
+                ];
+            }
+
+            $legacyMatches = DB::table('sg_proform')
+                ->where('nit', $nit)
+                ->where('mes', $mes)
+                ->where('anio', $anio)
+                ->where('emisora', $emisora)
+                ->where(function ($query): void {
+                    $query->whereNull('id_cobro')->orWhere('id_cobro', 0);
+                })
+                ->orderByDesc('id')
+                ->get();
+
+            if ($legacyMatches->count() === 1) {
+                $legacy = $legacyMatches->first();
+
+                DB::table('sg_proform')
+                    ->where('id', $legacy->id)
+                    ->update([
+                        'id_cobro' => $idCobro,
+                    ]);
+
+                $linked = DB::table('sg_proform')
+                    ->where('id', $legacy->id)
+                    ->first();
+
+                Log::info('Proforma legacy vinculada automáticamente a id_cobro.', [
+                    'proforma_id' => $linked->id ?? null,
+                    'nro_prof' => $linked->nro_prof ?? null,
+                    'id_cobro_asignado' => $idCobro,
+                    'nit' => $nit,
+                    'mes' => $mes,
+                    'anio' => $anio,
+                    'emisora' => $emisora,
+                    'usuario' => $this->resolveActor(),
+                ]);
+
+                return [
+                    'status' => 'found',
+                    'proforma' => $linked,
+                ];
+            }
+
+            if ($legacyMatches->count() > 1) {
+                Log::warning('Múltiples proformas legacy candidatas para asignar id_cobro; creación bloqueada.', [
+                    'id_cobro' => $idCobro,
+                    'nit' => $nit,
+                    'mes' => $mes,
+                    'anio' => $anio,
+                    'emisora' => $emisora,
+                    'legacy_matches' => $legacyMatches->map(fn (object $proforma) => [
+                        'id' => $proforma->id ?? null,
+                        'nro_prof' => $proforma->nro_prof ?? null,
+                    ])->values()->all(),
+                    'usuario' => $this->resolveActor(),
+                ]);
+
+                return [
+                    'status' => 'multiple_legacy',
+                    'legacy_matches' => $legacyMatches->all(),
+                ];
+            }
+
+            return ['status' => 'none'];
+        }
+
+        $proforma = DB::table('sg_proform')
+            ->where('nit', $nit)
+            ->where('mes', $mes)
+            ->where('anio', $anio)
+            ->where('emisora', $emisora)
+            ->first();
+
+        return $proforma !== null
+            ? ['status' => 'found', 'proforma' => $proforma]
+            : ['status' => 'none'];
+    }
+
+    private function nombreMesParaMensaje(?int $mes): string
+    {
+        if ($mes === null) {
+            return 'mes';
+        }
+
+        return ucfirst(self::MESES_ES[array_search($mes, self::MESES_ES, true)] ?? (string) $mes);
+    }
+
+    private function resolveActor(): string
+    {
+        $user = Auth::user();
+
+        if ($user) {
+            return trim((string) ($user->name ?? $user->email ?? 'usuario'));
+        }
+
+        return trim((string) (session('usuario') ?? session('email') ?? 'desconocido'));
     }
 
     private function actualizarValoresExternosDesdeRevision(object $cobro, array $revision): void
