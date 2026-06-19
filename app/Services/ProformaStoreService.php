@@ -71,13 +71,18 @@ class ProformaStoreService
         return $proforma ? (int) $proforma->id : null;
     }
 
-    public function storeFromCobro(object $cobro, array $extraConcepto = [], bool $preserveExistingEstado = false): array
+    public function storeFromCobro(
+        object $cobro,
+        array $extraConcepto = [],
+        bool $preserveExistingEstado = false,
+        bool $protectProcessedProforma = false
+    ): array
     {
         if ($validationError = $this->validateCobroReference($cobro)) {
             return $validationError;
         }
 
-        return DB::transaction(function () use ($cobro, $extraConcepto, $preserveExistingEstado) {
+        return DB::transaction(function () use ($cobro, $extraConcepto, $preserveExistingEstado, $protectProcessedProforma) {
             $preview = $this->proformaPreviewService->buildFromCobro($cobro);
             $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
 
@@ -130,6 +135,29 @@ class ProformaStoreService
             }
 
             if ($proformaExistente !== null) {
+                if ($protectProcessedProforma && $this->shouldProtectExistingProforma($proformaExistente)) {
+                    $motivo = $this->buildProtectedProformaReason($proformaExistente);
+
+                    Log::info('Proforma existente protegida omitida en generacion masiva.', [
+                        'id_cobro' => $idCobro,
+                        'proforma_id' => (int) ($proformaExistente->id ?? 0),
+                        'nro_prof' => $proformaExistente->nro_prof ?? null,
+                        'estado' => (int) ($proformaExistente->estado ?? 0),
+                        'enviado' => (int) ($proformaExistente->enviado ?? 0),
+                        'motivo' => $motivo,
+                    ]);
+
+                    return [
+                        'created' => false,
+                        'duplicated' => false,
+                        'blocked' => false,
+                        'protected' => true,
+                        'omitted' => true,
+                        'proforma_id' => $proformaExistente->id ?? null,
+                        'message' => 'Proforma ya enviada/facturada. Se omite de la generación masiva.',
+                    ];
+                }
+
                 $extraConcepto = $this->completarConceptoExtraDesdeProformaExistente(
                     (int) $proformaExistente->id,
                     $cobro,
@@ -249,6 +277,34 @@ class ProformaStoreService
             'proforma_id' => null,
             'message' => 'No se puede generar la proforma porque el cobro no tiene un id_cobro valido.',
         ];
+    }
+
+    private function shouldProtectExistingProforma(object $proforma): bool
+    {
+        $estado = (int) ($proforma->estado ?? 0);
+        $enviado = (int) ($proforma->enviado ?? 0);
+
+        return $enviado === 1 || $estado === 4 || $estado === 6;
+    }
+
+    private function buildProtectedProformaReason(object $proforma): string
+    {
+        $estado = (int) ($proforma->estado ?? 0);
+        $enviado = (int) ($proforma->enviado ?? 0);
+
+        if ($enviado === 1) {
+            return 'Proforma ya enviada.';
+        }
+
+        if ($estado === 6) {
+            return 'Proforma ya facturada.';
+        }
+
+        if ($estado === 4) {
+            return 'Proforma ya pagada.';
+        }
+
+        return 'Proforma protegida.';
     }
 
     /**

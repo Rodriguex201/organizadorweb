@@ -1104,6 +1104,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         $actualizadas = 0;
         $fallidas = [];
         $omitidas = 0;
+        $omitidasProtegidas = 0;
         $omitidasDetalle = [];
         $proformasListas = [];
         $cobrosEncontradosEnLoop = 0;
@@ -1159,7 +1160,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
             try {
                 $storeInvocations++;
-                $resultado = $this->proformaStoreService->storeFromCobro($cobro);
+                $resultado = $this->proformaStoreService->storeFromCobro($cobro, [], false, true);
 
                 Log::info('Generacion masiva grupo: resultado storeFromCobro.', [
                     'grupo' => $grupo,
@@ -1171,6 +1172,18 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                     $motivoOmitida = (string) ($resultado['message'] ?? 'No se pudo generar la proforma.');
                     $omitidas++;
                     $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, $motivoOmitida);
+                    continue;
+                }
+
+                if (($resultado['protected'] ?? false) === true || ($resultado['omitted'] ?? false) === true) {
+                    $omitidas++;
+                    $omitidasProtegidas++;
+                    $motivoOmitida = (string) ($resultado['message'] ?? 'Proforma protegida omitida en la generación masiva.');
+                    $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, $motivoOmitida, [
+                        'id_cobro' => $idCobro,
+                        'proforma_id' => (int) ($resultado['proforma_id'] ?? 0),
+                        'protegida' => true,
+                    ]);
                     continue;
                 }
 
@@ -1214,6 +1227,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             'store_invocations' => $storeInvocations,
             'creadas' => $creadas,
             'actualizadas' => $actualizadas,
+            'omitidas_protegidas' => $omitidasProtegidas,
             'omitidas' => $omitidas,
             'omitidas_detalle' => $omitidasDetalle,
             'fallidas' => count($fallidas),
@@ -1221,7 +1235,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         ]);
 
         $statusType = count($fallidas) > 0 ? 'warning' : 'success';
-        $message = "Generacion masiva grupo {$grupo} finalizada. Creadas: {$creadas}. Actualizadas: {$actualizadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
+        $message = "Generacion masiva grupo {$grupo} finalizada. Generadas: {$creadas}. Actualizadas: {$actualizadas}. Omitidas protegidas: {$omitidasProtegidas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';
 
         if ($fallidas !== []) {
             $message .= ' Errores: '.collect($fallidas)
@@ -1235,6 +1249,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             'message' => $message,
             'creadas' => $creadas,
             'actualizadas' => $actualizadas,
+            'omitidas_protegidas' => $omitidasProtegidas,
             'omitidas' => $omitidas,
             'fallidas' => count($fallidas),
             'fallidas_detalle' => $fallidas,
@@ -1248,18 +1263,27 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
     {
         $proformasListas = array_values($resultado['proformas_listas'] ?? []);
         $existingLote = session('cobros.proformas_listas_para_envio');
+        $cantidadDescartadaLoteAnterior = 0;
 
         if ($proformasListas !== []) {
-            $proformasListas = $this->mergePendingProformasForEnvio(
-                is_array($existingLote) ? $existingLote : null,
-                $grupo,
-                $proformasListas,
-            );
+            if (is_array($existingLote) && (int) ($existingLote['grupo'] ?? 0) === $grupo) {
+                $cantidadDescartadaLoteAnterior = count(is_array($existingLote['proformas'] ?? null) ? $existingLote['proformas'] : []);
+            }
+
+            $proformasListas = $this->mergePendingProformasForEnvio($grupo, $proformasListas);
 
             session()->put('cobros.proformas_listas_para_envio', [
                 'grupo' => $grupo,
                 'filters' => $filters,
                 'proformas' => $proformasListas,
+            ]);
+
+            Log::info('Cobros lote temporal de envio reiniciado para nueva generacion masiva.', [
+                'grupo' => $grupo,
+                'cantidad_descartada_lote_anterior' => $cantidadDescartadaLoteAnterior,
+                'cantidad_nuevo_lote' => count($proformasListas),
+                'usuario' => $this->resolveMassActionUser(),
+                'fecha_hora' => now()->toDateTimeString(),
             ]);
         } elseif (!is_array($existingLote) || (int) ($existingLote['grupo'] ?? 0) !== $grupo) {
             session()->forget('cobros.proformas_listas_para_envio');
@@ -1295,21 +1319,19 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         return $idUsuario ? "{$usuario} ({$idUsuario})" : $usuario;
     }
 
-    private function mergePendingProformasForEnvio(?array $existingLote, int $grupo, array $nuevasProformas): array
+    private function mergePendingProformasForEnvio(int $grupo, array $nuevasProformas): array
     {
-        $existingProformas = [];
-
-        if (is_array($existingLote) && (int) ($existingLote['grupo'] ?? 0) === $grupo) {
-            $existingProformas = is_array($existingLote['proformas'] ?? null)
-                ? $existingLote['proformas']
-                : [];
-        }
-
-        return collect(array_merge($existingProformas, $nuevasProformas))
-            ->filter(fn ($item) => is_array($item) && (int) ($item['id'] ?? 0) > 0)
+        $resultado = $this->sanitizeProformasForEnvioLote(
+            $grupo,
+            collect($nuevasProformas)
+            ->filter(fn ($item) => is_array($item))
             ->keyBy(fn (array $item) => (int) $item['id'])
             ->values()
-            ->all();
+            ->all(),
+            'nueva_generacion'
+        );
+
+        return $resultado['proformas'];
     }
 
     private function clearCobrosPendingBatchSession(): void
@@ -1358,51 +1380,12 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             return;
         }
 
-        $proformaIds = collect($proformas)
-            ->filter(fn ($item) => is_array($item) && (int) ($item['id'] ?? 0) > 0)
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
-
-        if ($proformaIds->isEmpty()) {
-            session()->forget('cobros.proformas_listas_para_envio');
-
-            return;
-        }
-
-        $existingIds = DB::table('sg_proform')
-            ->whereIn('id', $proformaIds->all())
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        $existingIdsLookup = array_fill_keys($existingIds, true);
-        $proformasSanitizadas = [];
-
-        foreach ($proformas as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-
-            $proformaId = (int) ($item['id'] ?? 0);
-
-            if ($proformaId <= 0) {
-                continue;
-            }
-
-            if (!isset($existingIdsLookup[$proformaId])) {
-                Log::warning('Cobros lote pendiente descartado por proforma inexistente.', [
-                    'proforma_id' => $proformaId,
-                    'empresa' => trim((string) ($item['empresa'] ?? '')),
-                    'grupo' => (int) ($payload['grupo'] ?? 0),
-                ]);
-
-                continue;
-            }
-
-            $proformasSanitizadas[] = $item;
-        }
+        $resultado = $this->sanitizeProformasForEnvioLote(
+            (int) ($payload['grupo'] ?? 0),
+            $proformas,
+            'sesion_pendiente'
+        );
+        $proformasSanitizadas = $resultado['proformas'];
 
         if ($proformasSanitizadas === []) {
             session()->forget('cobros.proformas_listas_para_envio');
@@ -1412,5 +1395,93 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
         $payload['proformas'] = array_values($proformasSanitizadas);
         session()->put('cobros.proformas_listas_para_envio', $payload);
+    }
+
+    /**
+     * @param array<int, mixed> $proformas
+     * @return array{proformas: array<int, array<string, mixed>>, discarded: int}
+     */
+    private function sanitizeProformasForEnvioLote(int $grupo, array $proformas, string $context): array
+    {
+        $sanitizadas = [];
+        $discarded = 0;
+
+        foreach ($proformas as $item) {
+            if (!is_array($item)) {
+                $discarded++;
+                continue;
+            }
+
+            $proformaId = (int) ($item['id'] ?? 0);
+            $empresa = trim((string) ($item['empresa'] ?? ''));
+
+            if ($proformaId <= 0) {
+                $discarded++;
+                $this->logEnvioBatchDiscard($grupo, $context, $proformaId, null, null, null, 'ID de proforma invalido.', $empresa);
+                continue;
+            }
+
+            $proforma = $this->proformasService->findProformaById($proformaId);
+
+            if (!$proforma) {
+                $discarded++;
+                $this->logEnvioBatchDiscard($grupo, $context, $proformaId, null, null, null, 'Proforma inexistente o eliminada.', $empresa);
+                continue;
+            }
+
+            $estado = (int) ($proforma->estado ?? 0);
+            $enviado = (int) ($proforma->enviado ?? 0);
+            $nroProf = $proforma->nro_prof ?? null;
+
+            if ($enviado === 1) {
+                $discarded++;
+                $this->logEnvioBatchDiscard($grupo, $context, $proformaId, $nroProf, $estado, $enviado, 'Proforma ya enviada.', $empresa);
+                continue;
+            }
+
+            if ($estado === ProformasService::ESTADO_PAGADA) {
+                $discarded++;
+                $this->logEnvioBatchDiscard($grupo, $context, $proformaId, $nroProf, $estado, $enviado, 'Proforma pagada.', $empresa);
+                continue;
+            }
+
+            if ($estado === ProformasService::ESTADO_FACTURADA) {
+                $discarded++;
+                $this->logEnvioBatchDiscard($grupo, $context, $proformaId, $nroProf, $estado, $enviado, 'Proforma facturada.', $empresa);
+                continue;
+            }
+
+            $sanitizadas[] = [
+                'id' => $proformaId,
+                'empresa' => $empresa !== '' ? $empresa : trim((string) ($proforma->emp ?? 'Sin nombre')),
+            ];
+        }
+
+        return [
+            'proformas' => array_values($sanitizadas),
+            'discarded' => $discarded,
+        ];
+    }
+
+    private function logEnvioBatchDiscard(
+        int $grupo,
+        string $context,
+        int $proformaId,
+        null|string|int $nroProf,
+        ?int $estado,
+        ?int $enviado,
+        string $motivo,
+        string $empresa = ''
+    ): void {
+        Log::info('Cobros lote temporal de envio: proforma descartada.', [
+            'grupo' => $grupo,
+            'contexto' => $context,
+            'proforma_id' => $proformaId > 0 ? $proformaId : null,
+            'nro_prof' => $nroProf,
+            'estado' => $estado,
+            'enviado' => $enviado,
+            'motivo' => $motivo,
+            'empresa' => $empresa !== '' ? $empresa : null,
+        ]);
     }
 }

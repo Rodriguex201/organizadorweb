@@ -133,10 +133,10 @@
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <p class="text-sm font-semibold text-cyan-800">
-                        Se generaron o actualizaron {{ count($proformasListas) }} proformas del grupo {{ $grupoListoParaEnvio }}.
+                        Se generaron o actualizaron {{ count($proformasListas) }} proformas del grupo {{ $grupoListoParaEnvio }} en esta ejecucion.
                     </p>
                     <p class="text-sm text-cyan-700">
-                        Desea enviarlas ahora a los correos registrados?
+                        Desea enviarlas ahora a los correos registrados de esta ejecucion?
                     </p>
                 </div>
 
