@@ -18,6 +18,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
+Route::get('/cobros/proformas-masivo/progreso/{executionId}', [CobrosController::class, 'massGenerationProgress'])
+    ->name('cobros.proformas-masivo.progress');
+Route::get('/cobros/proformas-masivo/envio/progreso/{executionId}', [CobrosController::class, 'massSendProgress'])
+    ->name('cobros.proformas-masivo.envio.progress');
 
 Route::middleware('auth.custom')->group(function (): void {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
@@ -46,7 +50,7 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::post('/cobros/extraordinario', [CobrosController::class, 'storeExtraordinary'])->name('cobros.extraordinario.store');
     Route::post('/cobros/lote-pendiente/limpiar', [CobrosController::class, 'limpiarLotePendienteEnvio'])->name('cobros.lote-pendiente.limpiar');
     Route::post('/cobros/proformas-masivo/{grupo}', [CobrosController::class, 'generarProformasMasivo'])->name('cobros.proformas-masivo');
-    Route::post('/cobros/proformas-masivo/{grupo}/enviar', [CobrosController::class, 'enviarProformasMasivo'])->name('cobros.proformas-masivo.enviar');
+    Route::post('/cobros/proformas-masivo/{grupo}/enviar', [CobrosController::class, 'enviarProformasMasivoAjax'])->name('cobros.proformas-masivo.enviar');
     Route::post('/cobros/proformas-masivo/{grupo}/pendientes/activar', [CobrosController::class, 'activarPendientesFacturacionMasivo'])->name('cobros.proformas-masivo.pendientes.activar');
     Route::post('/cobros/proformas-masivo/{grupo}/pendientes/regenerar', [CobrosController::class, 'regenerarPendientesFacturacionMasivo'])->name('cobros.proformas-masivo.pendientes.regenerar');
     Route::post('/cobros/proformas-masivo/{grupo}/pendientes/descartar', [CobrosController::class, 'descartarRegeneracionPendientesFacturacionMasivo'])->name('cobros.proformas-masivo.pendientes.descartar');

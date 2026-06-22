@@ -78,11 +78,20 @@ class ProformaStoreService
         bool $protectProcessedProforma = false
     ): array
     {
+        $startedAt = microtime(true);
+        $idCobro = (int) ($cobro->id_cobro ?? 0);
+
         if ($validationError = $this->validateCobroReference($cobro)) {
+            Log::info('Proforma storeFromCobro: validacion bloqueante.', [
+                'id_cobro' => $idCobro,
+                'duration_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+                'resultado' => $validationError,
+            ]);
+
             return $validationError;
         }
 
-        return DB::transaction(function () use ($cobro, $extraConcepto, $preserveExistingEstado, $protectProcessedProforma) {
+        $result = DB::transaction(function () use ($cobro, $extraConcepto, $preserveExistingEstado, $protectProcessedProforma) {
             $preview = $this->proformaPreviewService->buildFromCobro($cobro);
             $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
 
@@ -247,6 +256,19 @@ class ProformaStoreService
                 'message' => 'Proforma guardada correctamente en sg_proform y sg_proford.',
             ];
         });
+
+        Log::info('Proforma storeFromCobro: finalizado.', [
+            'id_cobro' => $idCobro,
+            'proforma_id' => (int) ($result['proforma_id'] ?? 0),
+            'created' => (bool) ($result['created'] ?? false),
+            'duplicated' => (bool) ($result['duplicated'] ?? false),
+            'protected' => (bool) ($result['protected'] ?? false),
+            'omitted' => (bool) ($result['omitted'] ?? false),
+            'blocked' => (bool) ($result['blocked'] ?? false),
+            'duration_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+        ]);
+
+        return $result;
     }
 
     public function regenerateFromCobro(object $cobro, array $extraConcepto = []): array

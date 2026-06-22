@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -62,6 +63,7 @@ class ProformaPdfService
 
     public function generateForProformaId(int $proformaId, bool $regenerar = false): array
     {
+        $startedAt = microtime(true);
         $cabecera = DB::table('sg_proform')->where('id', $proformaId)->first();
 
         if (!$cabecera) {
@@ -78,6 +80,14 @@ class ProformaPdfService
 
         if (!$regenerar && $relativeAnterior !== null) {
             if (Storage::disk('local')->exists($relativeAnterior)) {
+                $durationMs = (microtime(true) - $startedAt) * 1000;
+                Log::info('Proforma PDF: reutilizado existente.', [
+                    'proforma_id' => $proformaId,
+                    'regenerar' => $regenerar,
+                    'relative_path' => $relativeAnterior,
+                    'duration_ms' => round($durationMs, 2),
+                ]);
+
                 return [
                     'relative_path' => $relativeAnterior,
                     'absolute_path' => Storage::disk('local')->path($relativeAnterior),
@@ -103,13 +113,16 @@ class ProformaPdfService
             'total_en_letras' => $this->numeroALetrasService->toColombianPesos((float) ($cabecera->vtotal ?? 0)),
         ];
 
+        $renderStartedAt = microtime(true);
         $pdf = Pdf::loadView('proformas.pdf', $data)->setPaper('a4');
         $pdfBinario = $pdf->output();
+        $renderDurationMs = (microtime(true) - $renderStartedAt) * 1000;
 
         $ruta = 'proformas/'.((string) ($cabecera->anio ?? date('Y')));
         $nombreArchivo = $this->construirNombreArchivo($cabecera, $proformaId);
         $relativePath = $this->construirRutaRelativa($ruta, $nombreArchivo);
 
+        $storageStartedAt = microtime(true);
         if ($regenerar && $relativeAnterior !== null && Storage::disk('local')->exists($relativeAnterior)) {
             Storage::disk('local')->delete($relativeAnterior);
         }
@@ -124,9 +137,11 @@ class ProformaPdfService
         ) {
             Storage::disk('local')->delete($relativeAnterior);
         }
+        $storageDurationMs = (microtime(true) - $storageStartedAt) * 1000;
 
         $hash = hash('sha256', $pdfBinario);
 
+        $persistStartedAt = microtime(true);
         DB::table('sg_proform')
             ->where('id', $proformaId)
             ->update([
@@ -134,6 +149,19 @@ class ProformaPdfService
                 'npdf' => $nombreArchivo,
                 'hpdf' => $hash,
             ]);
+        $persistDurationMs = (microtime(true) - $persistStartedAt) * 1000;
+        $totalDurationMs = (microtime(true) - $startedAt) * 1000;
+
+        Log::info('Proforma PDF: generacion finalizada.', [
+            'proforma_id' => $proformaId,
+            'regenerar' => $regenerar,
+            'filename' => $nombreArchivo,
+            'detail_count' => $detalle->count(),
+            'render_ms' => round($renderDurationMs, 2),
+            'storage_ms' => round($storageDurationMs, 2),
+            'persist_ms' => round($persistDurationMs, 2),
+            'total_ms' => round($totalDurationMs, 2),
+        ]);
 
         return [
             'relative_path' => $relativePath,
