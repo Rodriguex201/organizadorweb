@@ -307,7 +307,7 @@
                         syncCityValidity();
                     });
 
-                    botonBuscar.addEventListener('click', async () => {
+                    const ejecutarBusquedaCiudad = async () => {
                         const termino = inputBusqueda.value.trim();
                         inputDepartamento.value = '';
                         inputCiudadCodigo.value = '';
@@ -338,6 +338,17 @@
                         } catch (error) {
                             setEstado('Error consultando ciudades. Intenta de nuevo.', true);
                         }
+                    };
+
+                    botonBuscar.addEventListener('click', ejecutarBusquedaCiudad);
+
+                    inputBusqueda.addEventListener('keydown', (event) => {
+                        if (event.key !== 'Enter') {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        ejecutarBusquedaCiudad();
                     });
 
                     syncCityValidity();
