@@ -5,6 +5,7 @@ use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\DebugEmpresaServidorController;
+use App\Http\Controllers\DirectorioAuditController;
 use App\Http\Controllers\EstadoCuentaProformasController;
 use App\Http\Controllers\ConfiguracionDirectorioController;
 use App\Http\Controllers\ConfiguracionEstadoProformaController;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
+Route::get('/debug/directorio-audit', [DirectorioAuditController::class, 'show'])
+    ->name('debug.directorio-audit.show');
 Route::get('/cobros/proformas-masivo/progreso/{executionId}', [CobrosController::class, 'massGenerationProgress'])
     ->name('cobros.proformas-masivo.progress');
 Route::get('/cobros/proformas-masivo/envio/progreso/{executionId}', [CobrosController::class, 'massSendProgress'])
@@ -32,7 +35,6 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/debug/empresa-servidor/{codigo}', [DebugEmpresaServidorController::class, 'show'])
         ->middleware('role.admin')
         ->name('debug.empresa-servidor.show');
-
     Route::get('/clientes', [ClientesController::class, 'index'])->name('clientes.index');
     Route::get('/clientes/create', [ClientesController::class, 'create'])->name('clientes.create');
     Route::get('/clientes/codigo/disponibilidad', [ClientesController::class, 'checkCodigoAvailability'])->name('clientes.codigo.disponibilidad');

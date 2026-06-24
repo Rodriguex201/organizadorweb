@@ -30,6 +30,62 @@ class ClientesFacturacionControllerTest extends TestCase
         $this->assertNull($cliente->fecha_inicio_facturacion);
     }
 
+    public function test_store_crea_carpeta_y_subcarpetas_cuando_hay_directorio_configurado(): void
+    {
+        $this->withoutMiddleware();
+        $this->createClientesTable();
+        $this->createCitiesTable();
+        $this->createConfiguracionDirectorioTable();
+
+        $rutaBase = sys_get_temp_dir().'\\organizador_clientes_test_'.uniqid();
+        mkdir($rutaBase, 0777, true);
+
+        DB::table('configuracion_directorio')->insert([
+            'ruta_clientes' => $rutaBase,
+        ]);
+
+        $response = $this->post(route('clientes.store'), $this->validClientPayload([
+            'empresa' => 'VITTAL CONFORT',
+            'codigo' => 'B549',
+        ]));
+
+        $response->assertRedirect(route('clientes.index'));
+
+        $carpetaCliente = $rutaBase.'\\B549__VITTAL CONFORT';
+
+        $this->assertNotNull(DB::table('clientes_potenciales')->where('codigo', 'B549')->first());
+        $this->assertDirectoryExists($carpetaCliente);
+        $this->assertDirectoryExists($carpetaCliente.'\\DOCUMENTOS\\CONTRATOS');
+        $this->assertDirectoryExists($carpetaCliente.'\\SISTEMAS DE INFORMACION\\FORMATOS');
+
+        \Illuminate\Support\Facades\File::deleteDirectory($rutaBase);
+    }
+
+    public function test_store_revierte_registro_si_falla_la_creacion_del_directorio(): void
+    {
+        $this->withoutMiddleware();
+        $this->createClientesTable();
+        $this->createCitiesTable();
+        $this->createConfiguracionDirectorioTable();
+
+        DB::table('configuracion_directorio')->insert([
+            'ruta_clientes' => 'Z:\\ruta_inaccesible_para_prueba',
+        ]);
+
+        $response = $this->from(route('clientes.create'))->post(route('clientes.store'), $this->validClientPayload([
+            'empresa' => 'VITTAL CONFORT',
+            'codigo' => 'B549',
+            'nit' => '24693943',
+        ]));
+
+        $response->assertRedirect(route('clientes.create'));
+        $response->assertSessionHasErrors([
+            'general' => 'No fue posible crear la carpeta del cliente en el directorio base. El registro no se guardo.',
+        ]);
+
+        $this->assertNull(DB::table('clientes_potenciales')->where('codigo', 'B549')->first());
+    }
+
     public function test_update_asigna_fecha_actual_cuando_pasa_a_activo(): void
     {
         $this->withoutMiddleware();
@@ -568,6 +624,7 @@ class ClientesFacturacionControllerTest extends TestCase
     protected function tearDown(): void
     {
         Schema::dropIfExists('clientes_potenciales');
+        Schema::dropIfExists('configuracion_directorio');
         Schema::dropIfExists('xxxxcity');
 
         parent::tearDown();
@@ -630,6 +687,17 @@ class ClientesFacturacionControllerTest extends TestCase
                 'cityiso' => null,
             ],
         ]);
+    }
+
+    private function createConfiguracionDirectorioTable(): void
+    {
+        Schema::dropIfExists('configuracion_directorio');
+
+        Schema::create('configuracion_directorio', function (Blueprint $table): void {
+            $table->increments('id');
+            $table->string('ruta_clientes');
+            $table->timestamps();
+        });
     }
 
     private function validClientPayload(array $overrides = []): array

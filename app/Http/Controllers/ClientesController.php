@@ -11,7 +11,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use App\Models\ConfiguracionDirectorio;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -295,15 +294,25 @@ class ClientesController extends Controller
             $payload['usuarios_idusuario'] = session('idusuario');
         }
 
-        $clienteId = null;
+        try {
+            DB::transaction(function () use ($mapping, $payload, &$clienteId): void {
+                $clienteId = null;
 
-        if ($mapping['id']) {
-            $clienteId = DB::table('clientes_potenciales')->insertGetId($payload, $mapping['id']);
-        } else {
-            DB::table('clientes_potenciales')->insert($payload);
+                if ($mapping['id']) {
+                    $clienteId = DB::table('clientes_potenciales')->insertGetId($payload, $mapping['id']);
+                } else {
+                    DB::table('clientes_potenciales')->insert($payload);
+                }
+
+                $this->crearEstructuraDirectoriosCliente($payload, $mapping, $clienteId);
+            });
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->withErrors([
+                'general' => 'No fue posible crear la carpeta del cliente en el directorio base. El registro no se guardo.',
+            ]);
         }
-
-        $this->crearEstructuraDirectoriosCliente($payload, $mapping, $clienteId);
 
         return redirect()->route('clientes.index')->with('status', 'Cliente creado correctamente.');
     }
@@ -1425,69 +1434,155 @@ class ClientesController extends Controller
 
 private function crearEstructuraDirectoriosCliente(array $payload, array $mapping, mixed $clienteId): void
 {
-    
+    $rutaBase = null;
+    $rutaFinal = null;
+    $codigo = (string) ($payload[$mapping['codigo'] ?? ''] ?? '');
+    $empresa = (string) ($payload[$mapping['empresa'] ?? ''] ?? '');
+
     try {
+        if (!Schema::hasTable('configuracion_directorio')) {
+            Log::warning('Directorio cliente audit: la tabla configuracion_directorio no existe; se omite la creacion de carpetas.', [
+                'cliente_id' => $clienteId,
+            ]);
+            return;
+        }
+
         $config = ConfiguracionDirectorio::query()->first();
         $rutaBase = trim((string) ($config?->ruta_clientes ?? ''));
 
-
+        $this->logDirectorioClienteAudit('inicio', [
+            'cliente_id' => $clienteId,
+            'ruta_base' => $rutaBase,
+            'ruta_base_file_exists' => $rutaBase !== '' ? file_exists($rutaBase) : false,
+            'ruta_base_is_dir' => $rutaBase !== '' ? is_dir($rutaBase) : false,
+            'ruta_base_is_readable' => $rutaBase !== '' ? is_readable($rutaBase) : false,
+            'ruta_base_is_writable' => $rutaBase !== '' ? is_writable($rutaBase) : false,
+        ]);
 
         if ($rutaBase === '') {
-            Log::warning('No hay ruta base configurada para directorios de clientes.', [
-                'cliente_id' => $clienteId,
-            ]);
-            return;
+            throw new \RuntimeException('No hay ruta base configurada para directorios de clientes.');
         }
 
         if (!file_exists($rutaBase)) {
-            Log::error('Ruta base no existe', [
-                'cliente_id' => $clienteId,
-                'ruta_base' => $rutaBase,
-            ]);
-            return;
+            throw new \RuntimeException("La ruta base configurada no existe o no es accesible: {$rutaBase}");
         }
 
-        $codigo = (string) ($payload[$mapping['codigo'] ?? ''] ?? '');
-        $empresa = (string) ($payload[$mapping['empresa'] ?? ''] ?? '');
         $nombreEmpresa = $this->normalizeFolderName($codigo . '__' . $empresa);
 
-        
-
         if ($nombreEmpresa === '__') {
-            Log::warning('No se pudo generar nombre de carpeta para cliente.', [
-                'cliente_id' => $clienteId,
-                'ruta_base' => $rutaBase,
-            ]);
-            return;
+            throw new \RuntimeException('No se pudo generar el nombre de la carpeta del cliente.');
         }
 
         $rutaFinal = $this->joinWindowsPath($rutaBase, $nombreEmpresa);
 
-        File::makeDirectory($rutaFinal, 0777, true, true);
-
-        foreach ($this->subcarpetasCliente() as $subcarpeta => $subcarpetasInternas) {
-            $rutaSubcarpeta = $this->joinWindowsPath($rutaFinal, $subcarpeta);
-            File::makeDirectory($rutaSubcarpeta, 0777, true, true);
-
-            foreach ($subcarpetasInternas as $subcarpetaInterna) {
-                $rutaSubcarpetaInterna = $this->joinWindowsPath($rutaSubcarpeta, $subcarpetaInterna);
-                File::makeDirectory($rutaSubcarpetaInterna, 0777, true, true);
-            }
-        }
-
-        Log::info('Carpeta creada', [
+        $this->logDirectorioClienteAudit('ruta_resuelta', [
             'cliente_id' => $clienteId,
+            'codigo' => $codigo,
+            'empresa' => $empresa,
             'ruta_base' => $rutaBase,
             'ruta_final' => $rutaFinal,
         ]);
 
+        $this->crearDirectorioAuditado($rutaFinal, $clienteId, $rutaBase, $rutaFinal, 'cliente');
+
+        foreach ($this->subcarpetasCliente() as $subcarpeta => $subcarpetasInternas) {
+            $rutaSubcarpeta = $this->joinWindowsPath($rutaFinal, $subcarpeta);
+            $this->crearDirectorioAuditado($rutaSubcarpeta, $clienteId, $rutaBase, $rutaFinal, 'subcarpeta');
+
+            foreach ($subcarpetasInternas as $subcarpetaInterna) {
+                $rutaSubcarpetaInterna = $this->joinWindowsPath($rutaSubcarpeta, $subcarpetaInterna);
+                $this->crearDirectorioAuditado($rutaSubcarpetaInterna, $clienteId, $rutaBase, $rutaFinal, 'subcarpeta_interna');
+            }
+        }
+
+        $this->logDirectorioClienteAudit('completado', [
+            'cliente_id' => $clienteId,
+            'ruta_base' => $rutaBase,
+            'ruta_final' => $rutaFinal,
+            'ruta_final_file_exists' => file_exists($rutaFinal),
+            'ruta_final_is_dir' => is_dir($rutaFinal),
+        ]);
     } catch (\Throwable $exception) {
-    Log::error('Error al crear carpeta de cliente.', [
-        'cliente_id' => $clienteId,
-        'ruta_base' => $rutaBase ?? null,
-        'error' => $exception->getMessage(),
-    ]);
+        $this->logDirectorioClienteAudit('error', [
+            'cliente_id' => $clienteId,
+            'codigo' => $codigo,
+            'empresa' => $empresa,
+            'ruta_base' => $rutaBase,
+            'ruta_final' => $rutaFinal,
+            'ruta_base_file_exists' => $rutaBase ? file_exists($rutaBase) : false,
+            'ruta_final_file_exists' => $rutaFinal ? file_exists($rutaFinal) : false,
+            'error_class' => $exception::class,
+            'error_message' => $exception->getMessage(),
+            'stacktrace' => $exception->getTraceAsString(),
+        ]);
+
+        throw $exception;
     }
+}
+
+private function crearDirectorioAuditado(
+    string $rutaObjetivo,
+    mixed $clienteId,
+    ?string $rutaBase,
+    ?string $rutaFinal,
+    string $tipo
+): void {
+    $existiaAntes = file_exists($rutaObjetivo);
+    $eraDirectorioAntes = is_dir($rutaObjetivo);
+
+    if ($eraDirectorioAntes) {
+        $this->logDirectorioClienteAudit('mkdir_skip', [
+            'cliente_id' => $clienteId,
+            'tipo' => $tipo,
+            'ruta_base' => $rutaBase,
+            'ruta_final' => $rutaFinal,
+            'ruta_objetivo' => $rutaObjetivo,
+            'file_exists_before' => $existiaAntes,
+            'is_dir_before' => $eraDirectorioAntes,
+            'mkdir_result' => null,
+            'mkdir_message' => 'El directorio ya existia; no se ejecuto mkdir.',
+        ]);
+        return;
+    }
+
+    $mkdirError = null;
+    set_error_handler(static function (int $severity, string $message) use (&$mkdirError): bool {
+        $mkdirError = $message;
+        return true;
+    });
+
+    try {
+        $mkdirResult = mkdir($rutaObjetivo, 0777, true);
+    } finally {
+        restore_error_handler();
+    }
+
+    $existeDespues = file_exists($rutaObjetivo);
+    $esDirectorioDespues = is_dir($rutaObjetivo);
+
+    $this->logDirectorioClienteAudit('mkdir', [
+        'cliente_id' => $clienteId,
+        'tipo' => $tipo,
+        'ruta_base' => $rutaBase,
+        'ruta_final' => $rutaFinal,
+        'ruta_objetivo' => $rutaObjetivo,
+        'file_exists_before' => $existiaAntes,
+        'is_dir_before' => $eraDirectorioAntes,
+        'file_exists_after' => $existeDespues,
+        'is_dir_after' => $esDirectorioDespues,
+        'mkdir_result' => $mkdirResult,
+        'mkdir_message' => $mkdirError,
+    ]);
+
+    if ($mkdirResult !== true && !$esDirectorioDespues) {
+        $detalle = $mkdirError ? " Error: {$mkdirError}" : '';
+        throw new \RuntimeException("mkdir fallo para la ruta {$rutaObjetivo}.{$detalle}");
+    }
+}
+
+private function logDirectorioClienteAudit(string $evento, array $contexto): void
+{
+    Log::info('Directorio cliente audit: '.$evento, $contexto);
 }
 
 private function normalizeFolderName(string $value): string
