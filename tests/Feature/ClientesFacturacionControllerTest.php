@@ -3,13 +3,24 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\ClientesController;
+use App\Services\DirectorioApiService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ClientesFacturacionControllerTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config([
+            'services.directorio_api.force_api' => false,
+        ]);
+    }
+
     public function test_store_guarda_facturacion_pendiente_por_defecto(): void
     {
         $this->withoutMiddleware();
@@ -61,29 +72,78 @@ class ClientesFacturacionControllerTest extends TestCase
         \Illuminate\Support\Facades\File::deleteDirectory($rutaBase);
     }
 
-    public function test_store_revierte_registro_si_falla_la_creacion_del_directorio(): void
+    public function test_store_guarda_cliente_aunque_falle_la_creacion_del_directorio(): void
     {
         $this->withoutMiddleware();
         $this->createClientesTable();
         $this->createCitiesTable();
         $this->createConfiguracionDirectorioTable();
+        Log::spy();
 
         DB::table('configuracion_directorio')->insert([
             'ruta_clientes' => 'Z:\\ruta_inaccesible_para_prueba',
         ]);
 
-        $response = $this->from(route('clientes.create'))->post(route('clientes.store'), $this->validClientPayload([
+        $response = $this->post(route('clientes.store'), $this->validClientPayload([
             'empresa' => 'VITTAL CONFORT',
             'codigo' => 'B549',
             'nit' => '24693943',
         ]));
 
-        $response->assertRedirect(route('clientes.create'));
-        $response->assertSessionHasErrors([
-            'general' => 'No fue posible crear la carpeta del cliente en el directorio base. El registro no se guardo.',
+        $response->assertRedirect(route('clientes.index'));
+        $response->assertSessionHas('status', 'Cliente creado correctamente.');
+
+        $cliente = DB::table('clientes_potenciales')->where('codigo', 'B549')->first();
+
+        $this->assertNotNull($cliente);
+
+        Log::shouldHaveReceived('error')->withArgs(function (string $message, array $context) use ($cliente): bool {
+            return $message === 'Fallo al provisionar directorios del cliente.'
+                && ($context['cliente_id'] ?? null) === $cliente->idclientes_potenciales
+                && ($context['codigo'] ?? null) === 'B549'
+                && ($context['empresa'] ?? null) === 'VITTAL CONFORT'
+                && is_string($context['error'] ?? null)
+                && $context['error'] !== '';
+        })->once();
+    }
+
+    public function test_store_guarda_cliente_aunque_falle_notificacion_api_de_directorios(): void
+    {
+        $this->withoutMiddleware();
+        $this->createClientesTable();
+        $this->createCitiesTable();
+        Log::spy();
+
+        config([
+            'services.directorio_api.force_api' => true,
         ]);
 
-        $this->assertNull(DB::table('clientes_potenciales')->where('codigo', 'B549')->first());
+        $mock = \Mockery::mock(DirectorioApiService::class);
+        $mock->shouldReceive('notificarClienteCreado')
+            ->once()
+            ->andThrow(new \RuntimeException('API de directorios no disponible.'));
+        $this->app->instance(DirectorioApiService::class, $mock);
+
+        $response = $this->post(route('clientes.store'), $this->validClientPayload([
+            'empresa' => 'OMEGA SAS',
+            'codigo' => 'O550',
+            'nit' => '900555000',
+        ]));
+
+        $response->assertRedirect(route('clientes.index'));
+        $response->assertSessionHas('status', 'Cliente creado correctamente.');
+
+        $cliente = DB::table('clientes_potenciales')->where('codigo', 'O550')->first();
+
+        $this->assertNotNull($cliente);
+
+        Log::shouldHaveReceived('error')->withArgs(function (string $message, array $context) use ($cliente): bool {
+            return $message === 'Fallo al provisionar directorios del cliente.'
+                && ($context['cliente_id'] ?? null) === $cliente->idclientes_potenciales
+                && ($context['codigo'] ?? null) === 'O550'
+                && ($context['empresa'] ?? null) === 'OMEGA SAS'
+                && ($context['error'] ?? null) === 'API de directorios no disponible.';
+        })->once();
     }
 
     public function test_update_asigna_fecha_actual_cuando_pasa_a_activo(): void

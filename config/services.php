@@ -29,6 +29,14 @@ return [
 
     'proforma_bulk_send_delay_seconds' => (int) env('PROFORMA_BULK_SEND_DELAY_SECONDS', 2),
 
+    'directorio_api' => [
+        'url' => env('DIRECTORIO_API_URL'),
+        'token' => env('DIRECTORIO_API_TOKEN'),
+        'timeout' => (int) env('DIRECTORIO_API_TIMEOUT', 10),
+        'verify_ssl' => env('DIRECTORIO_API_VERIFY_SSL', true),
+        'force_api' => env('DIRECTORIO_FORZAR_API', false),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

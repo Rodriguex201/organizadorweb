@@ -2,9 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\ConfiguracionDirectorio;
-use Illuminate\Support\Facades\Schema;
-
 class DirectorioAudit
 {
     private const REQUESTED_PATH = '\\\\192.168.1.150\\Soporte_00_Organizador_Empresas_Rm';
@@ -46,13 +43,7 @@ class DirectorioAudit
 
     private static function configuredPath(): ?string
     {
-        if (!Schema::hasTable('configuracion_directorio')) {
-            return null;
-        }
-
-        $config = ConfiguracionDirectorio::query()->first();
-
-        return trim((string) ($config?->ruta_clientes ?? ''));
+        return DirectorioClientePathResolver::resolve();
     }
 
     private static function whoAmI(): ?string

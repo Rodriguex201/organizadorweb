@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\ClientePotencial;
+use App\Services\DirectorioApiService;
 use App\Services\ClienteValorTotalCalculator;
+use App\Support\DirectorioClientePathResolver;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use App\Models\ConfiguracionDirectorio;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -294,25 +295,26 @@ class ClientesController extends Controller
             $payload['usuarios_idusuario'] = session('idusuario');
         }
 
+        $clienteId = null;
+
         try {
             DB::transaction(function () use ($mapping, $payload, &$clienteId): void {
-                $clienteId = null;
-
                 if ($mapping['id']) {
                     $clienteId = DB::table('clientes_potenciales')->insertGetId($payload, $mapping['id']);
-                } else {
-                    DB::table('clientes_potenciales')->insert($payload);
+                    return;
                 }
 
-                $this->crearEstructuraDirectoriosCliente($payload, $mapping, $clienteId);
+                DB::table('clientes_potenciales')->insert($payload);
             });
         } catch (\Throwable $exception) {
             report($exception);
 
             return back()->withInput()->withErrors([
-                'general' => 'No fue posible crear la carpeta del cliente en el directorio base. El registro no se guardo.',
+                'general' => 'No fue posible guardar el cliente.',
             ]);
         }
+
+        $this->intentarProvisionDirectoriosCliente($payload, $mapping, $clienteId);
 
         return redirect()->route('clientes.index')->with('status', 'Cliente creado correctamente.');
     }
@@ -1440,18 +1442,18 @@ private function crearEstructuraDirectoriosCliente(array $payload, array $mappin
     $empresa = (string) ($payload[$mapping['empresa'] ?? ''] ?? '');
 
     try {
-        if (!Schema::hasTable('configuracion_directorio')) {
+        $rutaBase = DirectorioClientePathResolver::resolve();
+
+        if ($rutaBase === null && !app()->environment('production') && !Schema::hasTable('configuracion_directorio')) {
             Log::warning('Directorio cliente audit: la tabla configuracion_directorio no existe; se omite la creacion de carpetas.', [
                 'cliente_id' => $clienteId,
             ]);
             return;
         }
 
-        $config = ConfiguracionDirectorio::query()->first();
-        $rutaBase = trim((string) ($config?->ruta_clientes ?? ''));
-
         $this->logDirectorioClienteAudit('inicio', [
             'cliente_id' => $clienteId,
+            'app_env' => app()->environment(),
             'ruta_base' => $rutaBase,
             'ruta_base_file_exists' => $rutaBase !== '' ? file_exists($rutaBase) : false,
             'ruta_base_is_dir' => $rutaBase !== '' ? is_dir($rutaBase) : false,
@@ -1459,7 +1461,7 @@ private function crearEstructuraDirectoriosCliente(array $payload, array $mappin
             'ruta_base_is_writable' => $rutaBase !== '' ? is_writable($rutaBase) : false,
         ]);
 
-        if ($rutaBase === '') {
+        if ($rutaBase === null || $rutaBase === '') {
             throw new \RuntimeException('No hay ruta base configurada para directorios de clientes.');
         }
 
@@ -1473,7 +1475,7 @@ private function crearEstructuraDirectoriosCliente(array $payload, array $mappin
             throw new \RuntimeException('No se pudo generar el nombre de la carpeta del cliente.');
         }
 
-        $rutaFinal = $this->joinWindowsPath($rutaBase, $nombreEmpresa);
+        $rutaFinal = $this->joinDirectoryPath($rutaBase, $nombreEmpresa);
 
         $this->logDirectorioClienteAudit('ruta_resuelta', [
             'cliente_id' => $clienteId,
@@ -1486,11 +1488,11 @@ private function crearEstructuraDirectoriosCliente(array $payload, array $mappin
         $this->crearDirectorioAuditado($rutaFinal, $clienteId, $rutaBase, $rutaFinal, 'cliente');
 
         foreach ($this->subcarpetasCliente() as $subcarpeta => $subcarpetasInternas) {
-            $rutaSubcarpeta = $this->joinWindowsPath($rutaFinal, $subcarpeta);
+            $rutaSubcarpeta = $this->joinDirectoryPath($rutaFinal, $subcarpeta);
             $this->crearDirectorioAuditado($rutaSubcarpeta, $clienteId, $rutaBase, $rutaFinal, 'subcarpeta');
 
             foreach ($subcarpetasInternas as $subcarpetaInterna) {
-                $rutaSubcarpetaInterna = $this->joinWindowsPath($rutaSubcarpeta, $subcarpetaInterna);
+                $rutaSubcarpetaInterna = $this->joinDirectoryPath($rutaSubcarpeta, $subcarpetaInterna);
                 $this->crearDirectorioAuditado($rutaSubcarpetaInterna, $clienteId, $rutaBase, $rutaFinal, 'subcarpeta_interna');
             }
         }
@@ -1517,6 +1519,34 @@ private function crearEstructuraDirectoriosCliente(array $payload, array $mappin
         ]);
 
         throw $exception;
+    }
+}
+
+private function intentarProvisionDirectoriosCliente(array $payload, array $mapping, mixed $clienteId): void
+{
+    $codigo = (string) ($payload[$mapping['codigo'] ?? ''] ?? '');
+    $empresa = (string) ($payload[$mapping['empresa'] ?? ''] ?? '');
+
+    try {
+        if (DirectorioApiService::shouldUseExternalApi()) {
+            app(DirectorioApiService::class)->notificarClienteCreado([
+                'clienteId' => $clienteId,
+                'codigo' => $codigo,
+                'empresa' => $empresa,
+            ]);
+
+            return;
+        }
+
+        $this->crearEstructuraDirectoriosCliente($payload, $mapping, $clienteId);
+    } catch (\Throwable $exception) {
+        Log::error('Fallo al provisionar directorios del cliente.', [
+            'cliente_id' => $clienteId,
+            'codigo' => $codigo,
+            'empresa' => $empresa,
+            'error' => $exception->getMessage(),
+            'error_class' => $exception::class,
+        ]);
     }
 }
 
@@ -1618,9 +1648,9 @@ private function normalizeFolderName(string $value): string
         return strtr($value, $replacements);
     }
 
-    private function joinWindowsPath(string $basePath, string $segment): string
+    private function joinDirectoryPath(string $basePath, string $segment): string
     {
-        return rtrim($basePath, '\\') . DIRECTORY_SEPARATOR . ltrim($segment, '\\');
+        return rtrim($basePath, '\\/') . DIRECTORY_SEPARATOR . ltrim($segment, '\\/');
     }
 
     private function subcarpetasCliente(): array

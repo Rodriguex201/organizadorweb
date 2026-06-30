@@ -19,18 +19,21 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
-Route::get('/debug/directorio-audit', [DirectorioAuditController::class, 'show'])
-    ->name('debug.directorio-audit.show');
-Route::get('/cobros/proformas-masivo/progreso/{executionId}', [CobrosController::class, 'massGenerationProgress'])
-    ->name('cobros.proformas-masivo.progress');
-Route::get('/cobros/proformas-masivo/envio/progreso/{executionId}', [CobrosController::class, 'massSendProgress'])
-    ->name('cobros.proformas-masivo.envio.progress');
+
+if (!app()->isProduction()) {
+    Route::get('/debug/directorio-audit', [DirectorioAuditController::class, 'show'])
+        ->name('debug.directorio-audit.show');
+}
 
 Route::middleware('auth.custom')->group(function (): void {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::redirect('/', '/clientes')->name('home');
 
+    Route::get('/cobros/proformas-masivo/progreso/{executionId}', [CobrosController::class, 'massGenerationProgress'])
+        ->name('cobros.proformas-masivo.progress');
+    Route::get('/cobros/proformas-masivo/envio/progreso/{executionId}', [CobrosController::class, 'massSendProgress'])
+        ->name('cobros.proformas-masivo.envio.progress');
     Route::get('/ciudades/buscar', [CiudadesController::class, 'buscar'])->name('ciudades.buscar');
     Route::get('/debug/empresa-servidor/{codigo}', [DebugEmpresaServidorController::class, 'show'])
         ->middleware('role.admin')
