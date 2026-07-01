@@ -232,21 +232,49 @@
                     });
                 }
 
-                const inputBusqueda = document.getElementById('ciudad_busqueda');
-                const botonBuscar = document.getElementById('ciudad_buscar_btn');
-                const inputDepartamento = document.getElementById('departamento');
-                const inputCiudadCodigo = document.getElementById('ciudad_codigo');
-                const estado = document.getElementById('ciudad_estado');
-                const resultados = document.getElementById('ciudad_resultados');
+                const getCityElements = () => {
+                    const inputBusqueda = document.getElementById('ciudad_busqueda');
+                    const botonBuscar = document.getElementById('ciudad_buscar_btn');
+                    const inputDepartamento = document.getElementById('departamento');
+                    const inputCiudadCodigo = document.getElementById('ciudad_codigo');
+                    const estado = document.getElementById('ciudad_estado');
+                    const resultados = document.getElementById('ciudad_resultados');
 
-                if (inputBusqueda && botonBuscar && inputDepartamento && inputCiudadCodigo && estado && resultados) {
+                    if (!inputBusqueda || !botonBuscar || !inputDepartamento || !inputCiudadCodigo || !estado || !resultados) {
+                        return null;
+                    }
+
+                    return {
+                        inputBusqueda,
+                        botonBuscar,
+                        inputDepartamento,
+                        inputCiudadCodigo,
+                        estado,
+                        resultados,
+                    };
+                };
+
+                if (getCityElements()) {
                     const setEstado = (texto, error = false) => {
-                        estado.textContent = texto;
-                        estado.classList.toggle('text-rose-600', error);
-                        estado.classList.toggle('text-slate-500', !error);
+                        const elements = getCityElements();
+
+                        if (!elements) {
+                            return;
+                        }
+
+                        elements.estado.textContent = texto;
+                        elements.estado.classList.toggle('text-rose-600', error);
+                        elements.estado.classList.toggle('text-slate-500', !error);
                     };
 
                     const syncCityValidity = () => {
+                        const elements = getCityElements();
+
+                        if (!elements) {
+                            return;
+                        }
+
+                        const { inputBusqueda, inputCiudadCodigo } = elements;
                         const hasSearchText = inputBusqueda.value.trim() !== '';
                         const hasSelectedCity = inputCiudadCodigo.value.trim() !== '';
 
@@ -264,11 +292,25 @@
                     };
 
                     const limpiarResultados = () => {
-                        resultados.innerHTML = '';
-                        resultados.classList.add('hidden');
+                        const elements = getCityElements();
+
+                        if (!elements) {
+                            return;
+                        }
+
+                        elements.resultados.innerHTML = '';
+                        elements.resultados.classList.add('hidden');
                     };
 
                     const pintarResultados = (items) => {
+                        const elements = getCityElements();
+
+                        if (!elements) {
+                            return;
+                        }
+
+                        const { inputBusqueda, inputDepartamento, inputCiudadCodigo, resultados } = elements;
+
                         limpiarResultados();
 
                         if (!items.length) {
@@ -298,17 +340,31 @@
                         });
                     };
 
-                    inputBusqueda.addEventListener('input', () => {
-                        inputBusqueda.value = toUppercase(inputBusqueda.value);
-                        inputDepartamento.value = '';
-                        inputCiudadCodigo.value = '';
+                    const resetCitySelection = () => {
+                        const elements = getCityElements();
+
+                        if (!elements) {
+                            return;
+                        }
+
+                        elements.inputBusqueda.value = toUppercase(elements.inputBusqueda.value);
+                        elements.inputDepartamento.value = '';
+                        elements.inputCiudadCodigo.value = '';
                         limpiarResultados();
                         setEstado('Usa buscar para seleccionar una ciudad.');
                         syncCityValidity();
-                    });
+                    };
 
                     const ejecutarBusquedaCiudad = async () => {
+                        const elements = getCityElements();
+
+                        if (!elements) {
+                            return;
+                        }
+
+                        const { inputBusqueda, inputDepartamento, inputCiudadCodigo } = elements;
                         const termino = inputBusqueda.value.trim();
+
                         inputDepartamento.value = '';
                         inputCiudadCodigo.value = '';
                         syncCityValidity();
@@ -340,16 +396,42 @@
                         }
                     };
 
-                    botonBuscar.addEventListener('click', ejecutarBusquedaCiudad);
+                    clienteForm?.addEventListener('input', (event) => {
+                        const target = event.target;
 
-                    inputBusqueda.addEventListener('keydown', (event) => {
-                        if (event.key !== 'Enter') {
+                        if (!(target instanceof HTMLInputElement) || target.id !== 'ciudad_busqueda') {
+                            return;
+                        }
+
+                        resetCitySelection();
+                    });
+
+                    clienteForm?.addEventListener('click', (event) => {
+                        const target = event.target;
+
+                        if (!(target instanceof Element) || !target.closest('#ciudad_buscar_btn')) {
                             return;
                         }
 
                         event.preventDefault();
                         ejecutarBusquedaCiudad();
                     });
+
+                    clienteForm?.addEventListener('keydown', (event) => {
+                        const target = event.target;
+
+                        if (
+                            event.key !== 'Enter'
+                            || !(target instanceof HTMLInputElement)
+                            || target.id !== 'ciudad_busqueda'
+                        ) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        event.stopPropagation();
+                        ejecutarBusquedaCiudad();
+                    }, true);
 
                     syncCityValidity();
                 }
