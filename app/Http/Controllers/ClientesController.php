@@ -636,6 +636,20 @@ class ClientesController extends Controller
             'vlrextrae' => 'vlrextrae',
         ];
 
+        $numericOptionalDefaultsToZero = [
+            'vlrterminal',
+            'vlrnomina',
+            'nominaterminal',
+            'vlrfactura',
+            'vlrsoporte',
+            'vlrextra',
+            'vlrextra2',
+            'numeromoviles',
+            'vlrmovil',
+            'numextra',
+            'vlrextrae',
+        ];
+
         foreach ($numericInputsToLogical as $input => $logicalKey) {
             $column = $mapping[$logicalKey] ?? null;
             if (!$column || !array_key_exists($input, $validated)) {
@@ -644,7 +658,7 @@ class ClientesController extends Controller
 
             $payload[$column] = $validated[$input] !== '' && $validated[$input] !== null
                 ? (float) $validated[$input]
-                : null;
+                : (in_array($input, $numericOptionalDefaultsToZero, true) ? 0 : null);
         }
 
         if (($mapping['valor_total'] ?? null) && array_key_exists('valor_total', $validated)) {
