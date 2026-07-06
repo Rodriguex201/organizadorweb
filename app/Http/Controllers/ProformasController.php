@@ -21,7 +21,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ProformasController extends Controller
 {
-    private const FILTER_KEYS = ['nro_prof', 'nit', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio', 'filtro_nota'];
+    private const FILTER_KEYS = ['nro_prof', 'empresa', 'emisora', 'mes', 'anio', 'estado', 'envio', 'filtro_nota'];
 
     public function __construct(
         private readonly ProformasService $proformasService,
@@ -59,7 +59,6 @@ class ProformasController extends Controller
 
         $validated = Validator::make($rawFilters, [
             'nro_prof' => ['nullable', 'string', 'max:100'],
-            'nit' => ['nullable', 'string', 'max:60'],
             'empresa' => ['nullable', 'string', 'max:200'],
             'emisora' => ['nullable', 'string', 'max:20'],
             'mes' => ['nullable', 'string', 'max:20'],
@@ -76,7 +75,6 @@ class ProformasController extends Controller
 
         $filters = [
             'nro_prof' => $validated['nro_prof'] ?? null,
-            'nit' => $validated['nit'] ?? null,
             'empresa' => $validated['empresa'] ?? null,
             'emisora' => $validated['emisora'] ?? null,
             'mes' => $periodo['mes'],
@@ -725,7 +723,6 @@ class ProformasController extends Controller
 
         session([
             'proformas.numero' => $filters['nro_prof'],
-            'proformas.nit' => $filters['nit'],
             'proformas.empresa' => $filters['empresa'],
             'proformas.emisora' => $filters['emisora'],
             'proformas.mes' => $filters['mes'],
@@ -740,7 +737,6 @@ class ProformasController extends Controller
     {
         return [
             'nro_prof' => null,
-            'nit' => null,
             'empresa' => null,
             'emisora' => null,
             'mes' => (int) now()->format('n'),
@@ -789,7 +785,6 @@ class ProformasController extends Controller
 
         return $this->sanitizeFilterArray([
             'nro_prof' => session('proformas.numero'),
-            'nit' => session('proformas.nit'),
             'empresa' => session('proformas.empresa'),
             'emisora' => session('proformas.emisora'),
             'mes' => session('proformas.mes'),

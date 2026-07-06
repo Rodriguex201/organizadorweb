@@ -73,7 +73,6 @@ class ProformasService
             ->select($select);
 
         $nroProf = trim((string) ($filters['nro_prof'] ?? ''));
-        $nit = trim((string) ($filters['nit'] ?? ''));
         $empresa = $this->normalizeTextFilter($filters['empresa'] ?? '');
         $emisora = trim((string) ($filters['emisora'] ?? ''));
         $estado = $this->normalizarEntero($filters['estado'] ?? null);
@@ -84,7 +83,6 @@ class ProformasService
 
         $query
             ->when($nroProf !== '', fn ($q) => $q->where('p.nro_prof', 'like', "%{$nroProf}%"))
-            ->when($nit !== '', fn ($q) => $q->where('p.nit', 'like', "%{$nit}%"))
             ->when($emisora !== '', fn ($q) => $q->where('p.emisora', $emisora))
             ->when($estado !== null, fn ($q) => $q->where('p.estado', $estado))
             ->when($envio !== null, fn ($q) => $q->where('p.enviado', $envio))
@@ -507,6 +505,7 @@ class ProformasService
         $query->where(function (Builder $empresaQuery) use ($empresaLike): void {
             $empresaQuery
                 ->whereRaw($this->normalizedSqlExpression('p.emp').' LIKE ?', [$empresaLike])
+                ->orWhereRaw($this->normalizedSqlExpression('p.nit').' LIKE ?', [$empresaLike])
                 ->orWhereExists(
                     $this->buildClienteRelacionSubquery()
                         ->selectRaw('1')

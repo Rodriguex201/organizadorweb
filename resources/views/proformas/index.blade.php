@@ -49,12 +49,9 @@
                 <input id="nro_prof" name="nro_prof" value="{{ $filters['nro_prof'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div class="min-w-[120px] max-w-[180px] w-full">
-                <label for="nit" class="mb-1 block text-sm font-medium">NIT</label>
-                <input id="nit" name="nit" value="{{ $filters['nit'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="empresa" class="mb-1 block text-sm font-medium">Código o Empresa</label>
-                <input id="empresa" name="empresa" value="{{ $filters['empresa'] ?? '' }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="empresa" name="empresa" value="{{ $filters['empresa'] ?? '' }}" placeholder="CÃ³digo, nombre, empresa o NIT" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <p class="mt-1 text-xs text-slate-500">Admite bÃºsqueda por cÃ³digo, nombre, empresa o NIT.</p>
             </div>
             <div class="min-w-[120px] max-w-[180px] w-full">
                 <label for="emisora" class="mb-1 block text-sm font-medium">Emisora</label>
@@ -443,6 +440,22 @@
             overlayMessage: 'Consultando proformas, por favor espere...',
             overlayDelayMs: 500,
         });
+
+        const companySearchInput = document.getElementById('empresa');
+        const companySearchLabel = document.querySelector('label[for="empresa"]');
+        const companySearchHelp = companySearchInput?.parentElement?.querySelector('p');
+
+        if (companySearchLabel) {
+            companySearchLabel.textContent = 'Codigo o Empresa';
+            companySearchLabel.title = 'Busca por codigo, nombre, empresa o NIT';
+        }
+
+        if (companySearchInput) {
+            companySearchInput.placeholder = 'Codigo, nombre, empresa o NIT';
+            companySearchInput.title = 'Busca por codigo, nombre, empresa o NIT';
+        }
+
+        companySearchHelp?.remove();
 
         const ESTADO_GENERADA = {{ \App\Services\ProformasService::ESTADO_GENERADA }};
         const ESTADO_ENVIADA = {{ \App\Services\ProformasService::ESTADO_ENVIADA }};
