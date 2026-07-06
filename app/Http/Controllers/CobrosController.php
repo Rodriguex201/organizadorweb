@@ -349,6 +349,7 @@ $filters = [
                 'fallidas' => (int) ($resultado['fallidas'] ?? 0),
                 'pdf_regenerados' => (int) ($resultado['pdf_regenerados'] ?? 0),
                 'saltadas_completas' => (int) ($resultado['saltadas_completas'] ?? 0),
+                'omitidas_detalle' => array_values($resultado['omitidas_detalle'] ?? []),
             ];
             $sendBatchPayload = session('cobros.proformas_listas_para_envio');
             $sendBatchProformas = is_array($sendBatchPayload['proformas'] ?? null) ? array_values($sendBatchPayload['proformas']) : [];
@@ -391,6 +392,10 @@ $filters = [
                     'total' => (int) $candidatos->count(),
                     'summary' => $summary,
                     'send_batch' => $sendBatch,
+                    'pending_facturacion' => [
+                        'count' => count($resultado['pendientes_facturacion'] ?? []),
+                    ],
+                    'redirect_url' => $redirect->getTargetUrl(),
                 ]);
             }
 
@@ -1074,6 +1079,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 'reviewValues' => $formData,
                 'formData' => $formData,
                 'proformaPersistidaId' => $this->proformaStoreService->findExistingProformaIdFromCobro($cobro),
+                'facturacionCliente' => $this->buildFacturacionClienteData($cobro),
             ])->with('status', 'Valores recalculados en pantalla. Aún no se guardan.')->with('status_type', 'warning');
         }
 
@@ -1439,8 +1445,29 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         return array_merge([
             'codigo' => $codigo !== '' ? $codigo : 'Sin codigo',
             'empresa' => $empresa !== '' ? $empresa : 'Sin nombre',
+            'nit' => null,
             'motivo' => $motivo !== '' ? $motivo : 'Motivo no especificado',
         ], $extra);
+    }
+
+    private function resolveOmitidaNit(object $source, ?string $fallback = null): ?string
+    {
+        $candidates = [
+            $source->nit ?? null,
+            $source->cliente_nit ?? null,
+            $source->nit_cliente ?? null,
+            $fallback,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $nit = trim((string) ($candidate ?? ''));
+
+            if ($nit !== '') {
+                return $nit;
+            }
+        }
+
+        return null;
     }
 
     private function procesarGeneracionMasiva(int $grupo, array $filters, \Illuminate\Support\Collection $candidatos, ?string $progressKey = null): array
@@ -1478,6 +1505,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             $idCobro = (int) ($candidato->id_cobro ?? 0);
             $codigoCliente = trim((string) ($candidato->codigo ?? 'Sin codigo'));
             $empresaCliente = trim((string) ($candidato->empresa ?? $candidato->nombre ?? 'Sin nombre'));
+            $nitCliente = $this->resolveOmitidaNit($candidato);
             $markProgress = function (string $message) use ($progressKey, $grupo, $totalCandidates, &$processedCount, &$creadas, &$actualizadas, &$omitidas, &$omitidasProtegidas, &$fallidas, &$pdfRegenerados, &$saltadasCompletas): void {
                 $processedCount++;
                 $this->updateMassGenerationProgress($progressKey, $grupo, $totalCandidates, $processedCount, $message, [
@@ -1493,14 +1521,17 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
             if ($idCobro <= 0) {
                 $omitidas++;
-                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Datos incompletos');
-                $markProgress("Omitido {$codigoCliente}: datos incompletos.");
+                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'ID de cobro invalido o ausente.', [
+                    'nit' => $nitCliente,
+                ]);
+                $markProgress("Omitido {$codigoCliente}: id_cobro invalido o ausente.");
                 continue;
             }
 
             if ($this->clienteTieneFacturacionPendiente($candidato)) {
                 $omitidas++;
-                $detalle = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Estado Facturacion = PENDIENTE', [
+                $detalle = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Nota de cobro pendiente de activacion.', [
+                    'nit' => $nitCliente,
                     'cliente_id' => (int) ($candidato->cliente_id ?? $candidato->id_cliente ?? 0),
                     'id_cobro' => $idCobro,
                     'fecha_arriendo' => $candidato->fecha_arriendo ?? null,
@@ -1517,7 +1548,9 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
             if ($this->clienteRetiradoService->estaRetirado($candidato)) {
                 $omitidas++;
-                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Cliente retirado');
+                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Cliente retirado.', [
+                    'nit' => $nitCliente,
+                ]);
                 $markProgress("Omitido {$codigoCliente}: cliente retirado.");
                 continue;
             }
@@ -1530,12 +1563,16 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                     'id_cobro' => $idCobro,
                 ]);
                 $omitidas++;
-                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Datos incompletos');
+                $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, 'Cobro no encontrado para el id_cobro asociado.', [
+                    'nit' => $nitCliente,
+                    'id_cobro' => $idCobro,
+                ]);
                 $markProgress("Omitido {$codigoCliente}: cobro no encontrado.");
                 continue;
             }
 
             $cobrosEncontradosEnLoop++;
+            $nitCliente = $this->resolveOmitidaNit($cobro, $nitCliente);
 
             try {
                 $estadoExistente = $this->resolveMassGenerationExistingProformaState($idCobro);
@@ -1594,7 +1631,10 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 if (($resultado['blocked'] ?? false) === true) {
                     $motivoOmitida = (string) ($resultado['message'] ?? 'No se pudo generar la proforma.');
                     $omitidas++;
-                    $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, $motivoOmitida);
+                    $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, $motivoOmitida, [
+                        'nit' => $nitCliente,
+                        'id_cobro' => $idCobro,
+                    ]);
                     $markProgress("Omitido {$codigoCliente}: {$motivoOmitida}");
                     continue;
                 }
@@ -1604,6 +1644,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                     $omitidasProtegidas++;
                     $motivoOmitida = (string) ($resultado['message'] ?? 'Proforma protegida omitida en la generación masiva.');
                     $omitidasDetalle[] = $this->buildOmitidaDetalleItem($codigoCliente, $empresaCliente, $motivoOmitida, [
+                        'nit' => $nitCliente,
                         'id_cobro' => $idCobro,
                         'proforma_id' => (int) ($resultado['proforma_id'] ?? 0),
                         'protegida' => true,

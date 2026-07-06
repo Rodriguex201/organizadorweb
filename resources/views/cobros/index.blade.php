@@ -107,8 +107,14 @@
             <div class="mt-3 space-y-3">
                 @foreach($proformasMasivoOmitidas as $omitida)
                     <div class="rounded border border-amber-100 bg-white/70 px-3 py-2">
-                        <p class="font-medium">&bull; {{ $omitida['codigo'] ?? 'Sin codigo' }} - {{ $omitida['empresa'] ?? 'Sin nombre' }}</p>
-                        <p class="mt-1 text-amber-800">{{ $omitida['motivo'] ?? 'Motivo no especificado' }}</p>
+                        <p class="font-medium">
+                            &bull; {{ $omitida['empresa'] ?? 'Sin nombre' }}
+                            @if(!empty($omitida['nit']))
+                                (NIT {{ $omitida['nit'] }})
+                            @endif
+                        </p>
+                        <p class="mt-1 text-xs text-amber-700">Codigo: {{ $omitida['codigo'] ?? 'Sin codigo' }}</p>
+                        <p class="mt-1 text-amber-800">Motivo: {{ $omitida['motivo'] ?? 'Motivo no especificado' }}</p>
                     </div>
                 @endforeach
             </div>
@@ -797,6 +803,46 @@
             </div>
         `;
 
+        const escapeMassGenerationHtml = (value) => String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+
+        const buildEnhancedMassGenerationSummaryHtml = (group, summary, message) => {
+            const omitidasDetalle = Array.isArray(summary?.omitidas_detalle) ? summary.omitidas_detalle : [];
+            const detalleHtml = omitidasDetalle.length === 0
+                ? ''
+                : `
+                    <div class="mt-4 space-y-3">
+                        ${omitidasDetalle.map((omitida) => `
+                            <div class="rounded border border-amber-200 bg-white/80 px-3 py-3 text-amber-900">
+                                <p class="font-medium">
+                                    &bull; ${escapeMassGenerationHtml(omitida?.empresa || 'Sin nombre')}
+                                    ${omitida?.nit ? ` (NIT ${escapeMassGenerationHtml(omitida.nit)})` : ''}
+                                </p>
+                                <p class="mt-1 text-xs text-amber-700">Codigo: ${escapeMassGenerationHtml(omitida?.codigo || 'Sin codigo')}</p>
+                                <p class="mt-1">Motivo: ${escapeMassGenerationHtml(omitida?.motivo || 'Motivo no especificado')}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+            return `
+                <p class="font-semibold">${escapeMassGenerationHtml(message || `Generacion masiva grupo ${group} finalizada.`)}</p>
+                <div class="mt-2 grid grid-cols-1 gap-1 md:grid-cols-2">
+                    <p>Generadas: ${summary.generadas ?? 0}</p>
+                    <p>Actualizadas: ${summary.actualizadas ?? 0}</p>
+                    <p>Omitidas protegidas: ${summary.omitidas_protegidas ?? 0}</p>
+                    <p>Omitidas: ${summary.omitidas ?? 0}</p>
+                    <p>Fallidas: ${summary.fallidas ?? 0}</p>
+                    <p>PDF regenerados: ${summary.pdf_regenerados ?? 0}</p>
+                </div>
+                ${detalleHtml}
+            `;
+        };
+
         const clearSendBatchPanel = () => {
             if (!sendBatchPanelContainer) {
                 return;
@@ -1187,7 +1233,11 @@
                         },
                     });
                     closeMassGenerationModal();
-                    showMassGenerationFeedback(buildMassGenerationSummaryHtml(group, payload.summary || {}, payload.message), 'success');
+                    showMassGenerationFeedback(buildEnhancedMassGenerationSummaryHtml(group, payload.summary || {}, payload.message), 'success');
+                    if (Number(payload.pending_facturacion?.count || 0) > 0 && payload.redirect_url) {
+                        window.location.assign(payload.redirect_url);
+                        return;
+                    }
                     currentDynamicSendBatch = payload.send_batch || null;
                     if (currentDynamicSendBatch) {
                         currentDynamicSendBatch.progress_url_template = '{{ route('cobros.proformas-masivo.envio.progress', ['executionId' => '__EXECUTION_ID__']) }}';
@@ -1482,6 +1532,7 @@
         openButton.addEventListener('click', openModal);
         closeButton.addEventListener('click', closeModal);
         cancelButton.addEventListener('click', closeModal);
+        openModal();
 
         selectAllButton.addEventListener('click', () => {
             allSelected = !allSelected;

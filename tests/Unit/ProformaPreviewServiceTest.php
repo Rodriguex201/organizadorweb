@@ -15,13 +15,13 @@ class ProformaPreviewServiceTest extends TestCase
         $catalogo = $this->createMock(ConceptosCatalogService::class);
         $catalogo->method('findByCodes')
             ->willReturn([
-                '0010' => ['codigo' => '0010', 'nombre' => 'Mensualidad SaaS', 'cuenta' => '4130', 'activo' => 1],
+                '0010' => ['codigo' => '0010', 'nombre' => 'SERVICIO CLOUD ARRENDAMIENTO / ACTUALIZACION SOFTWARE (SAAS)', 'cuenta' => '4130', 'activo' => 1],
                 '0011' => ['codigo' => '0011', 'nombre' => 'SERVICIO CLOUD TERMINALES EXTRA', 'cuenta' => '4131', 'activo' => 1],
-                '0099' => ['codigo' => '0099', 'nombre' => 'Nomina electronica', 'cuenta' => '4132', 'activo' => 1],
-                '0081' => ['codigo' => '0081', 'nombre' => 'Facturacion electronica', 'cuenta' => '4133', 'activo' => 1],
-                '0101' => ['codigo' => '0101', 'nombre' => 'Recepcion compras', 'cuenta' => '4134', 'activo' => 1],
-                '0102' => ['codigo' => '0102', 'nombre' => 'Soporte electronico', 'cuenta' => '4135', 'activo' => 1],
-                'EXTRA' => ['codigo' => 'EXTRA', 'nombre' => 'Cargo extra manual', 'cuenta' => '4199', 'activo' => 1],
+                '0099' => ['codigo' => '0099', 'nombre' => 'SERVICIO CLOUD NOMINA ELECTRONICA', 'cuenta' => '4132', 'activo' => 1],
+                '0081' => ['codigo' => '0081', 'nombre' => 'SERVICIO CLOUD FACTURACION ELECTRONICA', 'cuenta' => '4133', 'activo' => 1],
+                '0101' => ['codigo' => '0101', 'nombre' => 'SERVICIO CLOUD RECEPCION COMPRAS', 'cuenta' => '4134', 'activo' => 1],
+                '0102' => ['codigo' => '0102', 'nombre' => 'SERVICIO CLOUD SOPORTE ELECTRONICO', 'cuenta' => '4135', 'activo' => 1],
+                'EXTRA' => ['codigo' => 'EXTRA', 'nombre' => 'CARGO EXTRA MANUAL', 'cuenta' => '4199', 'activo' => 1],
             ]);
 
         $service = new ProformaPreviewService(
@@ -65,25 +65,47 @@ class ProformaPreviewServiceTest extends TestCase
 
         $lineaExtra = null;
         $lineaFacturacion = null;
+        $lineaMensualidad = null;
+        $lineaNomina = null;
+        $lineaSoporte = null;
         foreach ($lineas as $linea) {
+            if (($linea['codigo'] ?? null) === '0010') {
+                $lineaMensualidad = $linea;
+            }
+
             if (($linea['codigo'] ?? null) === '0011') {
                 $lineaExtra = $linea;
+            }
+
+            if (($linea['codigo'] ?? null) === '0099') {
+                $lineaNomina = $linea;
             }
 
             if (($linea['codigo'] ?? null) === '0081') {
                 $lineaFacturacion = $linea;
             }
+
+            if (($linea['codigo'] ?? null) === '0102') {
+                $lineaSoporte = $linea;
+            }
         }
 
+        $this->assertNotNull($lineaMensualidad);
         $this->assertNotNull($lineaExtra);
+        $this->assertNotNull($lineaNomina);
         $this->assertNotNull($lineaFacturacion);
+        $this->assertNotNull($lineaSoporte);
+        $this->assertSame('SERVICIO CLOUD ARRENDAMIENTO / ACTUALIZACION SOFTWARE (SAAS)', $lineaMensualidad['concepto']);
         $this->assertSame('SERVICIO CLOUD TERMINALES EXTRA', $lineaExtra['concepto']);
+        $this->assertSame('SERVICIO CLOUD NOMINA ELECTRONICA', $lineaNomina['concepto']);
         $this->assertSame(2.0, $lineaExtra['cantidad']);
         $this->assertSame(30.0, $lineaExtra['valor_unitario']);
         $this->assertSame(60.0, $lineaExtra['valor_parcial']);
+        $this->assertSame('SERVICIO CLOUD FACTURACION ELECTRONICA', $lineaFacturacion['concepto']);
         $this->assertSame(8.0, $lineaFacturacion['cantidad']);
         $this->assertSame(2.0, $lineaFacturacion['valor_unitario']);
         $this->assertSame(16.0, $lineaFacturacion['valor_parcial']);
+        $this->assertSame('SERVICIO CLOUD SOPORTE ELECTRONICO', $lineaSoporte['concepto']);
         $this->assertSame(317.0, $preview['detalle']['total_preview']);
         $this->assertSame(317.0, $preview['detalle']['total_calculado']);
     }
@@ -93,8 +115,8 @@ class ProformaPreviewServiceTest extends TestCase
         $catalogo = $this->createMock(ConceptosCatalogService::class);
         $catalogo->method('findByCodes')
             ->willReturn([
-                '0010' => ['codigo' => '0010', 'nombre' => 'Mensualidad SaaS', 'cuenta' => '4130', 'activo' => 1],
-                '0099' => ['codigo' => '0099', 'nombre' => 'Nomina electronica', 'cuenta' => '4132', 'activo' => 1],
+                '0010' => ['codigo' => '0010', 'nombre' => 'SERVICIO CLOUD ARRENDAMIENTO / ACTUALIZACION SOFTWARE (SAAS)', 'cuenta' => '4130', 'activo' => 1],
+                '0099' => ['codigo' => '0099', 'nombre' => 'SERVICIO CLOUD NOMINA ELECTRONICA', 'cuenta' => '4132', 'activo' => 1],
             ]);
         $catalogo->method('resolve')
             ->willReturn([

@@ -101,6 +101,9 @@
                     ($dashboard['suma_total_por_estado'][\App\Services\ProformasService::ESTADO_PAGADA]['total'] ?? 0)
                     + ($dashboard['suma_total_por_estado'][\App\Services\ProformasService::ESTADO_FACTURADA]['total'] ?? 0)
                 );
+                $totalPendiente = (float) (
+                    $dashboard['suma_total_por_estado'][\App\Services\ProformasService::ESTADO_ENVIADA]['total'] ?? 0
+                );
             @endphp
             <h2 class="text-sm font-semibold uppercase text-slate-600">Suma total del periodo</h2>
             <p class="mt-2 text-2xl font-bold">$ {{ number_format((float) $dashboard['suma_total_vtotal'], 2, ',', '.') }}</p>
@@ -110,16 +113,34 @@
                 <p class="mt-1 text-xl font-bold text-emerald-700">$ {{ number_format($totalPagado, 2, ',', '.') }}</p>
                 <p class="mt-1 text-xs text-emerald-600">Pagada + Facturada</p>
             </div>
+            <div class="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
+                <p class="text-xs font-semibold uppercase tracking-wide text-violet-700">Pendiente</p>
+                <p class="mt-1 text-xl font-bold text-violet-700">$ {{ number_format($totalPendiente, 2, ',', '.') }}</p>
+                <p class="mt-1 text-xs text-violet-600">Enviada / Pago pendiente</p>
+            </div>
         </div>
 
         <div class="rounded-lg bg-white p-4 shadow">
             <h2 class="text-sm font-semibold uppercase text-slate-600">Suma total por estado</h2>
             <div class="mt-3 space-y-2 text-sm">
                 @foreach($dashboard['suma_total_por_estado'] as $estadoCodigo => $datosEstado)
-                    <div class="flex items-center justify-between">
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($estadoCodigo) }}">{{ $datosEstado['label'] }}</span>
-                        <span class="font-medium">{{ number_format((int) $datosEstado['cantidad'], 0, ',', '.') }} / $ {{ number_format((float) $datosEstado['total'], 2, ',', '.') }}</span>
-                    </div>
+                    @php
+                        $mostrarPagoPendiente = strcasecmp((string) $datosEstado['label'], 'Enviada') === 0;
+                    @endphp
+                    @if($mostrarPagoPendiente)
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($estadoCodigo) }}">{{ $datosEstado['label'] }}</span>
+                                <span class="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">Pago Pendiente</span>
+                            </div>
+                            <span class="font-medium">{{ number_format((int) $datosEstado['cantidad'], 0, ',', '.') }} / $ {{ number_format((float) $datosEstado['total'], 2, ',', '.') }}</span>
+                        </div>
+                    @else
+                        <div class="flex items-center justify-between">
+                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($estadoCodigo) }}">{{ $datosEstado['label'] }}</span>
+                            <span class="font-medium">{{ number_format((int) $datosEstado['cantidad'], 0, ',', '.') }} / $ {{ number_format((float) $datosEstado['total'], 2, ',', '.') }}</span>
+                        </div>
+                    @endif
                 @endforeach
             </div>
         </div>
