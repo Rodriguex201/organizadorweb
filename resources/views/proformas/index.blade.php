@@ -574,11 +574,12 @@
             menu.classList.add('opacity-100', 'scale-100');
         };
 
+        const versionedPdfUrl = (url) => `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`;
 
         const getActionsForState = (estadoActual, enviadoActual, pdfUrl, enviarUrl, activationShowUrl) => {
             const acciones = [];
             if (pdfUrl) {
-                acciones.push({ type: 'link', label: 'Ver PDF', url: pdfUrl });
+                acciones.push({ type: 'link', label: 'Ver PDF', url: versionedPdfUrl(pdfUrl) });
             }
 
             if (activationShowUrl) {

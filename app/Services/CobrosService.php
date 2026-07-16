@@ -136,6 +136,43 @@ return $query
             ];
     }
 
+    public function getPeriodSummaryByRegimen(array $filters = []): array
+    {
+        return $this->buildFilteredCobrosQuery($filters)
+            ->selectRaw("
+                CASE UPPER(TRIM(COALESCE(cp.regimen, '')))
+                    WHEN 'PCS' THEN 'PCS'
+                    WHEN 'SMP' THEN 'SMP'
+                    ELSE 'SAS'
+                END as regimen
+            ")
+            ->selectRaw('COUNT(DISTINCT ve.id_cliente) as empresas')
+            ->selectRaw('COALESCE(SUM(ve.valor_total), 0) as valor_total')
+            ->groupByRaw("
+                CASE UPPER(TRIM(COALESCE(cp.regimen, '')))
+                    WHEN 'PCS' THEN 'PCS'
+                    WHEN 'SMP' THEN 'SMP'
+                    ELSE 'SAS'
+                END
+            ")
+            ->get()
+            ->all();
+    }
+
+    public function getAvailableYears(): array
+    {
+        return DB::table('valores_externos as ve')
+            ->selectRaw($this->valoresExternosYearSql('ve').' as anio')
+            ->whereRaw($this->valoresExternosYearSql('ve').' IS NOT NULL')
+            ->distinct()
+            ->orderBy('anio')
+            ->pluck('anio')
+            ->map(static fn (mixed $year): int => (int) $year)
+            ->filter(static fn (int $year): bool => $year > 0)
+            ->values()
+            ->all();
+    }
+
 
     public function debugSnapshot(array $filters = []): array
     {

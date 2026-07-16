@@ -84,7 +84,7 @@ class EmpresaActivacionService
                 }
 
                 $filasGlobales = DB::connection($contexto['conexion'])->update(
-                    'UPDATE `empresas`.`empresas` SET emprfinit = ?, emprfpago = ? WHERE emprobra = ?',
+                    'UPDATE `empresas`.`empresas` SET emprfpago = ?, emprfinit = ? WHERE emprobra = ?',
                     [$fechaInicio, $fechaFin, $contexto['codigo']],
                 );
 
@@ -220,12 +220,12 @@ class EmpresaActivacionService
         $registroIndividualExiste = $individual !== null;
         $fechaInicioIndividual = $this->normalizarFecha($individual->seg_fecha ?? null);
         $fechaFinIndividual = $this->normalizarFecha($individual->seg_maxima ?? null);
-        $fechaInicioGlobal = $this->normalizarFecha($global->emprfinit ?? null);
-        $fechaFinGlobal = $this->normalizarFecha($global->emprfpago ?? null);
-        $fechaInicioReferencia = $registroIndividualExiste ? $fechaInicioIndividual : $fechaFinGlobal;
-        $fechaFinReferencia = $registroIndividualExiste ? $fechaFinIndividual : $fechaInicioGlobal;
-        $comparacion1 = $fechaInicioIndividual === $fechaFinGlobal;
-        $comparacion2 = $fechaFinIndividual === $fechaInicioGlobal;
+        $fechaInicioGlobal = $this->normalizarFecha($global->emprfpago ?? null);
+        $fechaFinGlobal = $this->normalizarFecha($global->emprfinit ?? null);
+        $fechaInicioReferencia = $registroIndividualExiste ? $fechaInicioIndividual : $fechaInicioGlobal;
+        $fechaFinReferencia = $registroIndividualExiste ? $fechaFinIndividual : $fechaFinGlobal;
+        $comparacion1 = $fechaInicioIndividual === $fechaInicioGlobal;
+        $comparacion2 = $fechaFinIndividual === $fechaFinGlobal;
         $hayDiferencias = $registroIndividualExiste && (!$comparacion1 || !$comparacion2);
 
         Log::info('[ACTIVACION FECHAS DEBUG]', [
@@ -236,8 +236,8 @@ class EmpresaActivacionService
             'emprfinit_raw' => $global->emprfinit ?? null,
             'seg_fecha_normalizada' => $fechaInicioIndividual,
             'seg_maxima_normalizada' => $fechaFinIndividual,
-            'emprfpago_normalizada' => $fechaFinGlobal,
-            'emprfinit_normalizada' => $fechaInicioGlobal,
+            'emprfpago_normalizada' => $fechaInicioGlobal,
+            'emprfinit_normalizada' => $fechaFinGlobal,
             'comparacion_1' => [
                 'columnas' => 'seg_fecha vs emprfpago',
                 'resultado' => $comparacion1,

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ClienteCrecimientoReportService;
 use App\Services\EmpresaActivacionService;
+use App\Services\FinanzasDashboardService;
 use App\Services\ProformaEmailService;
 use App\Services\ProformaDashboardExportService;
 use App\Services\ProformaPdfService;
@@ -28,6 +30,7 @@ class ProformasController extends Controller
         private readonly ProformaPdfService $proformaPdfService,
         private readonly ProformaEmailService $proformaEmailService,
         private readonly ProformaDashboardExportService $proformaDashboardExportService,
+        private readonly ClienteCrecimientoReportService $clienteCrecimientoReportService,
         private readonly EmpresaActivacionService $empresaActivacionService,
     ) {
     }
@@ -229,6 +232,68 @@ class ProformasController extends Controller
 
     public function dashboard(Request $request): View
     {
+        $activeTab = $this->normalizeDashboardTab($request->query('tab'));
+
+        if ($activeTab === 'crecimiento') {
+            $validated = $request->validate([
+                'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+            ]);
+
+            $anio = (int) ($validated['anio'] ?? now()->format('Y'));
+
+            return view('proformas.dashboard', [
+                'activeTab' => $activeTab,
+                'dashboard' => $this->emptyDashboardData(),
+                'growthReport' => $this->clienteCrecimientoReportService->buildAnnualReport($anio),
+                'growthHistoricalReport' => $this->clienteCrecimientoReportService->buildHistoricalGrowthReport(),
+                'financeReport' => null,
+                'proformas' => $this->emptyProformasPaginator($request),
+                'filters' => [
+                    'mes' => (int) now()->format('n'),
+                    'anio' => $anio,
+                    'estado' => null,
+                    'grupo_fecha' => null,
+                ],
+                'meses' => ProformasService::MESES,
+                'estados' => ProformasService::ESTADOS,
+                'exportOptions' => null,
+                'proformasService' => $this->proformasService,
+                'hasSearched' => false,
+            ]);
+        }
+
+        if ($activeTab === 'finanzas') {
+            $validated = $request->validate([
+                'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
+                'mes' => ['nullable', 'integer', 'min:1', 'max:12'],
+            ]);
+
+            $anio = (int) ($validated['anio'] ?? now()->format('Y'));
+            $mes = array_key_exists('mes', $validated)
+                ? $this->normalizarEntero($validated['mes'])
+                : (int) now()->format('n');
+
+            return view('proformas.dashboard', [
+                'activeTab' => $activeTab,
+                'dashboard' => $this->emptyDashboardData(),
+                'growthReport' => null,
+                'growthHistoricalReport' => null,
+                'financeReport' => app(FinanzasDashboardService::class)->buildDashboardReport($anio, $mes),
+                'proformas' => $this->emptyProformasPaginator($request),
+                'filters' => [
+                    'mes' => (int) now()->format('n'),
+                    'anio' => $anio,
+                    'estado' => null,
+                    'grupo_fecha' => null,
+                ],
+                'meses' => ProformasService::MESES,
+                'estados' => ProformasService::ESTADOS,
+                'exportOptions' => null,
+                'proformasService' => $this->proformasService,
+                'hasSearched' => false,
+            ]);
+        }
+
         $hasFilterQuery = collect(['mes', 'anio', 'estado', 'grupo_fecha'])->contains(
             fn (string $key) => $request->query->has($key)
         );
@@ -242,7 +307,11 @@ class ProformasController extends Controller
 
         if (!$hasFilterQuery) {
             return view('proformas.dashboard', [
+                'activeTab' => $activeTab,
                 'dashboard' => $this->emptyDashboardData(),
+                'growthReport' => null,
+                'growthHistoricalReport' => null,
+                'financeReport' => null,
                 'proformas' => $this->emptyProformasPaginator($request),
                 'filters' => $defaultFilters,
                 'meses' => ProformasService::MESES,
@@ -277,7 +346,11 @@ class ProformasController extends Controller
         );
 
         return view('proformas.dashboard', [
+            'activeTab' => $activeTab,
             'dashboard' => $dashboard,
+            'growthReport' => null,
+            'growthHistoricalReport' => null,
+            'financeReport' => null,
             'proformas' => $this->proformasService->paginateDashboardProformas(
                 $periodo['mes'],
                 $periodo['anio'],
@@ -291,6 +364,11 @@ class ProformasController extends Controller
             'proformasService' => $this->proformasService,
             'hasSearched' => true,
         ]);
+    }
+
+    private function normalizeDashboardTab(mixed $tab): string
+    {
+        return in_array((string) $tab, ['crecimiento', 'finanzas'], true) ? (string) $tab : 'proformas';
     }
 
     public function exportDashboard(Request $request): BinaryFileResponse|JsonResponse
@@ -386,10 +464,23 @@ class ProformasController extends Controller
             $request->boolean('regenerar'),
         );
         $browserFilename = $this->proformaPdfService->buildBrowserFilename($id);
+        $absolutePath = (string) ($resultado['absolute_path'] ?? '');
+
+        Log::info('Proformas PDF: archivo servido al usuario.', [
+            'proforma_id' => $id,
+            'regenerar' => $request->boolean('regenerar'),
+            'absolute_path' => $absolutePath,
+            'file_hash_sha256' => is_file($absolutePath) ? hash_file('sha256', $absolutePath) : null,
+            'file_modified_at' => is_file($absolutePath) ? date('Y-m-d H:i:s', filemtime($absolutePath)) : null,
+            'reused' => (bool) ($resultado['reused'] ?? false),
+        ]);
 
         return response()->file($resultado['absolute_path'], [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$browserFilename.'"; filename*=UTF-8\'\''.rawurlencode($browserFilename),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
         ]);
     }
 

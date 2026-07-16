@@ -16,8 +16,16 @@
         </div>
     </div>
 
+    <div class="mb-6 flex flex-wrap gap-2">
+        <a href="{{ route('proformas.dashboard', ['tab' => 'proformas', 'mes' => $filters['mes'], 'anio' => $filters['anio'], 'estado' => $filters['estado'], 'grupo_fecha' => $filters['grupo_fecha']]) }}" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium {{ $activeTab === 'proformas' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-700 shadow hover:bg-slate-100' }}">Proformas</a>
+        <a href="{{ route('proformas.dashboard', ['tab' => 'crecimiento', 'anio' => $filters['anio']]) }}" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium {{ $activeTab === 'crecimiento' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-700 shadow hover:bg-slate-100' }}">Crecimiento</a>
+        <a href="{{ route('proformas.dashboard', ['tab' => 'finanzas']) }}" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium {{ $activeTab === 'finanzas' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-700 shadow hover:bg-slate-100' }}">Finanzas</a>
+    </div>
+
+    @if($activeTab === 'proformas')
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
         <form id="dashboard-filter-form" method="GET" action="{{ route('proformas.dashboard') }}" class="grid grid-cols-1 gap-4 md:grid-cols-6">
+            <input type="hidden" name="tab" value="proformas">
             <div>
                 <label for="mes" class="mb-1 block text-sm font-medium">Mes</label>
                 <select id="mes" name="mes" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -35,7 +43,7 @@
                 <select id="estado" name="estado" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
                     @foreach($estados as $estadoCodigo => $estadoNombre)
-                        <option value="{{ $estadoCodigo }}" @selected((string) ($filters['estado'] ?? '') === (string) $estadoCodigo)>{{ $proformasService->estadoLabel($estadoCodigo) }}</option>
+                        <option value="{{ $estadoCodigo }}" @selected((string) ($filters['estado'] ?? '') === (string) $estadoCodigo)>{{ (int) $estadoCodigo === \App\Services\ProformasService::ESTADO_ENVIADA ? 'Enviada - Pendiente' : $proformasService->estadoLabel($estadoCodigo) }}</option>
                     @endforeach
                 </select>
             </div>
@@ -52,12 +60,27 @@
                     <span id="dashboard-apply-filter-spinner" class="mr-2 hidden h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
                     <span id="dashboard-apply-filter-label">Aplicar filtro</span>
                 </button>
-                <a href="{{ route('proformas.dashboard') }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Periodo actual</a>
+                <a href="{{ route('proformas.dashboard', ['tab' => 'proformas']) }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Periodo actual</a>
                 <button type="button" id="open-export-modal" class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60" @disabled(!($hasSearched ?? false)) title="{{ ($hasSearched ?? false) ? 'Exportar Excel' : 'Aplica filtros para habilitar la exportación' }}">Exportar Excel</button>
             </div>
         </form>
     </div>
-
+    @elseif($activeTab === 'crecimiento')
+    <div class="mb-6 rounded-lg bg-white p-4 shadow">
+        <form method="GET" action="{{ route('proformas.dashboard') }}" class="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <input type="hidden" name="tab" value="crecimiento">
+            <div>
+                <label for="growth-anio" class="mb-1 block text-sm font-medium">Año</label>
+                <input id="growth-anio" name="anio" type="number" min="1900" max="9999" value="{{ $filters['anio'] }}" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="md:col-span-3 flex items-end gap-2">
+                <button type="submit" class="inline-flex items-center rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Aplicar filtro</button>
+                <a href="{{ route('proformas.dashboard', ['tab' => 'crecimiento']) }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Año actual</a>
+            </div>
+        </form>
+    </div>
+    @endif
+    @if($activeTab === 'proformas')
     <div id="dashboard-results-area" class="relative">
         <div id="dashboard-results-loading-overlay" class="pointer-events-none absolute inset-0 z-20 hidden items-center justify-center rounded-lg bg-white/75 backdrop-blur-[1px]">
             <div class="rounded-xl border border-slate-200 bg-white px-5 py-4 text-center shadow-lg">
@@ -130,8 +153,7 @@
                     @if($mostrarPagoPendiente)
                         <div class="flex items-center justify-between gap-3">
                             <div class="flex items-center gap-2">
-                                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($estadoCodigo) }}">{{ $datosEstado['label'] }}</span>
-                                <span class="inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">Pago Pendiente</span>
+                                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($estadoCodigo) }}">{{ $datosEstado['label'] }} - Pago Pendiente</span>
                             </div>
                             <span class="font-medium">{{ number_format((int) $datosEstado['cantidad'], 0, ',', '.') }} / $ {{ number_format((float) $datosEstado['total'], 2, ',', '.') }}</span>
                         </div>
@@ -199,10 +221,102 @@
             </div>
         @endif
     </div>
+
     @endif
+    @endif
+
+    @if($activeTab === 'crecimiento')
+    <div class="mt-6 rounded-lg bg-white p-4 shadow">
+        <div class="mb-6 flex items-start justify-between gap-3">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900">Crecimiento de clientes</h2>
+                <p class="text-sm text-slate-500">Resumen anual usando el valor total vigente de clientes potenciales para ingresos, retiros y balance.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Año consultado</p>
+                <p class="text-lg font-bold text-slate-800">{{ $filters['anio'] }}</p>
+            </div>
+        </div>
+
+        <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Empresas nuevas</p>
+                <p class="mt-1 text-2xl font-bold text-emerald-700">{{ number_format((int) $growthReport['resumen_anual']['ingresos']['empresas'], 0, ',', '.') }}</p>
+            </div>
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Valor mensual incorporado</p>
+                <p class="mt-1 text-2xl font-bold text-emerald-700">$ {{ number_format((float) $growthReport['resumen_anual']['ingresos']['valor'], 2, ',', '.') }}</p>
+            </div>
+            <div class="rounded-lg border border-rose-200 bg-rose-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-rose-700">Empresas retiradas</p>
+                <p class="mt-1 text-2xl font-bold text-rose-700">{{ number_format((int) $growthReport['resumen_anual']['retiros']['empresas'], 0, ',', '.') }}</p>
+            </div>
+            <div class="rounded-lg border border-rose-200 bg-rose-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-rose-700">Valor mensual perdido</p>
+                <p class="mt-1 text-2xl font-bold text-rose-700">$ {{ number_format((float) $growthReport['resumen_anual']['retiros']['valor'], 2, ',', '.') }}</p>
+            </div>
+            <div class="rounded-lg border border-sky-200 bg-sky-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-sky-700">Balance neto de empresas</p>
+                <p class="mt-1 text-2xl font-bold text-sky-700">{{ number_format((int) $growthReport['resumen_anual']['balance']['empresas'], 0, ',', '.') }}</p>
+            </div>
+            <div class="rounded-lg border border-sky-200 bg-sky-50 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-sky-700">Balance neto ingreso mensual</p>
+                <p class="mt-1 text-2xl font-bold text-sky-700">$ {{ number_format((float) $growthReport['resumen_anual']['balance']['valor'], 2, ',', '.') }}</p>
+            </div>
+        </div>
+
+        <div class="overflow-hidden rounded-lg border border-slate-200">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-600">
+                    <tr>
+                        <th class="px-4 py-3">Mes</th>
+                        <th class="px-4 py-3 text-right">Nuevas</th>
+                        <th class="px-4 py-3 text-right">Valor ingresos</th>
+                        <th class="px-4 py-3 text-right">Retiradas</th>
+                        <th class="px-4 py-3 text-right">Valor retiros</th>
+                        <th class="px-4 py-3 text-right">Balance empresas</th>
+                        <th class="px-4 py-3 text-right">Balance valor</th>
+                    </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                    @foreach($growthReport['mensual'] as $monthReport)
+                        <tr class="hover:bg-slate-50">
+                            <td class="px-4 py-3 font-medium text-slate-800">{{ $monthReport['label'] }}</td>
+                            <td class="px-4 py-3 text-right text-emerald-700">{{ number_format((int) $monthReport['ingresos']['empresas'], 0, ',', '.') }}</td>
+                            <td class="px-4 py-3 text-right font-medium text-emerald-700">$ {{ number_format((float) $monthReport['ingresos']['valor'], 2, ',', '.') }}</td>
+                            <td class="px-4 py-3 text-right text-rose-700">{{ number_format((int) $monthReport['retiros']['empresas'], 0, ',', '.') }}</td>
+                            <td class="px-4 py-3 text-right font-medium text-rose-700">$ {{ number_format((float) $monthReport['retiros']['valor'], 2, ',', '.') }}</td>
+                            <td class="px-4 py-3 text-right text-sky-700">{{ number_format((int) $monthReport['balance']['empresas'], 0, ',', '.') }}</td>
+                            <td class="px-4 py-3 text-right font-medium text-sky-700">$ {{ number_format((float) $monthReport['balance']['valor'], 2, ',', '.') }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                    <tfoot class="bg-slate-100 text-sm font-semibold text-slate-800">
+                    <tr>
+                        <td class="px-4 py-3">Totales anuales</td>
+                        <td class="px-4 py-3 text-right text-emerald-700">{{ number_format((int) $growthReport['resumen_anual']['ingresos']['empresas'], 0, ',', '.') }}</td>
+                        <td class="px-4 py-3 text-right text-emerald-700">$ {{ number_format((float) $growthReport['resumen_anual']['ingresos']['valor'], 2, ',', '.') }}</td>
+                        <td class="px-4 py-3 text-right text-rose-700">{{ number_format((int) $growthReport['resumen_anual']['retiros']['empresas'], 0, ',', '.') }}</td>
+                        <td class="px-4 py-3 text-right text-rose-700">$ {{ number_format((float) $growthReport['resumen_anual']['retiros']['valor'], 2, ',', '.') }}</td>
+                        <td class="px-4 py-3 text-right text-sky-700">{{ number_format((int) $growthReport['resumen_anual']['balance']['empresas'], 0, ',', '.') }}</td>
+                        <td class="px-4 py-3 text-right text-sky-700">$ {{ number_format((float) $growthReport['resumen_anual']['balance']['valor'], 2, ',', '.') }}</td>
+                    </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        @include('proformas.partials.growth-charts', ['growthHistoricalReport' => $growthHistoricalReport])
     </div>
+    @endif
+
+    @if($activeTab === 'finanzas')
+        @include('proformas.partials.finance-dashboard', ['financeReport' => $financeReport])
+    @endif
 </div>
 
+@if($activeTab === 'proformas')
 <div id="export-modal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-slate-900/60" data-close-export-modal></div>
     <div class="relative mx-auto flex min-h-screen max-w-6xl items-center justify-center px-4 py-8">
@@ -390,8 +504,10 @@
         </div>
     </div>
 </div>
+@endif
 @endsection
 
+@if($activeTab === 'proformas')
 @push('scripts')
 @include('partials.filter-submit-loading-script')
 <script>
@@ -674,3 +790,4 @@
     })();
 </script>
 @endpush
+@endif

@@ -1232,6 +1232,11 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             throw new NotFoundHttpException('No se pudo resolver la proforma a regenerar.');
         }
 
+        Log::info('Cobros regenerar proforma: proforma resuelta para PDF.', [
+            'id_cobro' => $id,
+            'proforma_id' => $proformaId,
+        ]);
+
         $this->proformaPdfService->generateForProformaId($proformaId, true);
 
         $redirectRoute = $request->input('redirect_to') === 'revisar' ? 'cobros.revisar' : 'cobros.show';

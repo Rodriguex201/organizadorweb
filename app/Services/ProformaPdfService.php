@@ -128,6 +128,7 @@ class ProformaPdfService
         }
 
         Storage::disk('local')->put($relativePath, $pdfBinario);
+        $absolutePath = Storage::disk('local')->path($relativePath);
 
         if (
             !$regenerar
@@ -156,6 +157,9 @@ class ProformaPdfService
             'proforma_id' => $proformaId,
             'regenerar' => $regenerar,
             'filename' => $nombreArchivo,
+            'absolute_path' => $absolutePath,
+            'file_hash_sha256' => is_file($absolutePath) ? hash_file('sha256', $absolutePath) : null,
+            'file_modified_at' => is_file($absolutePath) ? date('Y-m-d H:i:s', filemtime($absolutePath)) : null,
             'detail_count' => $detalle->count(),
             'render_ms' => round($renderDurationMs, 2),
             'storage_ms' => round($storageDurationMs, 2),
@@ -165,7 +169,7 @@ class ProformaPdfService
 
         return [
             'relative_path' => $relativePath,
-            'absolute_path' => Storage::disk('local')->path($relativePath),
+            'absolute_path' => $absolutePath,
             'filename' => $nombreArchivo,
             'reused' => false,
         ];
