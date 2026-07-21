@@ -976,11 +976,11 @@
         };
 
         const buildSendBatchContext = (source, root = null) => {
-            if (!source) {
+            if (!source && !root) {
                 return null;
             }
 
-            if (source.ready !== undefined) {
+            if (source?.ready !== undefined) {
                 return {
                     ready: !!source.ready,
                     group: Number(source.group || 0),
@@ -1073,22 +1073,6 @@
             }
         };
 
-        const bindSendBatchPanel = (root, sendBatch) => {
-            if (!root) {
-                return;
-            }
-
-            const context = buildSendBatchContext(sendBatch, root);
-            const sendNowButton = root.querySelector('[data-send-batch-now]');
-            const saveLaterButton = root.querySelector('[data-send-batch-later]');
-
-            sendNowButton?.addEventListener('click', () => startMassSend(context, sendNowButton));
-            saveLaterButton?.addEventListener('click', () => {
-                root.classList.add('hidden');
-                showSendBatchSavedToast(context);
-            });
-        };
-
         const enhanceSendBatchPanel = (root) => {
             if (!root) {
                 return;
@@ -1165,15 +1149,6 @@
                     </p>
                 </div>
             `;
-
-            sendBatchPanelContainer.querySelector('[data-send-batch-now]')?.addEventListener('click', () => {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = sendBatch.send_url;
-                form.innerHTML = `<input type="hidden" name="_token" value="{{ csrf_token() }}">`;
-                document.body.appendChild(form);
-                form.submit();
-            });
 
             sendBatchPanelContainer.querySelector('[data-send-batch-later]')?.addEventListener('click', () => {
                 clearSendBatchPanel();
