@@ -221,7 +221,7 @@
 </div>
 
 <div id="growth-customizer-overlay" class="fixed inset-0 z-50 hidden bg-slate-900/50"></div>
-<aside id="growth-customizer-panel" class="fixed inset-y-0 right-0 z-50 hidden w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
+<aside id="growth-customizer-panel" class="fixed top-0 bottom-0 right-0 z-50 hidden w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
     <div class="flex min-h-full flex-col">
         <div class="border-b border-slate-200 px-5 py-4">
             <div class="flex items-start justify-between gap-3">
