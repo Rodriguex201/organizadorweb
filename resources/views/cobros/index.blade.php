@@ -18,6 +18,19 @@
         $loteResumen = is_array(session('cobros_proformas_masivo_lote_resumen')) ? session('cobros_proformas_masivo_lote_resumen') : null;
         $currentExecutionCount = (int) ($loteResumen['current_execution_count'] ?? count($proformasListas));
         $pendingBatchCount = (int) ($loteResumen['pending_batch_count'] ?? count($proformasListas));
+        $gruposFecha = \App\Support\GrupoFechaHelper::allowedGroups();
+        $grupoButtonClasses = [
+            7 => 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200',
+            10 => 'bg-teal-100 text-teal-700 hover:bg-teal-200',
+            20 => 'bg-blue-100 text-blue-700 hover:bg-blue-200',
+            27 => 'bg-sky-100 text-sky-700 hover:bg-sky-200',
+        ];
+        $grupoSpinnerClasses = [
+            7 => 'border-cyan-300 border-t-cyan-700',
+            10 => 'border-teal-300 border-t-teal-700',
+            20 => 'border-blue-300 border-t-blue-700',
+            27 => 'border-sky-300 border-t-sky-700',
+        ];
     @endphp
 
     <div class="mb-6 flex items-center justify-between gap-3">
@@ -37,39 +50,24 @@
                     </button>
                 </form>
             @endif
-            <form method="POST" action="{{ route('cobros.proformas-masivo', ['grupo' => 7]) }}" data-mass-generation-form data-grupo="7" data-progress-url-template="{{ route('cobros.proformas-masivo.progress', ['executionId' => '__EXECUTION_ID__']) }}">
-                @csrf
-                <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">
-                <input type="hidden" name="anio" value="{{ $filters['anio'] ?? '' }}">
-                <input type="hidden" name="proforma" value="{{ $filters['proforma'] ?? '' }}">
-                <input type="hidden" name="codigo" value="{{ $filters['codigo'] ?? '' }}">
-                <input type="hidden" name="buscar" value="{{ $filters['buscar'] ?? '' }}">
-                <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
-                <input type="hidden" name="grupo_fecha" value="{{ $filters['grupo_fecha'] ?? '' }}">
-                <input type="hidden" name="filtro_nota" value="{{ $filters['filtro_nota'] ?? '' }}">
-                <input type="hidden" name="filtro_envio" value="{{ $filters['filtro_envio'] ?? '' }}">
-                <button type="submit" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-70" data-mass-generation-button>
-                    <span class="mr-2 hidden h-4 w-4 animate-spin rounded-full border-2 border-cyan-300 border-t-cyan-700" data-mass-generation-spinner></span>
-                    <span data-mass-generation-label>Generar proformas grupo 7</span>
-                </button>
-            </form>
-
-            <form method="POST" action="{{ route('cobros.proformas-masivo', ['grupo' => 27]) }}" data-mass-generation-form data-grupo="27" data-progress-url-template="{{ route('cobros.proformas-masivo.progress', ['executionId' => '__EXECUTION_ID__']) }}">
-                @csrf
-                <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">
-                <input type="hidden" name="anio" value="{{ $filters['anio'] ?? '' }}">
-                <input type="hidden" name="proforma" value="{{ $filters['proforma'] ?? '' }}">
-                <input type="hidden" name="codigo" value="{{ $filters['codigo'] ?? '' }}">
-                <input type="hidden" name="buscar" value="{{ $filters['buscar'] ?? '' }}">
-                <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
-                <input type="hidden" name="grupo_fecha" value="{{ $filters['grupo_fecha'] ?? '' }}">
-                <input type="hidden" name="filtro_nota" value="{{ $filters['filtro_nota'] ?? '' }}">
-                <input type="hidden" name="filtro_envio" value="{{ $filters['filtro_envio'] ?? '' }}">
-                <button type="submit" class="inline-flex items-center rounded bg-sky-100 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-70" data-mass-generation-button>
-                    <span class="mr-2 hidden h-4 w-4 animate-spin rounded-full border-2 border-sky-300 border-t-sky-700" data-mass-generation-spinner></span>
-                    <span data-mass-generation-label>Generar proformas grupo 27</span>
-                </button>
-            </form>
+            @foreach($gruposFecha as $grupoFecha)
+                <form method="POST" action="{{ route('cobros.proformas-masivo', ['grupo' => $grupoFecha]) }}" data-mass-generation-form data-grupo="{{ $grupoFecha }}" data-progress-url-template="{{ route('cobros.proformas-masivo.progress', ['executionId' => '__EXECUTION_ID__']) }}">
+                    @csrf
+                    <input type="hidden" name="mes" value="{{ $filters['mes'] ?? '' }}">
+                    <input type="hidden" name="anio" value="{{ $filters['anio'] ?? '' }}">
+                    <input type="hidden" name="proforma" value="{{ $filters['proforma'] ?? '' }}">
+                    <input type="hidden" name="codigo" value="{{ $filters['codigo'] ?? '' }}">
+                    <input type="hidden" name="buscar" value="{{ $filters['buscar'] ?? '' }}">
+                    <input type="hidden" name="orden_fecha" value="{{ $filters['orden_fecha'] ?? '' }}">
+                    <input type="hidden" name="grupo_fecha" value="{{ $filters['grupo_fecha'] ?? '' }}">
+                    <input type="hidden" name="filtro_nota" value="{{ $filters['filtro_nota'] ?? '' }}">
+                    <input type="hidden" name="filtro_envio" value="{{ $filters['filtro_envio'] ?? '' }}">
+                    <button type="submit" class="inline-flex items-center rounded px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-70 {{ $grupoButtonClasses[$grupoFecha] ?? 'bg-slate-100 text-slate-700 hover:bg-slate-200' }}" data-mass-generation-button>
+                        <span class="mr-2 hidden h-4 w-4 animate-spin rounded-full border-2 {{ $grupoSpinnerClasses[$grupoFecha] ?? 'border-slate-300 border-t-slate-700' }}" data-mass-generation-spinner></span>
+                        <span data-mass-generation-label>Generar proformas {{ \App\Support\GrupoFechaHelper::label($grupoFecha) }}</span>
+                    </button>
+                </form>
+            @endforeach
 
             <a href="{{ route('proformas.index') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
                 Proformas Generadas
@@ -94,7 +92,7 @@
         <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <h2 class="font-semibold">Clientes omitidos</h2>
-                @if($pendientesFacturacionItems !== [] && in_array($pendientesFacturacionGrupo, [7, 27], true))
+    @if($pendientesFacturacionItems !== [] && in_array($pendientesFacturacionGrupo, $gruposFecha, true))
                     <button
                         type="button"
                         id="open-pendientes-facturacion-modal"
@@ -121,7 +119,7 @@
         </div>
     @endif
 
-    @if($activacionPendientesResult && is_array($regeneracionPendientesPayload) && in_array($regeneracionPendientesGrupo, [7, 27], true))
+    @if($activacionPendientesResult && is_array($regeneracionPendientesPayload) && in_array($regeneracionPendientesGrupo, $gruposFecha, true))
         <div class="mb-4 rounded border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
             <p class="font-semibold">Se activaron {{ (int) ($activacionPendientesResult['count'] ?? 0) }} clientes.</p>
             <p class="mt-1">Desea regenerar automaticamente las proformas omitidas?</p>
@@ -142,7 +140,7 @@
         </div>
     @endif
 
-    @if($proformasListas !== [] && in_array($grupoListoParaEnvio, [7, 27], true))
+    @if($proformasListas !== [] && in_array($grupoListoParaEnvio, $gruposFecha, true))
         <div
             class="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
             data-static-send-batch-panel
@@ -274,7 +272,7 @@
         </div>
     </div>
 
-    @if($pendientesFacturacionItems !== [] && in_array($pendientesFacturacionGrupo, [7, 27], true))
+    @if($pendientesFacturacionItems !== [] && in_array($pendientesFacturacionGrupo, $gruposFecha, true))
         <div
             id="pendientes-facturacion-modal"
             class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 px-4 py-6"
@@ -401,8 +399,9 @@
                 <select id="grupo_fecha" name="grupo_fecha"
                         class="w-full border border-slate-300 rounded px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                     <option value="">Todos</option>
-                    <option value="7" @selected(($filters['grupo_fecha'] ?? null) === '7')>Grupo 7</option>
-                    <option value="27" @selected(($filters['grupo_fecha'] ?? null) === '27')>Grupo 27</option>
+                    @foreach($gruposFecha as $grupoFecha)
+                        <option value="{{ $grupoFecha }}" @selected(($filters['grupo_fecha'] ?? null) === (string) $grupoFecha)>{{ \App\Support\GrupoFechaHelper::label($grupoFecha) }}</option>
+                    @endforeach
                 </select>
             </div>
 
@@ -529,8 +528,9 @@
                             @endif
                         </a>
                         <div id="fecha-arriendo-context-menu" class="hidden fixed z-50 min-w-[140px] rounded border border-slate-200 bg-white p-1 shadow-lg normal-case">
-                            <button type="button" data-grupo-fecha="7" class="w-full rounded px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-100">Ver grupo 7</button>
-                            <button type="button" data-grupo-fecha="27" class="w-full rounded px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-100">Ver grupo 27</button>
+                            @foreach($gruposFecha as $grupoFecha)
+                                <button type="button" data-grupo-fecha="{{ $grupoFecha }}" class="w-full rounded px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-100">Ver {{ \App\Support\GrupoFechaHelper::label($grupoFecha) }}</button>
+                            @endforeach
                         </div>
                     </th>
 

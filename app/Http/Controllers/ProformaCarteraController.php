@@ -12,6 +12,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class ProformaCarteraController extends Controller
 {
     private const FILTER_KEYS = [
+        'modo',
         'codigo',
         'empresa',
         'nit',
@@ -30,6 +31,7 @@ class ProformaCarteraController extends Controller
     public function index(Request $request): View
     {
         $validated = $request->validate([
+            'modo' => ['nullable', 'in:por_cobrar'],
             'codigo' => ['nullable', 'string', 'max:50'],
             'empresa' => ['nullable', 'string', 'max:200'],
             'nit' => ['nullable', 'string', 'max:60'],
@@ -45,6 +47,7 @@ class ProformaCarteraController extends Controller
             'filters' => $filters,
             'cartera' => $this->proformaCarteraService->paginateCartera($filters),
             'summary' => $this->proformaCarteraService->getSummary($filters),
+            'isPorCobrarMode' => $this->proformaCarteraService->isPorCobrarMode($filters),
             'meses' => ProformasService::MESES,
             'estados' => [
                 ProformasService::ESTADO_GENERADA => 'Generada',
@@ -58,6 +61,7 @@ class ProformaCarteraController extends Controller
     public function export(Request $request): BinaryFileResponse
     {
         $validated = $request->validate([
+            'modo' => ['nullable', 'in:por_cobrar'],
             'codigo' => ['nullable', 'string', 'max:50'],
             'empresa' => ['nullable', 'string', 'max:200'],
             'nit' => ['nullable', 'string', 'max:60'],

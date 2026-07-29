@@ -351,9 +351,10 @@ class ProformaDashboardExportService
                 $this->applyClienteJoins($query);
             }
 
-            $query->whereRaw(
-                GrupoFechaHelper::arriendoCutDaySql('COALESCE(cp_cobro.fecha_arriendo, cp_fallback.fecha_arriendo)').' = ?',
-                [$grupoFecha]
+            GrupoFechaHelper::applyGrupoFechaConstraint(
+                $query,
+                'COALESCE(cp_cobro.fecha_arriendo, cp_fallback.fecha_arriendo)',
+                $grupoFecha
             );
         }
 

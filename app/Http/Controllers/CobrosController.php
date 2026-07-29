@@ -12,6 +12,7 @@ use App\Services\ProformaPdfService;
 use App\Services\ProformaPreviewService;
 use App\Services\ProformasService;
 use App\Services\ProformaStoreService;
+use App\Support\GrupoFechaHelper;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -52,7 +53,7 @@ public function index(Request $request): View
         'codigo' => ['nullable', 'string', 'max:100'],
         'buscar' => ['nullable', 'string', 'max:100'],
         'orden_fecha' => ['nullable', 'in:asc,desc'],
-        'grupo_fecha' => ['nullable', 'in:7,27'],
+        'grupo_fecha' => ['nullable', GrupoFechaHelper::validationRule()],
         'filtro_nota' => ['nullable', 'in:con,sin'],
         'filtro_envio' => ['nullable', 'in:enviadas,no_enviadas'],
         'debug' => ['nullable'],
@@ -252,7 +253,7 @@ $filters = [
 
     public function generarProformasMasivo(Request $request, int $grupo): RedirectResponse|JsonResponse
     {
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
 
@@ -264,7 +265,7 @@ $filters = [
             'codigo' => ['nullable', 'string', 'max:100'],
             'buscar' => ['nullable', 'string', 'max:100'],
             'orden_fecha' => ['nullable', 'in:asc,desc'],
-            'grupo_fecha' => ['nullable', 'in:7,27'],
+            'grupo_fecha' => ['nullable', GrupoFechaHelper::validationRule()],
             'filtro_nota' => ['nullable', 'in:con,sin'],
             'filtro_envio' => ['nullable', 'in:enviadas,no_enviadas'],
         ]);
@@ -355,7 +356,7 @@ $filters = [
             $sendBatchProformas = is_array($sendBatchPayload['proformas'] ?? null) ? array_values($sendBatchPayload['proformas']) : [];
             $sendBatchGroup = (int) ($sendBatchPayload['grupo'] ?? 0);
             $sendBatch = [
-                'ready' => $sendBatchProformas !== [] && in_array($sendBatchGroup, [7, 27], true),
+                'ready' => $sendBatchProformas !== [] && GrupoFechaHelper::isAllowed($sendBatchGroup),
                 'group' => $sendBatchGroup,
                 'count' => count($sendBatchProformas),
                 'current_execution_count' => count(array_values($resultado['proformas_listas'] ?? [])),
@@ -364,7 +365,7 @@ $filters = [
                     fn (array $item) => trim((string) ($item['empresa'] ?? '')),
                     array_slice($sendBatchProformas, 0, 8)
                 ), fn (string $empresa) => $empresa !== '')),
-                'send_url' => in_array($sendBatchGroup, [7, 27], true)
+                'send_url' => GrupoFechaHelper::isAllowed($sendBatchGroup)
                     ? route('cobros.proformas-masivo.enviar', ['grupo' => $sendBatchGroup])
                     : null,
             ];
@@ -453,7 +454,7 @@ $filters = [
 
     public function activarPendientesFacturacionMasivo(Request $request, int $grupo): RedirectResponse
     {
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
 
@@ -580,7 +581,7 @@ $filters = [
 
     public function regenerarPendientesFacturacionMasivo(int $grupo): RedirectResponse
     {
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
 
@@ -608,7 +609,7 @@ $filters = [
 
     public function descartarRegeneracionPendientesFacturacionMasivo(int $grupo): RedirectResponse
     {
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
 
@@ -623,7 +624,7 @@ $filters = [
 
     public function enviarProformasMasivo(Request $request, int $grupo): RedirectResponse
     {
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
 
@@ -738,7 +739,7 @@ $filters = [
             return $this->enviarProformasMasivo($request, $grupo);
         }
 
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
 
@@ -2023,7 +2024,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
      */
     private function shouldRecoverPendingProformasBatch(int $grupo, array $filters, array $resultado, mixed $existingLote = null): bool
     {
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             return false;
         }
 

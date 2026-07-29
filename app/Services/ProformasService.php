@@ -764,7 +764,7 @@ class ProformasService
         }
 
         $this->applyClienteJoins($query);
-        $query->whereRaw($this->arriendoCutDaySql('COALESCE(cp_cobro.fecha_arriendo, cp_fallback.fecha_arriendo)').' = ?', [$grupoFecha]);
+        GrupoFechaHelper::applyGrupoFechaConstraint($query, 'COALESCE(cp_cobro.fecha_arriendo, cp_fallback.fecha_arriendo)', $grupoFecha);
     }
 
     private function buildDashboardBaseQuery(int $mes, int $anio, ?int $estado = null, ?int $grupoFecha = null): Builder
@@ -781,9 +781,7 @@ class ProformasService
 
     private function queryProformasByGrupoFecha(int $grupoFecha, ?int $mes = null, ?int $anio = null)
     {
-        $diaArriendo = $this->arriendoCutDaySql('cp.fecha_arriendo');
-
-        return DB::table('sg_proform as p')
+        $query = DB::table('sg_proform as p')
             ->leftJoin('clientes_potenciales as cp', function ($join) {
                 $join->whereRaw('BINARY cp.nit = BINARY p.nit');
             })
@@ -800,8 +798,11 @@ class ProformasService
                 'cp.fecha_arriendo as cliente_fecha_arriendo',
             ])
             ->when($mes !== null, fn ($query) => $query->where('p.mes', $mes))
-            ->when($anio !== null, fn ($query) => $query->where('p.anio', $anio))
-            ->whereRaw("{$diaArriendo} = ?", [$grupoFecha]);
+            ->when($anio !== null, fn ($query) => $query->where('p.anio', $anio));
+
+        GrupoFechaHelper::applyGrupoFechaConstraint($query, 'cp.fecha_arriendo', $grupoFecha);
+
+        return $query;
     }
 
     private function resolveInvalidReasonForBatch(object $proforma): ?string

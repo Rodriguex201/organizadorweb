@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Schema;
 
 class ProformaCarteraService
 {
+    public const MODE_POR_COBRAR = 'por_cobrar';
+
     private ?bool $sgProformHasIdCobroColumn = null;
 
     public function __construct(
@@ -20,7 +22,13 @@ class ProformaCarteraService
 
     public function resolveFilters(array $input = []): array
     {
+        $modo = trim((string) ($input['modo'] ?? ''));
+        $modo = $modo === self::MODE_POR_COBRAR ? self::MODE_POR_COBRAR : null;
         $estado = $this->normalizarEntero($input['estado'] ?? null);
+
+        if ($modo === self::MODE_POR_COBRAR) {
+            $estado = ProformasService::ESTADO_ENVIADA;
+        }
 
         if (!in_array($estado, [
             ProformasService::ESTADO_GENERADA,
@@ -30,11 +38,12 @@ class ProformaCarteraService
         }
 
         return [
+            'modo' => $modo,
             'codigo' => trim((string) ($input['codigo'] ?? '')),
             'empresa' => trim((string) ($input['empresa'] ?? '')),
             'nit' => trim((string) ($input['nit'] ?? '')),
-            'fecha_desde' => $this->normalizeDateFilter($input['fecha_desde'] ?? null),
-            'fecha_hasta' => $this->normalizeDateFilter($input['fecha_hasta'] ?? null),
+            'fecha_desde' => $modo === self::MODE_POR_COBRAR ? null : $this->normalizeDateFilter($input['fecha_desde'] ?? null),
+            'fecha_hasta' => $modo === self::MODE_POR_COBRAR ? null : $this->normalizeDateFilter($input['fecha_hasta'] ?? null),
             'estado' => $estado,
             'solo_acumuladas' => $this->toBooleanFlag($input['solo_acumuladas'] ?? null),
         ];
@@ -42,12 +51,10 @@ class ProformaCarteraService
 
     public function paginateCartera(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        return $this->buildCarteraQuery($filters)
-            ->orderByDesc('dias_vencido')
-            ->orderByDesc('valor_total_deuda')
-            ->orderBy('empresa')
-            ->paginate($perPage)
-            ->withQueryString();
+        $query = $this->buildCarteraQuery($filters);
+        $this->applyDefaultOrdering($query, $filters);
+
+        return $query->paginate($perPage)->withQueryString();
     }
 
     public function getSummary(array $filters = []): array
@@ -70,11 +77,15 @@ class ProformaCarteraService
 
     public function getRowsForExport(array $filters = []): Collection
     {
-        return $this->buildCarteraQuery($filters)
-            ->orderByDesc('dias_vencido')
-            ->orderByDesc('valor_total_deuda')
-            ->orderBy('empresa')
-            ->get();
+        $query = $this->buildCarteraQuery($filters);
+        $this->applyDefaultOrdering($query, $filters);
+
+        return $query->get();
+    }
+
+    public function isPorCobrarMode(array $filters = []): bool
+    {
+        return ($filters['modo'] ?? null) === self::MODE_POR_COBRAR;
     }
 
     public function estadoLabel(null|string|int $estado): string
@@ -111,6 +122,7 @@ class ProformaCarteraService
             'agg.cantidad_proformas',
             'agg.valor_total_deuda',
             'agg.dias_vencido',
+            'agg.oldest_period_key',
             'lp.id as ultima_proforma_id',
             'lp.nro_prof as ultima_proforma_numero',
             'lp.mes as ultima_proforma_mes',
@@ -130,10 +142,7 @@ class ProformaCarteraService
     private function buildAggregatedPendingSubquery(array $filters): Builder
     {
         $query = DB::table('sg_proform as p')
-            ->whereIn('p.estado', [
-                ProformasService::ESTADO_GENERADA,
-                ProformasService::ESTADO_ENVIADA,
-            ])
+            ->whereIn('p.estado', $this->pendingEstados($filters))
             ->whereRaw("TRIM(COALESCE(p.nit, '')) <> ''");
 
         $this->applyPendingFilters($query, $filters);
@@ -152,10 +161,7 @@ class ProformaCarteraService
     private function buildLatestPendingSubquery(array $filters): Builder
     {
         $query = DB::table('sg_proform as p')
-            ->whereIn('p.estado', [
-                ProformasService::ESTADO_GENERADA,
-                ProformasService::ESTADO_ENVIADA,
-            ])
+            ->whereIn('p.estado', $this->pendingEstados($filters))
             ->whereRaw("TRIM(COALESCE(p.nit, '')) <> ''");
 
         $this->applyPendingFilters($query, $filters);
@@ -192,6 +198,31 @@ class ProformaCarteraService
         if ($fechaHasta !== null) {
             $query->whereDate('p.creado_en', '<=', $fechaHasta);
         }
+    }
+
+    private function pendingEstados(array $filters): array
+    {
+        return $this->isPorCobrarMode($filters)
+            ? [ProformasService::ESTADO_ENVIADA]
+            : [
+                ProformasService::ESTADO_GENERADA,
+                ProformasService::ESTADO_ENVIADA,
+            ];
+    }
+
+    private function applyDefaultOrdering(Builder $query, array $filters): void
+    {
+        if ($this->isPorCobrarMode($filters)) {
+            $query->orderByDesc('valor_total_deuda')
+                ->orderByDesc('cantidad_proformas')
+                ->orderBy('empresa');
+
+            return;
+        }
+
+        $query->orderByDesc('dias_vencido')
+            ->orderByDesc('valor_total_deuda')
+            ->orderBy('empresa');
     }
 
     private function applyOuterFilters(Builder $query, array $filters): void

@@ -552,9 +552,7 @@ if (!empty($filters['anio'])) {
     }
 
     // 🔥 GRUPO FECHA
-    if ($grupoFecha !== null) {
-        $query->whereRaw($this->arriendoCutDaySql('cp.fecha_arriendo').' = ?', [$grupoFecha]);
-    }
+    GrupoFechaHelper::applyGrupoFechaConstraint($query, 'cp.fecha_arriendo', $grupoFecha);
 
     if (($filters['exclude_retirados'] ?? false) === true) {
         $this->clienteRetiradoService->applyNoRetiradosConstraint($query, 'cp');
@@ -665,9 +663,7 @@ if (!empty($filters['anio'])) {
             }
         }
 
-        if ($grupoFecha !== null) {
-            $query->whereRaw($this->arriendoCutDaySql('cp.fecha_arriendo').' = ?', [$grupoFecha]);
-        }
+        GrupoFechaHelper::applyGrupoFechaConstraint($query, 'cp.fecha_arriendo', $grupoFecha);
 
         if (($filters['exclude_retirados'] ?? false) === true) {
             $this->clienteRetiradoService->applyNoRetiradosConstraint($query, 'cp');

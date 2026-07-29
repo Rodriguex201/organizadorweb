@@ -9,6 +9,7 @@ use App\Services\ProformaEmailService;
 use App\Services\ProformaDashboardExportService;
 use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
+use App\Support\GrupoFechaHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -109,7 +110,7 @@ class ProformasController extends Controller
 
     public function confirmarEnvioMasivo(Request $request, int $grupo): View|JsonResponse
     {
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
 
@@ -158,7 +159,7 @@ class ProformasController extends Controller
 
     public function enviarMasivo(Request $request, int $grupo): RedirectResponse
     {
-        if (!in_array($grupo, [7, 27], true)) {
+        if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
 
@@ -326,7 +327,7 @@ class ProformasController extends Controller
             'mes' => ['nullable', 'string', 'max:20'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'estado' => ['nullable', 'integer'],
-            'grupo_fecha' => ['nullable', 'in:7,27'],
+            'grupo_fecha' => ['nullable', GrupoFechaHelper::validationRule()],
         ]);
 
         $periodo = $this->proformasService->normalizePeriodoFilters(
@@ -377,13 +378,13 @@ class ProformasController extends Controller
             'dashboard_mes' => ['nullable', 'string', 'max:20'],
             'dashboard_anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'dashboard_estado' => ['nullable', 'integer'],
-            'dashboard_grupo_fecha' => ['nullable', 'in:7,27'],
+            'dashboard_grupo_fecha' => ['nullable', GrupoFechaHelper::validationRule()],
             'scope' => ['required', 'in:current_filters,current_month,full_year,monthly_range'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'mes_desde' => ['nullable', 'integer', 'min:1', 'max:12'],
             'mes_hasta' => ['nullable', 'integer', 'min:1', 'max:12'],
             'estado' => ['nullable', 'integer'],
-            'grupo_fecha' => ['nullable', 'in:7,27'],
+            'grupo_fecha' => ['nullable', GrupoFechaHelper::validationRule()],
             'mode' => ['required', 'in:summary,detailed'],
             'format' => ['required', 'in:xlsx'],
             'columns' => ['required', 'array', 'min:1'],

@@ -6,6 +6,10 @@
 <div class="mx-auto max-w-7xl px-4 py-8">
     <div id="export-toast" class="pointer-events-none fixed right-6 top-6 z-[70] hidden max-w-sm rounded-xl border px-4 py-3 text-sm font-medium shadow-lg"></div>
 
+    @php
+        $gruposFecha = \App\Support\GrupoFechaHelper::allowedGroups();
+    @endphp
+
     <div class="mb-6 flex items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-bold">Informes de Proformas</h1>
@@ -51,8 +55,9 @@
                 <label for="grupo_fecha" class="mb-1 block text-sm font-medium">Grupo fecha</label>
                 <select id="grupo_fecha" name="grupo_fecha" class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todos</option>
-                    <option value="7" @selected((string) ($filters['grupo_fecha'] ?? '') === '7')>Grupo 7</option>
-                    <option value="27" @selected((string) ($filters['grupo_fecha'] ?? '') === '27')>Grupo 27</option>
+                    @foreach($gruposFecha as $grupoFecha)
+                        <option value="{{ $grupoFecha }}" @selected((string) ($filters['grupo_fecha'] ?? '') === (string) $grupoFecha)>{{ \App\Support\GrupoFechaHelper::label($grupoFecha) }}</option>
+                    @endforeach
                 </select>
             </div>
             <div class="md:col-span-2 flex items-end gap-2">
@@ -62,6 +67,7 @@
                 </button>
                 <a href="{{ route('proformas.dashboard', ['tab' => 'proformas']) }}" class="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Periodo actual</a>
                 <button type="button" id="open-export-modal" class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60" @disabled(!($hasSearched ?? false)) title="{{ ($hasSearched ?? false) ? 'Exportar Excel' : 'Aplica filtros para habilitar la exportación' }}">Exportar Excel</button>
+                <a href="{{ route('proformas.cartera.index', ['modo' => 'por_cobrar']) }}" class="rounded bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700">Cartera por Cobrar</a>
             </div>
         </form>
     </div>
@@ -377,8 +383,9 @@
                                 <label for="export-grupo-fecha" class="mb-2 block text-sm font-semibold text-slate-700">Grupo fecha</label>
                                 <select id="export-grupo-fecha" name="grupo_fecha" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                                     <option value="">Todos</option>
-                                    <option value="7" @selected((string) old('grupo_fecha', $exportOptions['filters']['grupo_fecha']) === '7')>Grupo 7</option>
-                                    <option value="27" @selected((string) old('grupo_fecha', $exportOptions['filters']['grupo_fecha']) === '27')>Grupo 27</option>
+                                    @foreach($gruposFecha as $grupoFecha)
+                                        <option value="{{ $grupoFecha }}" @selected((string) old('grupo_fecha', $exportOptions['filters']['grupo_fecha']) === (string) $grupoFecha)>{{ \App\Support\GrupoFechaHelper::label($grupoFecha) }}</option>
+                                    @endforeach
                                 </select>
                             </div>
 
