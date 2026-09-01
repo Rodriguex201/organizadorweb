@@ -17,7 +17,11 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -496,6 +500,38 @@ class ProformasController extends Controller
         ]);
     }
 
+    public function showComprobantePago(int $id): BinaryFileResponse
+    {
+        $proforma = $this->proformasService->findComprobantePagoById($id);
+
+        if (!$proforma) {
+            abort(404, 'Proforma no encontrada.');
+        }
+
+        $relativePath = trim((string) ($proforma->comprobante_pago ?? ''));
+        $disk = Storage::disk('local');
+
+        if ($relativePath === '' || !$disk->exists($relativePath)) {
+            abort(404, 'Comprobante de pago no encontrado.');
+        }
+
+        $mimeType = $disk->mimeType($relativePath) ?: 'application/octet-stream';
+        $extension = strtolower((string) pathinfo($relativePath, PATHINFO_EXTENSION));
+        $filename = 'comprobante-proforma-'.$id.($extension !== '' ? '.'.$extension : '');
+
+        $response = response()->file($disk->path($relativePath), [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="'.$filename.'"; filename*=UTF-8\'\''.rawurlencode($filename),
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+
+        $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+
+        return $response;
+    }
+
     public function show(int $id): View
     {
         $proforma = $this->proformasService->findProformaById($id);
@@ -626,12 +662,74 @@ class ProformasController extends Controller
 
     public function updateEstado(Request $request, int $id): RedirectResponse|JsonResponse
     {
-        $validated = $request->validate([
+        $rules = [
             'estado' => ['required', 'integer'],
             'redirect_to' => ['nullable', 'string', 'in:index,show'],
-        ]);
+        ];
 
-        $resultado = $this->proformasService->updateEstado($id, (int) $validated['estado']);
+        if ((int) $request->input('estado') === ProformasService::ESTADO_PAGADA) {
+            $rules['fpago'] = ['required', 'string', 'in:'.implode(',', ProformasService::METODOS_PAGO)];
+            $rules['comprobante_pago'] = [
+                Rule::requiredIf(in_array((string) $request->input('fpago'), ['TRANSFERENCIA', 'CONSIGNACIÓN'], true)),
+                'nullable',
+                File::types(['jpg', 'jpeg', 'png', 'webp', 'pdf'])->max(10 * 1024),
+                'extensions:jpg,jpeg,png,webp,pdf',
+            ];
+        }
+
+        $validated = $request->validate($rules);
+        $nuevoEstado = (int) $validated['estado'];
+        $metodoPago = $validated['fpago'] ?? null;
+        $comprobantePath = null;
+
+        try {
+            if (
+                $nuevoEstado === ProformasService::ESTADO_PAGADA
+                && in_array($metodoPago, ['TRANSFERENCIA', 'CONSIGNACIÓN'], true)
+            ) {
+                $comprobante = $request->file('comprobante_pago');
+                $extension = strtolower((string) $comprobante->extension());
+                $filename = Str::uuid()->toString().'.'.$extension;
+                $comprobantePath = Storage::disk('local')->putFileAs(
+                    'proformas/comprobantes/'.$id,
+                    $comprobante,
+                    $filename,
+                );
+
+                if ($comprobantePath === false) {
+                    throw new \RuntimeException('No fue posible almacenar el comprobante de pago.');
+                }
+            }
+
+            $resultado = $this->proformasService->updateEstado(
+                $id,
+                $nuevoEstado,
+                $metodoPago,
+                $comprobantePath,
+            );
+
+            if (!$resultado['ok'] && $comprobantePath !== null) {
+                Storage::disk('local')->delete($comprobantePath);
+            }
+        } catch (\Throwable $exception) {
+            if ($comprobantePath !== null) {
+                Storage::disk('local')->delete($comprobantePath);
+            }
+
+            report($exception);
+
+            $message = 'No se pudo actualizar el estado de la proforma.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 500);
+            }
+
+            return redirect()->back()->with('status', $message)->with('status_type', 'error');
+        }
+
+        if ($resultado['ok'] && $comprobantePath !== null) {
+            $resultado['comprobante_url'] = route('proformas.comprobante-pago.show', ['id' => $id]);
+        }
 
         if ($request->expectsJson()) {
             return response()->json($resultado, $resultado['ok'] ? 200 : 422);

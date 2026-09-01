@@ -223,9 +223,8 @@ class ImportacionesService
                     continue;
                 }
 
-                $previewRows[] = $this->buildErrorPreviewRow(
+                $previewRows[] = $this->buildPendingAssignmentPreviewRow(
                     $entry,
-                    'Multiples registros para el mismo NIT en el periodo.',
                     $entryId,
                     [
                         'entry_id' => $entryId,
@@ -233,11 +232,6 @@ class ImportacionesService
                         'matches' => $matches,
                     ]
                 );
-                $processErrors[] = [
-                    'file' => implode(', ', (array) ($entry['sources'] ?? [])),
-                    'row' => implode(', ', array_map('strval', (array) ($entry['rows'] ?? []))),
-                    'message' => "Multiples registros para el mismo NIT {$nit} en el periodo.",
-                ];
                 continue;
             }
 
@@ -257,7 +251,7 @@ class ImportacionesService
             'summary' => [
                 'total' => count($previewRows),
                 'ready' => count(array_filter($previewRows, fn (array $row) => $row['status'] === 'ready')),
-                'with_errors' => count(array_filter($previewRows, fn (array $row) => $row['status'] !== 'ready')),
+                'with_errors' => count(array_filter($previewRows, fn (array $row) => !in_array($row['status'], ['ready', 'pending_assignment'], true))),
                 'parse_errors' => count($parseErrors),
             ],
             'requires_base_generation' => false,
@@ -740,6 +734,43 @@ class ImportacionesService
             'nit' => $entry['nit'] ?? '',
             'emisor' => $entry['emisor'] ?? '',
             'cliente' => 'Sin coincidencia',
+            'periodo' => null,
+            'sources' => array_values((array) ($entry['sources'] ?? [])),
+            'rows' => array_values((array) ($entry['rows'] ?? [])),
+            'imported' => [
+                'facturas' => (float) ($entry['facturas'] ?? 0),
+                'nota_debito' => (float) ($entry['nota_debito'] ?? 0),
+                'nota_credito' => (float) ($entry['nota_credito'] ?? 0),
+                'soporte' => (float) ($entry['soporte'] ?? 0),
+                'nota_ajuste' => (float) ($entry['nota_ajuste'] ?? 0),
+                'acuse' => (float) ($entry['acuse'] ?? 0),
+            ],
+            'calculated' => [
+                'valor_facturas' => 0.0,
+                'valor_documentos' => 0.0,
+                'valor_acuse' => 0.0,
+                'valor_mensualidad' => 0.0,
+                'valor_total' => 0.0,
+            ],
+            'persist_payload' => [],
+        ], $extra);
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     * @return array<string, mixed>
+     */
+    private function buildPendingAssignmentPreviewRow(array $entry, ?string $entryId = null, array $extra = []): array
+    {
+        return array_merge([
+            'status' => 'pending_assignment',
+            'error_message' => 'Selecciona el cliente potencial correcto para este NIT antes de extraer.',
+            'entry_id' => $entryId ?? $this->resolveEntryIdentifier($entry),
+            'id_cobro' => null,
+            'id_cliente' => null,
+            'nit' => $entry['nit'] ?? '',
+            'emisor' => $entry['emisor'] ?? '',
+            'cliente' => 'Pendiente de asignacion',
             'periodo' => null,
             'sources' => array_values((array) ($entry['sources'] ?? [])),
             'rows' => array_values((array) ($entry['rows'] ?? [])),

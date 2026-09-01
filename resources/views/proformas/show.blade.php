@@ -140,6 +140,9 @@
             <div class="mt-3 flex flex-wrap gap-2">
                 <a href="{{ route('proformas.pdf.show', $proforma->id) }}" target="_blank" class="inline-flex items-center rounded bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-200">Ver PDF</a>
                 <a href="{{ route('proformas.pdf.download', $proforma->id) }}" class="inline-flex items-center rounded bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-200">Descargar PDF</a>
+                @if(trim((string) ($proforma->comprobante_pago ?? '')) !== '')
+                    <a href="{{ route('proformas.comprobante-pago.show', $proforma->id) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-200">Ver comprobante</a>
+                @endif
 
                 @if($canSendProforma)
                     <form method="POST" action="{{ route('proformas.enviar', $proforma->id) }}" data-proforma-enviar-form>
@@ -161,13 +164,7 @@
                 @endif
 
                 @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_PAGADA))
-                    <form method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}">
-                        @csrf
-                        @method('PATCH')
-                        <input type="hidden" name="estado" value="{{ \App\Services\ProformasService::ESTADO_PAGADA }}">
-                        <input type="hidden" name="redirect_to" value="show">
-                        <button type="submit" class="inline-flex items-center rounded bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-200">Marcar pagada</button>
-                    </form>
+                    <button id="pago-modal-abrir" type="button" class="inline-flex items-center rounded bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-200">Marcar pagada</button>
                 @endif
 
                 @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_FACTURADA))
@@ -184,6 +181,51 @@
             </div>
         </section>
     </div>
+
+    @if($proformasService->canTransition($proforma->estado, \App\Services\ProformasService::ESTADO_PAGADA))
+        <div id="pago-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-900/50 px-4" role="dialog" aria-modal="true" aria-labelledby="pago-modal-titulo">
+            <div class="w-full max-w-md rounded-lg bg-white shadow-xl">
+                <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                    <h2 id="pago-modal-titulo" class="text-base font-semibold text-slate-900">Marcar proforma como pagada</h2>
+                    <button id="pago-modal-cerrar-superior" type="button" class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Cerrar modal">X</button>
+                </div>
+
+                <form id="pago-form" method="POST" action="{{ route('proformas.estado.update', $proforma->id) }}" enctype="multipart/form-data" class="space-y-4 px-5 py-5">
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="estado" value="{{ \App\Services\ProformasService::ESTADO_PAGADA }}">
+                    <input type="hidden" name="redirect_to" value="show">
+
+                    <div>
+                        <label for="pago-metodo" class="mb-1 block text-sm font-medium text-slate-700">Método de pago</label>
+                        <select id="pago-metodo" name="fpago" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <option value="">Seleccionar...</option>
+                            <option value="EFECTIVO">Efectivo</option>
+                            <option value="TRANSFERENCIA">Transferencia</option>
+                            <option value="CONSIGNACIÓN">Consignación</option>
+                        </select>
+                    </div>
+
+                    <div id="pago-comprobante-contenedor" class="hidden">
+                        <span class="mb-1 block text-sm font-medium text-slate-700">Comprobante de pago</span>
+                        <input id="pago-comprobante" name="comprobante_pago" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" class="sr-only">
+                        <div class="flex items-center gap-3">
+                            <button id="pago-comprobante-abrir" type="button" class="rounded bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60" aria-controls="pago-comprobante">
+                                <span id="pago-comprobante-boton-texto">Elegir archivo</span>
+                            </button>
+                            <span id="pago-comprobante-nombre" class="min-w-0 truncate text-sm text-slate-600" aria-live="polite">Ningún archivo seleccionado.</span>
+                        </div>
+                        <p class="mt-1 text-xs text-slate-500">JPG, JPEG, PNG, WEBP o PDF. Máximo 10 MB.</p>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
+                        <button id="pago-modal-cancelar" type="button" class="rounded bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Cancelar</button>
+                        <button id="pago-modal-confirmar" type="submit" class="rounded bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60">Confirmar pago</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 </div>
 @endsection
 
@@ -320,6 +362,152 @@
                 button.disabled = false;
                 button.classList.remove('opacity-60', 'cursor-not-allowed');
             }
+        });
+    })();
+</script>
+<script>
+    (() => {
+        const openButton = document.getElementById('pago-modal-abrir');
+        const modal = document.getElementById('pago-modal');
+        const form = document.getElementById('pago-form');
+        const method = document.getElementById('pago-metodo');
+        const receiptContainer = document.getElementById('pago-comprobante-contenedor');
+        const receipt = document.getElementById('pago-comprobante');
+        const receiptOpenButton = document.getElementById('pago-comprobante-abrir');
+        const receiptButtonText = document.getElementById('pago-comprobante-boton-texto');
+        const receiptName = document.getElementById('pago-comprobante-nombre');
+        const closeTopButton = document.getElementById('pago-modal-cerrar-superior');
+        const cancelButton = document.getElementById('pago-modal-cancelar');
+        const confirmButton = document.getElementById('pago-modal-confirmar');
+
+        if (!openButton || !modal || !form || !method || !confirmButton) {
+            return;
+        }
+
+        let submitting = false;
+        let receiptPickerOpening = false;
+        let receiptFocusHandler = null;
+        let receiptSafetyTimeout = null;
+
+        const updateReceiptName = () => {
+            if (receiptName) {
+                receiptName.textContent = receipt?.files?.[0]?.name || 'Ningún archivo seleccionado.';
+            }
+        };
+
+        const finishOpeningReceipt = () => {
+            if (receiptFocusHandler) {
+                window.removeEventListener('focus', receiptFocusHandler);
+                receiptFocusHandler = null;
+            }
+
+            if (receiptSafetyTimeout) {
+                window.clearTimeout(receiptSafetyTimeout);
+                receiptSafetyTimeout = null;
+            }
+
+            receiptPickerOpening = false;
+            if (receiptOpenButton) {
+                receiptOpenButton.disabled = false;
+            }
+            if (receiptButtonText) {
+                receiptButtonText.textContent = 'Elegir archivo';
+            }
+            updateReceiptName();
+        };
+
+        const openReceiptPicker = () => {
+            if (!receipt || !receiptOpenButton || receiptPickerOpening) {
+                return;
+            }
+
+            receiptPickerOpening = true;
+            receiptOpenButton.disabled = true;
+            if (receiptButtonText) {
+                receiptButtonText.textContent = '⏳ Abriendo...';
+            }
+
+            receiptFocusHandler = () => window.setTimeout(finishOpeningReceipt, 0);
+            window.addEventListener('focus', receiptFocusHandler, { once: true });
+            receiptSafetyTimeout = window.setTimeout(finishOpeningReceipt, 30000);
+
+            window.requestAnimationFrame(() => {
+                window.setTimeout(() => {
+                    if (receiptPickerOpening) {
+                        receipt.click();
+                    }
+                }, 0);
+            });
+        };
+
+        const syncReceiptRequirement = () => {
+            if (!receiptContainer || !receipt) {
+                return;
+            }
+
+            const required = method.value === 'TRANSFERENCIA' || method.value === 'CONSIGNACIÓN';
+            receipt.required = required;
+            receiptContainer.classList.toggle('hidden', !required);
+
+            if (!required) {
+                receipt.value = '';
+                updateReceiptName();
+            }
+        };
+
+        const openModal = () => {
+            submitting = false;
+            form.reset();
+            finishOpeningReceipt();
+            syncReceiptRequirement();
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Confirmar pago';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            method.focus();
+        };
+
+        const closeModal = () => {
+            if (submitting) {
+                return;
+            }
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            form.reset();
+            finishOpeningReceipt();
+        };
+
+        openButton.addEventListener('click', openModal);
+        method.addEventListener('change', syncReceiptRequirement);
+        receiptOpenButton?.addEventListener('click', openReceiptPicker);
+        receipt?.addEventListener('change', finishOpeningReceipt);
+        receipt?.addEventListener('cancel', finishOpeningReceipt);
+        [closeTopButton, cancelButton].forEach((button) => {
+            button?.addEventListener('click', closeModal);
+        });
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal.classList.contains('flex')) {
+                closeModal();
+            }
+        });
+
+        form.addEventListener('submit', (event) => {
+            if (submitting) {
+                event.preventDefault();
+                return;
+            }
+
+            submitting = true;
+            confirmButton.disabled = true;
+            confirmButton.textContent = 'Confirmando...';
         });
     })();
 </script>

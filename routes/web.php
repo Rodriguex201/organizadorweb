@@ -93,6 +93,9 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/proformas/{id}', [ProformasController::class, 'show'])->name('proformas.show');
     Route::get('/proformas/{id}/pdf', [ProformasController::class, 'showPdf'])->name('proformas.pdf.show');
     Route::get('/proformas/{id}/pdf/download', [ProformasController::class, 'downloadPdf'])->name('proformas.pdf.download');
+    Route::get('/proformas/{id}/comprobante-pago', [ProformasController::class, 'showComprobantePago'])
+        ->middleware('role:admin,user')
+        ->name('proformas.comprobante-pago.show');
     Route::post('/proformas/{id}/enviar', [ProformasController::class, 'enviarCorreo'])->name('proformas.enviar');
     Route::post('/proformas/{id}/marcar-enviada', [ProformasController::class, 'marcarEnviada'])
         ->middleware('role:admin,user')

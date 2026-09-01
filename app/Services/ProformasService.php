@@ -20,6 +20,12 @@ class ProformasService
     public const ESTADO_PAGADA = 4;
     public const ESTADO_FACTURADA = 6;
 
+    public const METODOS_PAGO = [
+        'EFECTIVO',
+        'TRANSFERENCIA',
+        'CONSIGNACIÓN',
+    ];
+
     public const ESTADOS = [
         self::ESTADO_GENERADA => 'Generada',
         self::ESTADO_ENVIADA => 'Enviada',
@@ -58,6 +64,7 @@ class ProformasService
             'p.rpdf',
             'p.npdf',
             'p.hpdf',
+            'p.comprobante_pago',
             'p.enviado',
             'p.fecha_envio',
             'p.intentos_envio',
@@ -168,7 +175,7 @@ class ProformasService
         $this->applyClienteJoins($query);
 
         return $query
-            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])
+            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.comprobante_pago', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])
             ->selectRaw($this->joinedClienteFieldExpression('codigo').' as codigo')
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as id_cliente')
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as cliente_potencial_id')
@@ -176,6 +183,14 @@ class ProformasService
             ->selectRaw($this->joinedClienteFieldExpression('fecha_arriendo').' as cliente_fecha_arriendo')
             ->selectRaw($this->clienteResolutionSourceExpression().' as cliente_resolution_source')
             ->where('p.id', $id)
+            ->first();
+    }
+
+    public function findComprobantePagoById(int $id): ?object
+    {
+        return DB::table('sg_proform')
+            ->select(['id', 'nro_prof', 'comprobante_pago'])
+            ->where('id', $id)
             ->first();
     }
 
@@ -375,7 +390,7 @@ class ProformasService
         return ((int) ($enviado ?? 0)) === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700';
     }
 
-    public function updateEstado(int $proformaId, int $nuevoEstado): array
+    public function updateEstado(int $proformaId, int $nuevoEstado, ?string $metodoPago = null, ?string $comprobantePago = null): array
     {
         $proforma = DB::table('sg_proform')->select(['id', 'estado'])->where('id', $proformaId)->first();
         if (!$proforma) return ['ok' => false, 'message' => 'La proforma no existe.', 'from' => 0, 'to' => $nuevoEstado];
@@ -383,13 +398,17 @@ class ProformasService
         if (!isset(self::ESTADOS[$nuevoEstado])) return ['ok' => false, 'message' => 'Estado destino inválido.', 'from' => $estadoActual, 'to' => $nuevoEstado];
         if ($estadoActual === $nuevoEstado) return ['ok' => false, 'message' => 'La proforma ya tiene ese estado.', 'from' => $estadoActual, 'to' => $nuevoEstado];
         if (!$this->canTransition($estadoActual, $nuevoEstado)) return ['ok' => false, 'message' => 'Transición de estado no permitida.', 'from' => $estadoActual, 'to' => $nuevoEstado];
+        if ($nuevoEstado === self::ESTADO_PAGADA && !in_array($metodoPago, self::METODOS_PAGO, true)) return ['ok' => false, 'message' => 'Método de pago inválido.', 'from' => $estadoActual, 'to' => $nuevoEstado];
+        if ($nuevoEstado === self::ESTADO_PAGADA && in_array($metodoPago, ['TRANSFERENCIA', 'CONSIGNACIÓN'], true) && trim((string) $comprobantePago) === '') return ['ok' => false, 'message' => 'El comprobante de pago es obligatorio.', 'from' => $estadoActual, 'to' => $nuevoEstado];
 
-        DB::transaction(function () use ($proformaId, $nuevoEstado) {
+        DB::transaction(function () use ($proformaId, $nuevoEstado, $metodoPago, $comprobantePago) {
             $updatePayload = ['estado' => $nuevoEstado];
             $fechaActual = now()->toDateString();
 
             if ($nuevoEstado === self::ESTADO_PAGADA) {
                 $updatePayload['fpag'] = $fechaActual;
+                $updatePayload['fpago'] = $metodoPago;
+                $updatePayload['comprobante_pago'] = $metodoPago === 'EFECTIVO' ? null : $comprobantePago;
             }
 
             if ($nuevoEstado === self::ESTADO_FACTURADA) {

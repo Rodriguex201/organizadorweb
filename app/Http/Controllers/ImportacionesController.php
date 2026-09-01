@@ -84,6 +84,23 @@ class ImportacionesController extends Controller
         }
 
         $preview = $this->importacionesService->buildPreview($batch);
+
+        $pendingAssignments = collect($preview['rows'] ?? [])
+            ->filter(fn (array $row) => ($row['status'] ?? null) === 'pending_assignment')
+            ->pluck('nit')
+            ->unique()
+            ->count();
+
+        if ($pendingAssignments > 0) {
+            return redirect()
+                ->route('configuracion.importaciones.index')
+                ->with('status', sprintf(
+                    'Hay %d NIT pendiente(s) de asignacion. Resuelvelos antes de extraer los datos.',
+                    $pendingAssignments
+                ))
+                ->with('status_type', 'warning');
+        }
+
         $result = $this->importacionesService->processBatch(
             $batch,
             $preview,

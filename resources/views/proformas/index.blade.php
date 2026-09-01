@@ -161,6 +161,8 @@
                         data-estado="{{ $estadoCodigo }}"
                         data-enviado="{{ (int) ($proforma->enviado ?? 0) }}"
                         data-update-url="{{ route('proformas.estado.update', $proforma->id) }}"
+                        data-comprobante-url="{{ route('proformas.comprobante-pago.show', $proforma->id) }}"
+                        data-has-comprobante="{{ trim((string) ($proforma->comprobante_pago ?? '')) !== '' ? '1' : '0' }}"
                         data-pdf-url="{{ route('proformas.pdf.show', $proforma->id) }}"
                         data-enviar-url="{{ $canSendProforma ? route('proformas.enviar', $proforma->id) : '' }}"
                         data-marcar-enviada-url="{{ route('proformas.marcar-enviada', $proforma->id) }}"
@@ -351,6 +353,46 @@
 </div>
 @endif
 
+<div id="pago-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-900/50 px-4" role="dialog" aria-modal="true" aria-labelledby="pago-modal-titulo">
+    <div class="w-full max-w-md rounded-lg bg-white shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <h2 id="pago-modal-titulo" class="text-base font-semibold text-slate-900">Marcar proforma como pagada</h2>
+            <button id="pago-modal-cerrar-superior" type="button" class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Cerrar modal">X</button>
+        </div>
+
+        <form id="pago-form" class="space-y-4 px-5 py-5">
+            <div>
+                <label for="pago-metodo" class="mb-1 block text-sm font-medium text-slate-700">Método de pago</label>
+                <select id="pago-metodo" name="fpago" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <option value="">Seleccionar...</option>
+                    <option value="EFECTIVO">Efectivo</option>
+                    <option value="TRANSFERENCIA">Transferencia</option>
+                    <option value="CONSIGNACIÓN">Consignación</option>
+                </select>
+            </div>
+
+            <div id="pago-comprobante-contenedor" class="hidden">
+                <span class="mb-1 block text-sm font-medium text-slate-700">Comprobante de pago</span>
+                <input id="pago-comprobante" name="comprobante_pago" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" class="sr-only">
+                <div class="flex items-center gap-3">
+                    <button id="pago-comprobante-abrir" type="button" class="rounded bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60" aria-controls="pago-comprobante">
+                        <span id="pago-comprobante-boton-texto">Elegir archivo</span>
+                    </button>
+                    <span id="pago-comprobante-nombre" class="min-w-0 truncate text-sm text-slate-600" aria-live="polite">Ningún archivo seleccionado.</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-500">JPG, JPEG, PNG, WEBP o PDF. Máximo 10 MB.</p>
+            </div>
+
+            <div id="pago-feedback" class="hidden rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"></div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
+                <button id="pago-modal-cancelar" type="button" class="rounded bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300">Cancelar</button>
+                <button id="pago-modal-confirmar" type="submit" class="rounded bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60">Confirmar pago</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="envio-masivo-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
     <div class="w-full max-w-5xl rounded-lg bg-white shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -470,6 +512,18 @@
         const tableRows = Array.from(document.querySelectorAll('[data-proforma-row]'));
         const menu = document.getElementById('proforma-context-menu');
         const menuItems = document.getElementById('proforma-context-menu-items');
+        const paymentModal = document.getElementById('pago-modal');
+        const paymentForm = document.getElementById('pago-form');
+        const paymentMethod = document.getElementById('pago-metodo');
+        const paymentReceiptContainer = document.getElementById('pago-comprobante-contenedor');
+        const paymentReceipt = document.getElementById('pago-comprobante');
+        const paymentReceiptOpenButton = document.getElementById('pago-comprobante-abrir');
+        const paymentReceiptButtonText = document.getElementById('pago-comprobante-boton-texto');
+        const paymentReceiptName = document.getElementById('pago-comprobante-nombre');
+        const paymentFeedback = document.getElementById('pago-feedback');
+        const paymentCloseTopButton = document.getElementById('pago-modal-cerrar-superior');
+        const paymentCancelButton = document.getElementById('pago-modal-cancelar');
+        const paymentConfirmButton = document.getElementById('pago-modal-confirmar');
         const activationModal = document.getElementById('activacion-modal');
         const activationForm = document.getElementById('activacion-form');
         const activationCloseTopButton = document.getElementById('activacion-cerrar-superior');
@@ -495,8 +549,64 @@
         }
 
         let currentRow = null;
+        let pendingPaymentRow = null;
+        let paymentSubmitting = false;
+        let paymentReceiptPickerOpening = false;
+        let paymentReceiptFocusHandler = null;
+        let paymentReceiptSafetyTimeout = null;
 
         let feedbackTimeout = null;
+
+        const updatePaymentReceiptName = () => {
+            if (paymentReceiptName) {
+                paymentReceiptName.textContent = paymentReceipt?.files?.[0]?.name || 'Ningún archivo seleccionado.';
+            }
+        };
+
+        const finishOpeningPaymentReceipt = () => {
+            if (paymentReceiptFocusHandler) {
+                window.removeEventListener('focus', paymentReceiptFocusHandler);
+                paymentReceiptFocusHandler = null;
+            }
+
+            if (paymentReceiptSafetyTimeout) {
+                window.clearTimeout(paymentReceiptSafetyTimeout);
+                paymentReceiptSafetyTimeout = null;
+            }
+
+            paymentReceiptPickerOpening = false;
+            if (paymentReceiptOpenButton) {
+                paymentReceiptOpenButton.disabled = false;
+            }
+            if (paymentReceiptButtonText) {
+                paymentReceiptButtonText.textContent = 'Elegir archivo';
+            }
+            updatePaymentReceiptName();
+        };
+
+        const openPaymentReceiptPicker = () => {
+            if (!paymentReceipt || !paymentReceiptOpenButton || paymentReceiptPickerOpening) {
+                return;
+            }
+
+            paymentReceiptPickerOpening = true;
+            paymentReceiptOpenButton.disabled = true;
+            if (paymentReceiptButtonText) {
+                paymentReceiptButtonText.textContent = '⏳ Abriendo...';
+            }
+
+            paymentReceiptFocusHandler = () => window.setTimeout(finishOpeningPaymentReceipt, 0);
+            window.addEventListener('focus', paymentReceiptFocusHandler, { once: true });
+            paymentReceiptSafetyTimeout = window.setTimeout(finishOpeningPaymentReceipt, 30000);
+
+            window.requestAnimationFrame(() => {
+                window.setTimeout(() => {
+                    if (paymentReceiptPickerOpening) {
+                        paymentReceipt.click();
+                    }
+                }, 0);
+            });
+        };
 
         const showFeedback = (message, type = 'success') => {
             let container = document.getElementById('proforma-feedback');
@@ -528,6 +638,39 @@
             }, 2500);
         };
 
+        const openPaymentModal = (row) => {
+            if (!paymentModal || !paymentForm || !paymentMethod || !paymentConfirmButton) {
+                return;
+            }
+
+            pendingPaymentRow = row;
+            paymentSubmitting = false;
+            paymentForm.reset();
+            finishOpeningPaymentReceipt();
+            syncPaymentReceiptRequirement();
+            paymentFeedback?.classList.add('hidden');
+            if (paymentFeedback) {
+                paymentFeedback.textContent = '';
+            }
+            paymentConfirmButton.disabled = false;
+            paymentConfirmButton.textContent = 'Confirmar pago';
+            paymentModal.classList.remove('hidden');
+            paymentModal.classList.add('flex');
+            paymentMethod.focus();
+        };
+
+        const closePaymentModal = () => {
+            if (!paymentModal || paymentSubmitting) {
+                return;
+            }
+
+            paymentModal.classList.add('hidden');
+            paymentModal.classList.remove('flex');
+            paymentForm?.reset();
+            finishOpeningPaymentReceipt();
+            pendingPaymentRow = null;
+        };
+
 
         const hideMenu = () => {
             menu.classList.add('pointer-events-none', 'opacity-0', 'scale-95');
@@ -542,6 +685,8 @@
                 row.dataset.pdfUrl || '',
                 row.dataset.enviarUrl || '',
                 row.dataset.activacionShowUrl || '',
+                row.dataset.comprobanteUrl || '',
+                Number(row.dataset.hasComprobante || 0),
             );
 
             if (acciones.length === 0) {
@@ -576,10 +721,14 @@
 
         const versionedPdfUrl = (url) => `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`;
 
-        const getActionsForState = (estadoActual, enviadoActual, pdfUrl, enviarUrl, activationShowUrl) => {
+        const getActionsForState = (estadoActual, enviadoActual, pdfUrl, enviarUrl, activationShowUrl, comprobanteUrl, hasComprobante) => {
             const acciones = [];
             if (pdfUrl) {
                 acciones.push({ type: 'link', label: 'Ver PDF', url: versionedPdfUrl(pdfUrl) });
+            }
+
+            if (hasComprobante === 1 && comprobanteUrl) {
+                acciones.push({ type: 'link', label: 'Ver comprobante', url: comprobanteUrl });
             }
 
             if (activationShowUrl) {
@@ -1164,13 +1313,22 @@
             }
         };
 
-        const runAction = async (row, estadoDestino) => {
+        const runAction = async (row, estadoDestino, metodoPago = null) => {
             const url = row.dataset.updateUrl;
             if (!url) {
-                return;
+                return false;
             }
 
             try {
+                const requestPayload = {
+                    estado: estadoDestino,
+                    redirect_to: 'index',
+                };
+
+                if (estadoDestino === ESTADO_PAGADA) {
+                    requestPayload.fpago = metodoPago;
+                }
+
                 const response = await fetch(url, {
                     method: 'PATCH',
                     headers: {
@@ -1179,10 +1337,7 @@
                         'X-CSRF-TOKEN': csrfToken,
                         'X-Requested-With': 'XMLHttpRequest',
                     },
-                    body: JSON.stringify({
-                        estado: estadoDestino,
-                        redirect_to: 'index',
-                    }),
+                    body: JSON.stringify(requestPayload),
                 });
 
                 const payload = await response.json();
@@ -1193,10 +1348,59 @@
                 updateRowState(row, Number(payload.to || estadoDestino));
 
                 showFeedback(payload.message || 'Estado actualizado correctamente.', 'success');
+                return true;
             } catch (error) {
                 console.error(error);
                 showFeedback(error.message || 'No se pudo actualizar el estado.', 'error');
+                return false;
+            }
+        };
 
+        const runPaymentAction = async (row, metodoPago, comprobante) => {
+            const url = row.dataset.updateUrl;
+            if (!url) {
+                return false;
+            }
+
+            const requestData = new FormData();
+            requestData.append('_method', 'PATCH');
+            requestData.append('estado', String(ESTADO_PAGADA));
+            requestData.append('redirect_to', 'index');
+            requestData.append('fpago', metodoPago);
+
+            if (comprobante) {
+                requestData.append('comprobante_pago', comprobante);
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: requestData,
+                });
+
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || 'No se pudo actualizar el estado.');
+                }
+
+                row.dataset.hasComprobante = payload.comprobante_url ? '1' : '0';
+                if (payload.comprobante_url) {
+                    row.dataset.comprobanteUrl = payload.comprobante_url;
+                }
+
+                updateRowState(row, Number(payload.to || ESTADO_PAGADA));
+                showFeedback(payload.message || 'Estado actualizado correctamente.', 'success');
+
+                return true;
+            } catch (error) {
+                console.error(error);
+                showFeedback(error.message || 'No se pudo actualizar el estado.', 'error');
+                return false;
             }
         };
 
@@ -1239,9 +1443,86 @@
             }
 
             const estadoDestino = Number(targetButton.dataset.targetState);
+
+            if (estadoDestino === ESTADO_PAGADA) {
+                openPaymentModal(row);
+                return;
+            }
+
             await runAction(row, estadoDestino);
 
         });
+
+        [paymentCloseTopButton, paymentCancelButton].forEach((button) => {
+            button?.addEventListener('click', closePaymentModal);
+        });
+
+        paymentModal?.addEventListener('click', (event) => {
+            if (event.target === paymentModal) {
+                closePaymentModal();
+            }
+        });
+
+        paymentForm?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            if (paymentSubmitting || !pendingPaymentRow || !paymentMethod || !paymentConfirmButton) {
+                return;
+            }
+
+            if (!paymentMethod.value) {
+                paymentMethod.reportValidity();
+                return;
+            }
+
+            const receiptRequired = paymentMethod.value === 'TRANSFERENCIA' || paymentMethod.value === 'CONSIGNACIÓN';
+            const receiptFile = paymentReceipt?.files?.[0] || null;
+
+            if (receiptRequired && !receiptFile) {
+                paymentReceipt?.reportValidity();
+                return;
+            }
+
+            paymentSubmitting = true;
+            paymentConfirmButton.disabled = true;
+            paymentConfirmButton.textContent = 'Confirmando...';
+
+            const updated = await runPaymentAction(pendingPaymentRow, paymentMethod.value, receiptFile);
+
+            paymentSubmitting = false;
+            paymentConfirmButton.disabled = false;
+            paymentConfirmButton.textContent = 'Confirmar pago';
+
+            if (updated) {
+                closePaymentModal();
+                return;
+            }
+
+            if (paymentFeedback) {
+                paymentFeedback.textContent = 'No se pudo confirmar el pago. Revisa la información e intenta nuevamente.';
+                paymentFeedback.classList.remove('hidden');
+            }
+        });
+
+        const syncPaymentReceiptRequirement = () => {
+            if (!paymentMethod || !paymentReceiptContainer || !paymentReceipt) {
+                return;
+            }
+
+            const required = paymentMethod.value === 'TRANSFERENCIA' || paymentMethod.value === 'CONSIGNACIÓN';
+            paymentReceipt.required = required;
+            paymentReceiptContainer.classList.toggle('hidden', !required);
+
+            if (!required) {
+                paymentReceipt.value = '';
+                updatePaymentReceiptName();
+            }
+        };
+
+        paymentMethod?.addEventListener('change', syncPaymentReceiptRequirement);
+        paymentReceiptOpenButton?.addEventListener('click', openPaymentReceiptPicker);
+        paymentReceipt?.addEventListener('change', finishOpeningPaymentReceipt);
+        paymentReceipt?.addEventListener('cancel', finishOpeningPaymentReceipt);
 
         document.addEventListener('click', (event) => {
             if (!menu.contains(event.target)) {
@@ -1251,6 +1532,12 @@
 
         window.addEventListener('scroll', hideMenu, true);
         window.addEventListener('resize', hideMenu);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && paymentModal?.classList.contains('flex')) {
+                closePaymentModal();
+            }
+        });
 
         [activationCloseTopButton, activationCloseButton].forEach((button) => {
             button?.addEventListener('click', closeActivationModal);

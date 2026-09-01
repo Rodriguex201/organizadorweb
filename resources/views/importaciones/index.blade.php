@@ -108,8 +108,11 @@
     @if ($preview)
         @php
             $previewRowsCollection = collect($preview['rows'] ?? []);
-            $duplicadosPendientes = $previewRowsCollection->filter(fn (array $row) => ($row['status'] ?? null) !== 'ready' && !empty($row['match_count']))->count();
+            $pendingAssignmentRows = $previewRowsCollection->filter(fn (array $row) => ($row['status'] ?? null) === 'pending_assignment');
+            $pendingAssignmentsByNit = $pendingAssignmentRows->groupBy(fn (array $row) => (string) ($row['nit'] ?? ''));
+            $duplicadosPendientes = $pendingAssignmentsByNit->count();
             $duplicadosResueltos = $previewRowsCollection->filter(fn (array $row) => ($row['status'] ?? null) === 'ready' && !empty($row['resolved_manually']))->count();
+            $processablePreviewRows = $previewRowsCollection->reject(fn (array $row) => ($row['status'] ?? null) === 'pending_assignment');
         @endphp
         <section class="rounded-lg bg-white p-6 shadow">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -121,9 +124,18 @@
                 @if (!($preview['requires_base_generation'] ?? false))
                     <form method="POST" action="{{ route('configuracion.importaciones.extract') }}">
                         @csrf
-                        <button type="submit" class="inline-flex items-center rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                        <button
+                            type="submit"
+                            @disabled($duplicadosPendientes > 0)
+                            class="inline-flex items-center rounded px-4 py-2 text-sm font-medium text-white {{ $duplicadosPendientes > 0 ? 'cursor-not-allowed bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-700' }}"
+                        >
                             EXTRAER DATOS
                         </button>
+                        @if ($duplicadosPendientes > 0)
+                            <p class="mt-2 max-w-xs text-xs text-amber-700">
+                                Debes resolver {{ $duplicadosPendientes }} NIT pendiente(s) de asignacion antes de extraer.
+                            </p>
+                        @endif
                     </form>
                 @endif
             </div>
@@ -191,7 +203,85 @@
                 </div>
             @endif
 
-            @if (!empty($preview['rows']))
+            @if ($pendingAssignmentsByNit->isNotEmpty())
+                <section class="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                    <h3 class="text-base font-semibold text-amber-900">NIT pendientes de asignacion</h3>
+                    <p class="mt-1 text-sm text-amber-800">
+                        Se encontraron multiples clientes potenciales para estos NIT. Selecciona el cliente correcto para continuar con la importacion.
+                    </p>
+
+                    <div class="mt-4 space-y-4">
+                        @foreach ($pendingAssignmentsByNit as $nit => $nitRows)
+                            @php
+                                $firstPendingRow = $nitRows->first();
+                                $totalRegistrosNit = $nitRows->sum(fn (array $row) => count((array) ($row['rows'] ?? [])));
+                            @endphp
+                            <article class="rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
+                                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-900">NIT: {{ $nit }}</p>
+                                        <p class="mt-1 text-sm text-slate-600">
+                                            Este NIT aparece en {{ $totalRegistrosNit }} registro(s) del archivo.
+                                        </p>
+                                        <p class="mt-1 text-xs text-slate-500">
+                                            Seleccione el cliente potencial correspondiente.
+                                        </p>
+                                    </div>
+                                    <span class="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                        {{ $firstPendingRow['match_count'] ?? 0 }} coincidencias
+                                    </span>
+                                </div>
+
+                                <div class="mt-4 overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-slate-200 text-xs">
+                                        <thead class="bg-slate-100">
+                                            <tr>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">id_cliente</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">id_cobro</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">Codigo</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">Nombre</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">Empresa</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">Regimen</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">Fecha arriendo</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">Fecha retiro</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">Estado</th>
+                                                <th class="px-2 py-2 text-left font-medium text-slate-600">Accion</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 bg-white">
+                                            @foreach (($firstPendingRow['matches'] ?? []) as $match)
+                                                <tr>
+                                                    <td class="px-2 py-2 align-top">{{ $match['id_cliente'] }}</td>
+                                                    <td class="px-2 py-2 align-top">{{ $match['id_cobro'] }}</td>
+                                                    <td class="px-2 py-2 align-top">{{ $match['codigo'] !== '' ? $match['codigo'] : '-' }}</td>
+                                                    <td class="px-2 py-2 align-top">{{ $match['nombre'] !== '' ? $match['nombre'] : '-' }}</td>
+                                                    <td class="px-2 py-2 align-top">{{ $match['empresa'] !== '' ? $match['empresa'] : '-' }}</td>
+                                                    <td class="px-2 py-2 align-top">{{ $match['regimen'] !== '' ? $match['regimen'] : '-' }}</td>
+                                                    <td class="px-2 py-2 align-top">{{ $match['fecha_arriendo'] ?: '-' }}</td>
+                                                    <td class="px-2 py-2 align-top">{{ $match['fecha_retiro'] ?: '-' }}</td>
+                                                    <td class="px-2 py-2 align-top">{{ $match['estado'] }}</td>
+                                                    <td class="px-2 py-2 align-top">
+                                                        <form method="POST" action="{{ route('configuracion.importaciones.assign-ambiguous') }}">
+                                                            @csrf
+                                                            <input type="hidden" name="entry_id" value="{{ $firstPendingRow['entry_id'] }}">
+                                                            <input type="hidden" name="id_cobro" value="{{ $match['id_cobro'] }}">
+                                                            <button type="submit" class="rounded bg-indigo-600 px-2 py-1 font-medium text-white hover:bg-indigo-700">
+                                                                Asignar a este cliente
+                                                            </button>
+                                                        </form>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
+
+            @if ($processablePreviewRows->isNotEmpty())
                 <div class="mt-6 overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200 text-sm">
                         <thead class="bg-slate-50">
@@ -206,7 +296,7 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 bg-white" data-preview-table-body>
-                            @foreach ($preview['rows'] as $row)
+                            @foreach ($processablePreviewRows as $row)
                                 <tr
                                     data-preview-row
                                     data-filter-type="{{ ($row['status'] ?? null) === 'ready' ? (!empty($row['resolved_manually']) ? 'duplicate_resolved' : 'ready') : (!empty($row['match_count']) ? 'duplicate_pending' : 'error') }}"
