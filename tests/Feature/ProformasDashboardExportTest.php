@@ -2,16 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Exports\ProformasDashboardExcelExport;
 use App\Http\Controllers\ProformasController;
+use App\Services\ClienteCrecimientoReportService;
+use App\Services\EmpresaActivacionService;
 use App\Services\ProformaDashboardExportService;
 use App\Services\ProformaEmailService;
 use App\Services\ProformaPdfService;
 use App\Services\ProformasService;
-use App\Services\EmpresaActivacionService;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Mockery;
+use ReflectionMethod;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 
@@ -23,6 +29,7 @@ class ProformasDashboardExportTest extends TestCase
         $pdfService = Mockery::mock(ProformaPdfService::class);
         $emailService = Mockery::mock(ProformaEmailService::class);
         $exportService = Mockery::mock(ProformaDashboardExportService::class);
+        $crecimientoService = Mockery::mock(ClienteCrecimientoReportService::class);
         $activacionService = Mockery::mock(EmpresaActivacionService::class);
         $service->shouldIgnoreMissing();
 
@@ -62,6 +69,7 @@ class ProformasDashboardExportTest extends TestCase
             $pdfService,
             $emailService,
             $exportService,
+            $crecimientoService,
             $activacionService,
         );
 
@@ -82,6 +90,7 @@ class ProformasDashboardExportTest extends TestCase
         $pdfService = Mockery::mock(ProformaPdfService::class);
         $emailService = Mockery::mock(ProformaEmailService::class);
         $exportService = Mockery::mock(ProformaDashboardExportService::class);
+        $crecimientoService = Mockery::mock(ClienteCrecimientoReportService::class);
         $activacionService = Mockery::mock(EmpresaActivacionService::class);
         $service->shouldIgnoreMissing();
 
@@ -95,7 +104,7 @@ class ProformasDashboardExportTest extends TestCase
 
         $service->shouldReceive('getDashboardData')
             ->once()
-            ->with(5, 2026, 3)
+            ->with(5, 2026, 3, null)
             ->andReturn([
                 'total_proformas' => 0,
                 'total_generadas' => 0,
@@ -109,7 +118,7 @@ class ProformasDashboardExportTest extends TestCase
 
         $service->shouldReceive('paginateDashboardProformas')
             ->once()
-            ->with(5, 2026, 3)
+            ->with(5, 2026, 3, null)
             ->andReturn(new LengthAwarePaginator([], 0, 15, 1, [
                 'path' => route('proformas.dashboard'),
                 'pageName' => 'page',
@@ -121,6 +130,7 @@ class ProformasDashboardExportTest extends TestCase
                 'mes' => 5,
                 'anio' => 2026,
                 'estado' => 3,
+                'grupo_fecha' => null,
             ])
             ->andReturn([
                 'column_groups' => [],
@@ -149,6 +159,7 @@ class ProformasDashboardExportTest extends TestCase
             $pdfService,
             $emailService,
             $exportService,
+            $crecimientoService,
             $activacionService,
         );
 
@@ -160,6 +171,7 @@ class ProformasDashboardExportTest extends TestCase
             'mes' => 5,
             'anio' => 2026,
             'estado' => 3,
+            'grupo_fecha' => null,
         ], $view->getData()['filters']);
         $this->assertTrue($view->getData()['hasSearched']);
         $this->assertArrayHasKey('exportOptions', $view->getData());
@@ -204,6 +216,7 @@ class ProformasDashboardExportTest extends TestCase
                 'mes' => '5',
                 'anio' => 2026,
                 'estado' => 3,
+                'grupo_fecha' => null,
             ])
             ->andReturn($resolvedFilters);
 
@@ -324,5 +337,128 @@ class ProformasDashboardExportTest extends TestCase
 
         $this->assertInstanceOf(BinaryFileResponse::class, $response->baseResponse);
         $response->assertOk();
+    }
+
+    public function test_fecha_de_retiro_valida_usa_el_formato_del_exportador(): void
+    {
+        $service = $this->makeRealExportService();
+
+        $this->assertSame(
+            '18/06/2026',
+            $this->columnValue($service, 'cliente_fecha_retiro', '2026-06-18'),
+        );
+    }
+
+    public function test_fecha_de_retiro_nula_o_invalida_exporta_celda_vacia(): void
+    {
+        $service = $this->makeRealExportService();
+
+        $this->assertSame('', $this->columnValue($service, 'cliente_fecha_retiro', null));
+        $this->assertSame('', $this->columnValue($service, 'cliente_fecha_retiro', 'fecha-no-valida'));
+    }
+
+    public function test_motivo_de_retiro_por_id_exporta_el_nombre_del_catalogo(): void
+    {
+        $this->createRetiroCatalog();
+        DB::table('conceptos_r')->insert([
+            'id_retiro' => 2,
+            'conceptosretiro' => 'cambio contador',
+        ]);
+        $service = $this->makeRealExportService();
+
+        $this->assertSame(
+            'cambio contador',
+            $this->columnValue($service, 'cliente_motivo_retiro', '2'),
+        );
+    }
+
+    public function test_motivo_de_retiro_historico_conserva_el_texto_original(): void
+    {
+        $this->createRetiroCatalog();
+        $service = $this->makeRealExportService();
+
+        $this->assertSame(
+            'Cierre empresa',
+            $this->columnValue($service, 'cliente_motivo_retiro', 'Cierre empresa'),
+        );
+        $this->assertSame('', $this->columnValue($service, 'cliente_motivo_retiro', null));
+    }
+
+    public function test_motivo_de_retiro_con_id_sin_catalogo_conserva_el_valor_original(): void
+    {
+        $this->createRetiroCatalog();
+        DB::table('conceptos_r')->insert([
+            'id_retiro' => 1,
+            'conceptosretiro' => 'costoso',
+        ]);
+        $service = $this->makeRealExportService();
+
+        $this->assertSame(
+            '999',
+            $this->columnValue($service, 'cliente_motivo_retiro', '999'),
+        );
+    }
+
+    public function test_nuevas_columnas_aparecen_en_datos_cliente_y_respetan_el_orden_en_excel(): void
+    {
+        $this->createRetiroCatalog();
+        DB::table('conceptos_r')->insert([
+            'id_retiro' => 2,
+            'conceptosretiro' => 'cambio contador',
+        ]);
+        $service = $this->makeRealExportService();
+        $options = $service->getModalOptions();
+        $clienteGroup = collect($options['column_groups'])->firstWhere('key', 'cliente');
+
+        $this->assertNotNull($clienteGroup);
+        $this->assertContains('cliente_fecha_retiro', array_column($clienteGroup['columns'], 'key'));
+        $this->assertContains('cliente_motivo_retiro', array_column($clienteGroup['columns'], 'key'));
+
+        $selected = $this->invokePrivateMethod($service, 'sanitizeSelectedColumns', [[
+            'cliente_motivo_retiro',
+            'cliente_fecha_retiro',
+        ], ProformaDashboardExportService::EXPORT_MODE_DETAILED]);
+        $definitions = $this->invokePrivateMethod($service, 'columnDefinitions');
+        $row = (object) [
+            'cliente_motivo_retiro' => '2',
+            'cliente_fecha_retiro' => '2026-06-18',
+        ];
+        $headings = array_map(fn (string $key) => $definitions[$key]['label'], $selected);
+        $values = array_map(fn (string $key) => ($definitions[$key]['value'])($row), $selected);
+        $excel = new ProformasDashboardExcelExport($headings, [$values]);
+
+        $this->assertSame([
+            ['Motivo de retiro', 'Fecha de retiro'],
+            ['cambio contador', '18/06/2026'],
+        ], $excel->array());
+    }
+
+    private function makeRealExportService(): ProformaDashboardExportService
+    {
+        return new ProformaDashboardExportService(Mockery::mock(ProformasService::class));
+    }
+
+    private function columnValue(ProformaDashboardExportService $service, string $key, mixed $value): mixed
+    {
+        $definitions = $this->invokePrivateMethod($service, 'columnDefinitions');
+
+        return ($definitions[$key]['value'])((object) [$key => $value]);
+    }
+
+    private function invokePrivateMethod(object $object, string $method, array $arguments = []): mixed
+    {
+        $reflection = new ReflectionMethod($object, $method);
+        $reflection->setAccessible(true);
+
+        return $reflection->invokeArgs($object, $arguments);
+    }
+
+    private function createRetiroCatalog(): void
+    {
+        Schema::dropIfExists('conceptos_r');
+        Schema::create('conceptos_r', function (Blueprint $table): void {
+            $table->integer('id_retiro')->primary();
+            $table->string('conceptosretiro');
+        });
     }
 }

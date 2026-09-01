@@ -61,6 +61,8 @@ class ProformasService
             'p.anio',
             'p.vtotal',
             'p.estado',
+            'p.fpag',
+            'p.ffac',
             'p.rpdf',
             'p.npdf',
             'p.hpdf',

@@ -150,6 +150,36 @@
                         $clientePotencialId = (int) ($proforma->cliente_potencial_id ?? 0);
                         $fechaArriendo = \Illuminate\Support\Carbon::make($proforma->cliente_fecha_arriendo)?->format('d/m/Y') ?: 'N/D';
                         $canSendProforma = $proformasService->canSendProforma($proforma);
+                        $formatEstadoFecha = static function ($value): ?string {
+                            if (trim((string) ($value ?? '')) === '') {
+                                return null;
+                            }
+
+                            try {
+                                return \Illuminate\Support\Carbon::parse($value)->format('d/m/Y');
+                            } catch (\Throwable) {
+                                return null;
+                            }
+                        };
+                        $estadoTooltipLines = [];
+
+                        if (in_array($estadoCodigo, [\App\Services\ProformasService::ESTADO_PAGADA, \App\Services\ProformasService::ESTADO_FACTURADA], true)) {
+                            $fechaPago = $formatEstadoFecha($proforma->fpag ?? null);
+
+                            if ($fechaPago !== null) {
+                                $estadoTooltipLines[] = "Fecha de pago: {$fechaPago}";
+                            }
+                        }
+
+                        if ($estadoCodigo === \App\Services\ProformasService::ESTADO_FACTURADA) {
+                            $fechaFacturacion = $formatEstadoFecha($proforma->ffac ?? null);
+
+                            if ($fechaFacturacion !== null) {
+                                $estadoTooltipLines[] = "Fecha de facturación: {$fechaFacturacion}";
+                            }
+                        }
+
+                        $estadoTooltip = implode("\n", $estadoTooltipLines);
                     @endphp
                     <tr
                         class="hover:bg-slate-50"
@@ -216,6 +246,11 @@
                                 data-style-enviada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_ENVIADA) }}"
                                 data-style-pagada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_PAGADA) }}"
                                 data-style-facturada="{{ $proformasService->estadoBadgeStyle(\App\Services\ProformasService::ESTADO_FACTURADA) }}"
+                                @if($estadoTooltip !== '')
+                                    data-estado-tooltip="{{ $estadoTooltip }}"
+                                    tabindex="0"
+                                    aria-label="{{ $estado }}. {{ implode('. ', $estadoTooltipLines) }}"
+                                @endif
                                 style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}"
                             >{{ $estado }}</span>
                         </td>
@@ -268,6 +303,8 @@
 >
     <ul id="proforma-context-menu-items" class="space-y-1"></ul>
 </div>
+
+<div id="proforma-estado-tooltip" role="tooltip" aria-hidden="true" class="pointer-events-none fixed z-[100] hidden max-w-xs whitespace-pre-line rounded-md bg-slate-900 px-3 py-2 text-xs font-medium leading-5 text-white shadow-xl"></div>
 
 @if($canManageActivation)
 <div id="activacion-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
@@ -467,6 +504,75 @@
 
 @push('scripts')
 @include('partials.filter-submit-loading-script')
+<script>
+    (() => {
+        const tooltip = document.getElementById('proforma-estado-tooltip');
+        const badges = Array.from(document.querySelectorAll('[data-estado-tooltip]'));
+        let activeBadge = null;
+
+        if (!tooltip || badges.length === 0) {
+            return;
+        }
+
+        const hideTooltip = () => {
+            activeBadge = null;
+            tooltip.classList.add('hidden');
+            tooltip.setAttribute('aria-hidden', 'true');
+        };
+
+        const positionTooltip = (badge) => {
+            const badgeRect = badge.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
+            const gap = 8;
+            const viewportPadding = 8;
+            let top = badgeRect.top - tooltipRect.height - gap;
+
+            if (top < viewportPadding) {
+                top = badgeRect.bottom + gap;
+            }
+
+            const centeredLeft = badgeRect.left + ((badgeRect.width - tooltipRect.width) / 2);
+            const maxLeft = Math.max(viewportPadding, window.innerWidth - tooltipRect.width - viewportPadding);
+            const left = Math.min(Math.max(centeredLeft, viewportPadding), maxLeft);
+
+            tooltip.style.top = `${Math.round(top)}px`;
+            tooltip.style.left = `${Math.round(left)}px`;
+        };
+
+        const showTooltip = (badge) => {
+            const content = badge.dataset.estadoTooltip?.trim();
+            if (!content) {
+                return;
+            }
+
+            activeBadge = badge;
+            tooltip.textContent = content;
+            tooltip.classList.remove('hidden');
+            tooltip.setAttribute('aria-hidden', 'false');
+            positionTooltip(badge);
+        };
+
+        badges.forEach((badge) => {
+            badge.addEventListener('mouseenter', () => showTooltip(badge));
+            badge.addEventListener('mouseleave', hideTooltip);
+            badge.addEventListener('focus', () => showTooltip(badge));
+            badge.addEventListener('blur', hideTooltip);
+            badge.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    hideTooltip();
+                    badge.blur();
+                }
+            });
+        });
+
+        window.addEventListener('scroll', hideTooltip, true);
+        window.addEventListener('resize', () => {
+            if (activeBadge) {
+                positionTooltip(activeBadge);
+            }
+        });
+    })();
+</script>
 <script>
     (() => {
         window.initFilterSubmitLoading({

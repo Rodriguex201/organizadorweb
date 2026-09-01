@@ -30,6 +30,8 @@ class ProformaDashboardExportService
 
     private ?bool $sgProformHasIdCobroColumn = null;
 
+    private ?array $retiroReasonLabels = null;
+
     public function __construct(
         private readonly ProformasService $proformasService,
     ) {
@@ -456,6 +458,20 @@ class ProformaDashboardExportService
             'cliente_contacto' => $this->subqueryColumn('cliente_contacto', 'cliente', 'contacto', 'Contacto'),
             'cliente_fecha_arriendo' => $this->subqueryDateColumn('cliente_fecha_arriendo', 'cliente', 'fecha_arriendo', 'Fecha arriendo'),
             'cliente_fecha_inicio' => $this->subqueryDateColumn('cliente_fecha_inicio', 'cliente', 'fecha_llegada', 'Fecha inicio'),
+            'cliente_fecha_retiro' => [
+                'group' => 'cliente',
+                'label' => 'Fecha de retiro',
+                'type' => 'date',
+                'select' => fn (Builder $query) => $this->addClienteFieldSelect($query, 'fecha_retiro', 'cliente_fecha_retiro'),
+                'value' => fn (object $row) => $this->displayRetiroDateValue($row->cliente_fecha_retiro ?? null),
+            ],
+            'cliente_motivo_retiro' => [
+                'group' => 'cliente',
+                'label' => 'Motivo de retiro',
+                'type' => 'text',
+                'select' => fn (Builder $query) => $this->addClienteFieldSelect($query, 'tipoRetiro', 'cliente_motivo_retiro'),
+                'value' => fn (object $row) => $this->displayRetiroReasonValue($row->cliente_motivo_retiro ?? null),
+            ],
 
             'cliente_valor_principal' => $this->subqueryCurrencyColumn('cliente_valor_principal', 'cliente_valores', 'vlrprincipal', 'Valor principal'),
             'cliente_numero_equipos' => $this->subqueryNumericColumn('cliente_numero_equipos', 'cliente_valores', 'numequipos', 'Número equipos'),
@@ -883,6 +899,48 @@ class ProformaDashboardExportService
     private function displayDateValue(mixed $value): string
     {
         return $this->formatDate($value) ?? self::TEXT_PLACEHOLDER;
+    }
+
+    private function displayRetiroDateValue(mixed $value): string
+    {
+        $string = $this->stringValue($value);
+
+        if ($string === null) {
+            return '';
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($string)->format('d/m/Y');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function displayRetiroReasonValue(mixed $value): string
+    {
+        $reason = $this->stringValue($value);
+
+        if ($reason === null) {
+            return '';
+        }
+
+        return $this->retiroReasonLabels()[$reason] ?? $reason;
+    }
+
+    private function retiroReasonLabels(): array
+    {
+        if ($this->retiroReasonLabels !== null) {
+            return $this->retiroReasonLabels;
+        }
+
+        if (!Schema::hasTable('conceptos_r')) {
+            return $this->retiroReasonLabels = [];
+        }
+
+        return $this->retiroReasonLabels = DB::table('conceptos_r')
+            ->pluck('conceptosretiro', 'id_retiro')
+            ->mapWithKeys(fn ($label, $id) => [(string) $id => trim((string) $label)])
+            ->all();
     }
 
     private function toFloat(mixed $value): float
