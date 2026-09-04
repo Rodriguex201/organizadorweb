@@ -83,6 +83,10 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::post('/proformas/cartera/export', [ProformaCarteraController::class, 'export'])->name('proformas.cartera.export');
 
     Route::middleware('role.admin')->group(function (): void {
+        Route::get('/proformas/activacion/clientes', [ProformasController::class, 'buscarClientesActivacion'])->name('proformas.activacion.clientes.buscar');
+        Route::get('/proformas/activacion/clientes/{clienteId}', [ProformasController::class, 'obtenerActivacionCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.show');
+        Route::post('/proformas/activacion/clientes/{clienteId}', [ProformasController::class, 'guardarActivacionCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.update');
+        Route::post('/proformas/activacion/clientes/{clienteId}/eventos', [ProformasController::class, 'actualizarLicenciaEventosCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.eventos.update');
         Route::get('/proformas/envio-masivo/{grupo}/confirmar', [ProformasController::class, 'confirmarEnvioMasivo'])->name('proformas.envio-masivo.confirmar');
         Route::post('/proformas/envio-masivo/{grupo}', [ProformasController::class, 'enviarMasivo'])->name('proformas.envio-masivo.enviar');
         Route::get('/proformas/{id}/activacion', [ProformasController::class, 'obtenerActivacion'])->name('proformas.activacion.show');

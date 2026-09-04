@@ -3,6 +3,9 @@
 @section('title', 'Listado de Proformas')
 
 @section('content')
+@php
+    $canManageActivation = (int) session('rol_id', session('roles_idroles')) === 1;
+@endphp
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="mb-6 flex items-center justify-between gap-3">
         <div>
@@ -11,6 +14,9 @@
         </div>
 
         <div class="flex flex-wrap gap-2">
+            @if($canManageActivation)
+                <button id="activacion-global-abrir" type="button" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-800 hover:bg-cyan-200">Activación</button>
+            @endif
             <a href="{{ route('proformas.dashboard') }}" class="inline-flex items-center rounded bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200">
                 Ver Informe
             </a>
@@ -37,10 +43,6 @@
             {{ session('warning') }}
         </div>
     @endif
-
-    @php
-        $canManageActivation = (int) session('rol_id', session('roles_idroles')) === 1;
-    @endphp
 
     <div class="mb-6 rounded-lg bg-white p-4 shadow">
         <form id="proformas-filter-form" method="GET" action="{{ route('proformas.index') }}" class="grid items-end gap-4 md:grid-cols-5 lg:grid-cols-7">
@@ -317,6 +319,16 @@
             <button id="activacion-cerrar-superior" type="button" class="rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Cerrar modal">X</button>
         </div>
 
+        <div id="activacion-busqueda" class="hidden space-y-3 px-5 py-5" data-search-url="{{ route('proformas.activacion.clientes.buscar') }}">
+            <label for="activacion-buscar-cliente" class="block text-sm font-medium text-slate-700">Buscar empresa por código o nombre</label>
+            <input id="activacion-buscar-cliente" type="search" autocomplete="off" maxlength="100" aria-controls="activacion-resultados" class="w-full rounded border border-slate-300 px-3 py-2" placeholder="Ej.: A091 o MGI COMPUTERS">
+            <p id="activacion-busqueda-estado" class="text-sm text-slate-500" role="status">Escribe al menos 2 caracteres.</p>
+            <ul id="activacion-resultados" class="max-h-64 space-y-2 overflow-y-auto" aria-label="Clientes encontrados"></ul>
+        </div>
+        <div class="px-5 pt-3">
+            <p id="activacion-cliente-seleccionado" class="text-sm font-medium text-slate-700"></p>
+            <button id="activacion-cambiar-cliente" type="button" class="hidden mt-2 text-sm text-cyan-700 underline">Buscar otra empresa</button>
+        </div>
         <form id="activacion-form" class="space-y-5 px-5 py-5">
             <div id="activacion-feedback" class="hidden rounded border px-4 py-3 text-sm"></div>
 
@@ -650,7 +662,7 @@
         const eventosNoButton = document.getElementById('activacion-eventos-no');
         const eventosSiButton = document.getElementById('activacion-eventos-si');
 
-        if (!menu || !menuItems || tableRows.length === 0) {
+        if (!menu || !menuItems) {
             return;
         }
 
@@ -662,6 +674,24 @@
         let paymentReceiptSafetyTimeout = null;
 
         let feedbackTimeout = null;
+        let activationBusy = false;
+        let activationLoadVersion = 0;
+        const activationGlobalButton = document.getElementById('activacion-global-abrir');
+        const activationSearchPanel = document.getElementById('activacion-busqueda');
+        const activationSearchInput = document.getElementById('activacion-buscar-cliente');
+        const activationSearchResults = document.getElementById('activacion-resultados');
+        const activationSearchStatus = document.getElementById('activacion-busqueda-estado');
+        const activationSelectedClient = document.getElementById('activacion-cliente-seleccionado');
+        const activationChangeClient = document.getElementById('activacion-cambiar-cliente');
+        let activationSearchTimer = null;
+        let activationSearchRequest = null;
+
+        const activationRequestContext = () => activationForm?.dataset.global === '1' ? {} : {
+            codigo: activationForm?.dataset.codigo || '',
+            id_proforma: activationForm?.dataset.proformaId || '',
+            nit: activationForm?.dataset.nit || '',
+            id_cliente: activationForm?.dataset.clienteId || '',
+        };
 
         const updatePaymentReceiptName = () => {
             if (paymentReceiptName) {
@@ -944,14 +974,10 @@
             activationFechaFinInput.value = data.fecha_fin_actual || '';
         };
 
-        const fillActivationModalHeaderFromRow = (row) => {
+        const fillActivationModalHeader = ({ codigo, nit, proforma, empresa }) => {
             if (!activationCodigo) {
                 return;
             }
-
-            const codigo = row.dataset.codigo || '';
-            const nit = row.dataset.nit || '';
-            const proforma = row.dataset.proformaId || '';
 
             activationCodigo.textContent = codigo || 'N/D';
 
@@ -968,7 +994,7 @@
             }
 
             if (activationSync) {
-                activationSync.textContent = nit
+                activationSync.textContent = empresa ? `Empresa: ${empresa} · NIT ${nit || 'Sin NIT'}` : nit
                     ? `Proforma ${proforma || 'N/D'} · NIT ${nit}`
                     : `Proforma ${proforma || 'N/D'}`;
             }
@@ -992,10 +1018,13 @@
         };
 
         const closeActivationModal = () => {
-            if (!activationModal || !activationForm || !activationSubmitButton) {
+            if (!activationModal || !activationForm || !activationSubmitButton || activationBusy) {
                 return;
             }
 
+            activationLoadVersion++;
+            activationSearchRequest?.abort();
+            window.clearTimeout(activationSearchTimer);
             activationModal.classList.add('hidden');
             activationModal.classList.remove('flex');
             activationForm.dataset.updateUrl = '';
@@ -1005,13 +1034,7 @@
             activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
         };
 
-        const loadActivationData = async (row) => {
-            const showUrl = row.dataset.activacionShowUrl;
-            const updateUrl = row.dataset.activacionUpdateUrl;
-            const codigo = row.dataset.codigo || '';
-            const proforma = row.dataset.proformaId || '';
-            const nit = row.dataset.nit || '';
-            const clienteId = row.dataset.clienteId || '';
+        const loadActivationData = async ({ showUrl, updateUrl, eventosUpdateUrl = '', codigo = '', proforma = '', nit = '', clienteId = '', empresa = '', global = false }) => {
 
             if (!showUrl || !updateUrl || !activationForm || !activationSubmitButton) {
                 return;
@@ -1025,27 +1048,33 @@
             });
 
             openActivationModal();
+            const loadVersion = ++activationLoadVersion;
+            let loaded = false;
+            activationSearchPanel?.classList.add('hidden');
+            activationForm.classList.remove('hidden');
+            activationForm.reset();
+            activationForm.dataset.global = global ? '1' : '0';
+            activationForm.dataset.loaded = '0';
+            activationChangeClient?.classList.toggle('hidden', !global);
+            if (activationSelectedClient) {
+                activationSelectedClient.textContent = global ? `${codigo || 'Sin código'} · ${empresa} · NIT ${nit || 'Sin NIT'}` : '';
+            }
             clearActivationFeedback();
             activationForm.dataset.updateUrl = updateUrl;
             activationForm.dataset.codigo = codigo;
             activationForm.dataset.proformaId = proforma;
             activationForm.dataset.nit = nit;
             activationForm.dataset.clienteId = clienteId;
-            activationForm.dataset.eventosUpdateUrl = row.dataset.activacionEventosUpdateUrl || '';
-            fillActivationModalHeaderFromRow(row);
+            activationForm.dataset.eventosUpdateUrl = eventosUpdateUrl;
+            fillActivationModalHeader({ codigo, nit, proforma, empresa });
             activationSubmitButton.disabled = true;
             activationSubmitButton.classList.add('opacity-60', 'cursor-not-allowed');
             setActivationFeedback('Consultando valores actuales de activación...', 'warning');
 
             try {
-                const searchParams = new URLSearchParams({
-                    codigo,
-                    id_proforma: proforma,
-                    nit,
-                    id_cliente: clienteId,
-                });
+                const searchParams = new URLSearchParams(activationRequestContext());
 
-                const response = await fetch(`${showUrl}?${searchParams.toString()}`, {
+                const response = await fetch(global ? showUrl : `${showUrl}?${searchParams.toString()}`, {
                     headers: {
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
@@ -1053,11 +1082,15 @@
                 });
                 const payload = await response.json();
 
+                if (loadVersion !== activationLoadVersion) return;
+
                 if (!response.ok || !payload.ok) {
                     throw new Error(payload.message || 'No fue posible consultar la activación.');
                 }
 
                 fillActivationModal(payload.data || {});
+                loaded = true;
+                activationForm.dataset.loaded = '1';
 
                 if (activationHasDifferences(payload.data)) {
                     setActivationFeedback('Se detectó una diferencia entre la base individual y la tabla global. Al guardar quedarán sincronizadas.', 'warning');
@@ -1065,13 +1098,104 @@
                     clearActivationFeedback();
                 }
             } catch (error) {
+                if (loadVersion !== activationLoadVersion) return;
                 console.error(error);
                 setActivationFeedback(error.message || 'No fue posible consultar la activación.', 'error');
             } finally {
-                activationSubmitButton.disabled = false;
-                activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
+                if (loadVersion === activationLoadVersion) {
+                    activationSubmitButton.disabled = !loaded;
+                    activationSubmitButton.classList.toggle('opacity-60', !loaded);
+                    activationSubmitButton.classList.toggle('cursor-not-allowed', !loaded);
+                }
             }
         };
+
+        const openGlobalActivationSearch = () => {
+            if (activationBusy || !activationSearchPanel || !activationForm) return;
+            activationLoadVersion++;
+            activationSearchRequest?.abort();
+            window.clearTimeout(activationSearchTimer);
+            activationForm.reset();
+            activationForm.dataset.loaded = '0';
+            activationForm.dataset.updateUrl = '';
+            activationForm.classList.add('hidden');
+            activationChangeClient.classList.add('hidden');
+            activationSelectedClient.textContent = '';
+            activationSearchPanel.classList.remove('hidden');
+            activationSearchInput.value = '';
+            activationSearchResults.replaceChildren();
+            activationSearchStatus.textContent = 'Escribe al menos 2 caracteres.';
+            openActivationModal();
+            activationSearchInput.focus();
+        };
+
+        const searchActivationClients = async (term) => {
+            const request = new AbortController();
+            activationSearchRequest = request;
+            activationSearchStatus.textContent = 'Buscando empresas...';
+            try {
+                const params = new URLSearchParams({ q: term });
+                const response = await fetch(`${activationSearchPanel.dataset.searchUrl}?${params}`, {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    signal: request.signal,
+                });
+                const payload = await response.json();
+                if (request.signal.aborted || request !== activationSearchRequest) return;
+                if (!response.ok || !payload.ok) throw new Error(payload.message || 'No fue posible buscar empresas.');
+                activationSearchResults.replaceChildren();
+                const clients = payload.data || [];
+                activationSearchStatus.textContent = clients.length ? `${clients.length} resultados. Selecciona una empresa.` : 'No se encontraron empresas.';
+                clients.forEach((client) => {
+                    const item = document.createElement('li');
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'w-full rounded border border-slate-200 px-3 py-2 text-left text-sm hover:bg-cyan-50 focus:ring-2 focus:ring-cyan-500';
+                    button.textContent = `Código: ${client.codigo || 'Sin código'} · Empresa: ${client.empresa || 'Sin nombre'} · NIT: ${client.nit || 'Sin NIT'}`;
+                    button.addEventListener('click', () => loadActivationData({
+                        showUrl: client.show_url,
+                        updateUrl: client.update_url,
+                        eventosUpdateUrl: client.eventos_url,
+                        clienteId: client.id,
+                        codigo: client.codigo,
+                        empresa: client.empresa,
+                        nit: client.nit,
+                        global: true,
+                    }));
+                    item.append(button);
+                    activationSearchResults.append(item);
+                });
+            } catch (error) {
+                if (request.signal.aborted || request !== activationSearchRequest) return;
+                activationSearchStatus.textContent = error.message || 'No fue posible buscar empresas.';
+            }
+        };
+
+        activationGlobalButton?.addEventListener('click', openGlobalActivationSearch);
+        activationChangeClient?.addEventListener('click', openGlobalActivationSearch);
+        activationSearchInput?.addEventListener('input', () => {
+            window.clearTimeout(activationSearchTimer);
+            activationSearchRequest?.abort();
+            activationSearchResults.replaceChildren();
+            const term = activationSearchInput.value.trim();
+            activationSearchStatus.textContent = term.length < 2 ? 'Escribe al menos 2 caracteres.' : 'Buscando empresas...';
+            if (term.length >= 2) activationSearchTimer = window.setTimeout(() => searchActivationClients(term), 300);
+        });
+        activationSearchInput?.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                activationSearchResults.querySelector('button')?.focus();
+            }
+        });
+        activationSearchResults?.addEventListener('keydown', (event) => {
+            const buttons = Array.from(activationSearchResults.querySelectorAll('button'));
+            const index = buttons.indexOf(event.target);
+            if (index >= 0 && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+                event.preventDefault();
+                const next = index + (event.key === 'ArrowDown' ? 1 : -1);
+                if (next < 0) activationSearchInput.focus();
+                else buttons[Math.min(next, buttons.length - 1)]?.focus();
+            }
+        });
 
         const promptEventosActivation = (eventosLicencia) => new Promise((resolve) => {
             if (!eventosModal || !eventosDetalle || !eventosNoButton || !eventosSiButton) {
@@ -1086,11 +1210,13 @@
             openEventosModal();
 
             const onNo = () => {
+                eventosSiButton.removeEventListener('click', onYes);
                 closeEventosModal();
                 resolve(false);
             };
 
             const onYes = () => {
+                eventosNoButton.removeEventListener('click', onNo);
                 closeEventosModal();
                 resolve(true);
             };
@@ -1099,7 +1225,7 @@
             eventosSiButton.addEventListener('click', onYes, { once: true });
         });
 
-        const syncEventosActivation = async ({ eventosUpdateUrl, codigo, idProforma, nit, clienteId, fechaFin }) => {
+        const syncEventosActivation = async ({ eventosUpdateUrl, context, fechaFin }) => {
             const response = await fetch(eventosUpdateUrl, {
                 method: 'POST',
                 headers: {
@@ -1109,10 +1235,7 @@
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: JSON.stringify({
-                    codigo,
-                    id_proforma: idProforma,
-                    nit,
-                    id_cliente: clienteId,
+                    ...context,
                     fecha_fin: fechaFin,
                 }),
             });
@@ -1126,72 +1249,15 @@
             return payload;
         };
 
-        const saveActivationData = async () => {
-            if (!activationForm || !activationSubmitButton || !activationFechaInicioInput || !activationFechaFinInput) {
-                return;
-            }
-
-            const updateUrl = activationForm.dataset.updateUrl || '';
-            const codigo = activationForm.dataset.codigo || '';
-            const idProforma = activationForm.dataset.proformaId || '';
-            const nit = activationForm.dataset.nit || '';
-            const clienteId = activationForm.dataset.clienteId || '';
-            if (!updateUrl) {
-                setActivationFeedback('No se encontró la ruta para guardar la activación.', 'error');
-                return;
-            }
-
-            activationSubmitButton.disabled = true;
-            activationSubmitButton.classList.add('opacity-60', 'cursor-not-allowed');
-            clearActivationFeedback();
-
-            try {
-                const response = await fetch(updateUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: JSON.stringify({
-                        codigo,
-                        id_proforma: idProforma,
-                        nit,
-                        id_cliente: clienteId,
-                        fecha_inicio: activationFechaInicioInput.value,
-                        fecha_fin: activationFechaFinInput.value,
-                    }),
-                });
-
-                const payload = await response.json();
-
-                if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || 'No fue posible guardar la activación.');
-                }
-
-                fillActivationModal(payload.data || {});
-                setActivationFeedback(payload.message || 'Activación actualizada correctamente.', 'success');
-                showFeedback(payload.message || 'Activación actualizada correctamente.', 'success');
-            } catch (error) {
-                console.error(error);
-                setActivationFeedback(error.message || 'No fue posible guardar la activación.', 'error');
-            } finally {
-                activationSubmitButton.disabled = false;
-                activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
-            }
-        };
 
         const saveActivationDataWithEventos = async () => {
             if (!activationForm || !activationSubmitButton || !activationFechaInicioInput || !activationFechaFinInput) {
                 return;
             }
+            if (activationBusy || activationForm.dataset.loaded !== '1') return;
 
             const updateUrl = activationForm.dataset.updateUrl || '';
-            const codigo = activationForm.dataset.codigo || '';
-            const idProforma = activationForm.dataset.proformaId || '';
-            const nit = activationForm.dataset.nit || '';
-            const clienteId = activationForm.dataset.clienteId || '';
+            const context = activationRequestContext();
             const eventosUpdateUrl = activationForm.dataset.eventosUpdateUrl || '';
 
             if (!updateUrl) {
@@ -1199,6 +1265,7 @@
                 return;
             }
 
+            activationBusy = true;
             activationSubmitButton.disabled = true;
             activationSubmitButton.classList.add('opacity-60', 'cursor-not-allowed');
             clearActivationFeedback();
@@ -1213,10 +1280,7 @@
                         'X-Requested-With': 'XMLHttpRequest',
                     },
                     body: JSON.stringify({
-                        codigo,
-                        id_proforma: idProforma,
-                        nit,
-                        id_cliente: clienteId,
+                        ...context,
                         fecha_inicio: activationFechaInicioInput.value,
                         fecha_fin: activationFechaFinInput.value,
                     }),
@@ -1238,10 +1302,7 @@
                     if (accepted) {
                         const eventosPayload = await syncEventosActivation({
                             eventosUpdateUrl,
-                            codigo,
-                            idProforma,
-                            nit,
-                            clienteId,
+                            context,
                             fechaFin: activationFechaFinInput.value,
                         });
 
@@ -1253,6 +1314,7 @@
                 console.error(error);
                 setActivationFeedback(error.message || 'No fue posible guardar la activaciÃ³n.', 'error');
             } finally {
+                activationBusy = false;
                 activationSubmitButton.disabled = false;
                 activationSubmitButton.classList.remove('opacity-60', 'cursor-not-allowed');
             }
@@ -1544,7 +1606,15 @@
             }
 
             if (targetButton.dataset.activacionAction) {
-                await loadActivationData(row);
+                await loadActivationData({
+                    showUrl: row.dataset.activacionShowUrl,
+                    updateUrl: row.dataset.activacionUpdateUrl,
+                    eventosUpdateUrl: row.dataset.activacionEventosUpdateUrl,
+                    codigo: row.dataset.codigo,
+                    proforma: row.dataset.proformaId,
+                    nit: row.dataset.nit,
+                    clienteId: row.dataset.clienteId,
+                });
                 return;
             }
 

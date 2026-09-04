@@ -783,118 +783,132 @@ class ProformasController extends Controller
             : redirect()->back()->with('status', $resultado['message'])->with('status_type', 'error');
     }
 
-    public function obtenerActivacion(Request $request, int $id): JsonResponse
+    public function buscarClientesActivacion(Request $request): JsonResponse
     {
         if ($response = $this->denyIfNotActivationAdmin()) {
             return $response;
         }
 
-        $proforma = $this->proformasService->findProformaById($id);
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:100']]);
+        $term = trim((string) ($validated['q'] ?? ''));
 
-        if (!$proforma) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'La proforma seleccionada no existe.',
-            ], 404);
+        if (mb_strlen($term) < 2) {
+            return response()->json(['ok' => true, 'data' => []]);
         }
 
-        Log::info('[ACTIVACION REQUEST]', $request->all());
-
-        try {
-            $codigoEmpresa = $this->resolverCodigoEmpresaActivacion($request, $id, $proforma);
-            $detalle = $this->empresaActivacionService->obtenerDetalle($codigoEmpresa);
-
-            return response()->json([
-                'ok' => true,
-                'message' => 'Datos de activación cargados correctamente.',
-                'data' => $detalle,
+        $pattern = '%'.mb_strtolower($term).'%';
+        $clientes = DB::table('clientes_potenciales')
+            ->select(['idclientes_potenciales', 'codigo', 'empresa', 'nombre', 'nit'])
+            ->where(function ($query) use ($pattern): void {
+                $query->whereRaw('LOWER(codigo) LIKE ?', [$pattern])
+                    ->orWhereRaw('LOWER(empresa) LIKE ?', [$pattern])
+                    ->orWhereRaw('LOWER(nombre) LIKE ?', [$pattern]);
+            })
+            ->orderBy('codigo')
+            ->orderBy('idclientes_potenciales')
+            ->limit(20)
+            ->get()
+            ->map(fn (object $cliente) => [
+                'id' => $cliente->idclientes_potenciales,
+                'codigo' => trim((string) $cliente->codigo),
+                'empresa' => trim((string) $cliente->empresa) ?: trim((string) $cliente->nombre),
+                'nit' => trim((string) $cliente->nit),
+                'show_url' => route('proformas.activacion.clientes.show', $cliente->idclientes_potenciales),
+                'update_url' => route('proformas.activacion.clientes.update', $cliente->idclientes_potenciales),
+                'eventos_url' => route('proformas.activacion.clientes.eventos.update', $cliente->idclientes_potenciales),
             ]);
-        } catch (\Throwable $exception) {
-            report($exception);
 
-            return response()->json([
-                'ok' => false,
-                'message' => $exception->getMessage() ?: 'No fue posible consultar la activación de la empresa.',
-            ], 422);
-        }
+        return response()->json(['ok' => true, 'data' => $clientes]);
+    }
+
+    public function obtenerActivacion(Request $request, int $id): JsonResponse
+    {
+        return $this->ejecutarActivacion($request, $id, 'consultar');
     }
 
     public function guardarActivacion(Request $request, int $id): JsonResponse
     {
-        if ($response = $this->denyIfNotActivationAdmin()) {
-            return $response;
-        }
-
-        $validated = $request->validate([
-            'fecha_inicio' => ['required', 'date_format:Y-m-d', 'before_or_equal:fecha_fin'],
-            'fecha_fin' => ['required', 'date_format:Y-m-d', 'after_or_equal:fecha_inicio'],
-        ]);
-
-        $proforma = $this->proformasService->findProformaById($id);
-
-        if (!$proforma) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'La proforma seleccionada no existe.',
-            ], 404);
-        }
-
-        Log::info('[ACTIVACION REQUEST]', $request->all());
-
-        try {
-            $codigoEmpresa = $this->resolverCodigoEmpresaActivacion($request, $id, $proforma);
-            $detalle = $this->empresaActivacionService->guardarActivacion(
-                $codigoEmpresa,
-                $validated['fecha_inicio'],
-                $validated['fecha_fin'],
-                $this->resolverUsuarioLog(),
-            );
-
-            return response()->json([
-                'ok' => true,
-                'message' => 'La activación de la empresa se actualizó correctamente.',
-                'data' => $detalle,
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-
-            return response()->json([
-                'ok' => false,
-                'message' => $exception->getMessage() ?: 'No fue posible guardar la activación de la empresa.',
-            ], 422);
-        }
+        return $this->ejecutarActivacion($request, $id, 'guardar');
     }
 
     public function actualizarLicenciaEventos(Request $request, int $id): JsonResponse
+    {
+        return $this->ejecutarActivacion($request, $id, 'eventos');
+    }
+
+    public function obtenerActivacionCliente(Request $request, int $clienteId): JsonResponse
+    {
+        return $this->ejecutarActivacion($request, $clienteId, 'consultar', true);
+    }
+
+    public function guardarActivacionCliente(Request $request, int $clienteId): JsonResponse
+    {
+        return $this->ejecutarActivacion($request, $clienteId, 'guardar', true);
+    }
+
+    public function actualizarLicenciaEventosCliente(Request $request, int $clienteId): JsonResponse
+    {
+        return $this->ejecutarActivacion($request, $clienteId, 'eventos', true);
+    }
+
+    private function ejecutarActivacion(Request $request, int $id, string $operacion, bool $desdeCliente = false): JsonResponse
     {
         if ($response = $this->denyIfNotActivationAdmin()) {
             return $response;
         }
 
-        $validated = $request->validate([
-            'fecha_fin' => ['required', 'date_format:Y-m-d'],
-        ]);
+        $rules = match ($operacion) {
+            'guardar' => [
+                'fecha_inicio' => ['required', 'date_format:Y-m-d', 'before_or_equal:fecha_fin'],
+                'fecha_fin' => ['required', 'date_format:Y-m-d', 'after_or_equal:fecha_inicio'],
+            ],
+            'eventos' => ['fecha_fin' => ['required', 'date_format:Y-m-d']],
+            default => [],
+        };
+        $validated = $request->validate($rules);
+        $entidad = $desdeCliente
+            ? DB::table('clientes_potenciales')->select(['idclientes_potenciales', 'codigo'])->where('idclientes_potenciales', $id)->first()
+            : $this->proformasService->findProformaById($id);
 
-        $proforma = $this->proformasService->findProformaById($id);
-
-        if (!$proforma) {
+        if (!$entidad) {
             return response()->json([
                 'ok' => false,
-                'message' => 'La proforma seleccionada no existe.',
+                'message' => $desdeCliente ? 'El cliente seleccionado no existe.' : 'La proforma seleccionada no existe.',
             ], 404);
         }
 
+        if ($operacion !== 'eventos' && !$desdeCliente) {
+            Log::info('[ACTIVACION REQUEST]', $request->all());
+        }
+
         try {
-            $codigoEmpresa = $this->resolverCodigoEmpresaActivacion($request, $id, $proforma);
-            $detalle = $this->empresaActivacionService->actualizarLicenciaEventos(
-                $codigoEmpresa,
-                $validated['fecha_fin'],
-                $this->resolverUsuarioLog(),
-            );
+            if ($desdeCliente) {
+                // Nunca utilizar codigo, NIT o id_proforma enviados por el navegador.
+                $codigoEmpresa = trim((string) ($entidad->codigo ?? ''));
+                if (!preg_match('/^[A-Za-z0-9]+$/', $codigoEmpresa)) {
+                    throw new \RuntimeException('El cliente seleccionado no tiene un código de empresa válido para gestionar la activación.');
+                }
+            } else {
+                $codigoEmpresa = $this->resolverCodigoEmpresaActivacion($request, $id, $entidad);
+            }
+
+            $detalle = match ($operacion) {
+                'guardar' => $this->empresaActivacionService->guardarActivacion(
+                    $codigoEmpresa, $validated['fecha_inicio'], $validated['fecha_fin'], $this->resolverUsuarioLog(),
+                ),
+                'eventos' => $this->empresaActivacionService->actualizarLicenciaEventos(
+                    $codigoEmpresa, $validated['fecha_fin'], $this->resolverUsuarioLog(),
+                ),
+                default => $this->empresaActivacionService->obtenerDetalle($codigoEmpresa),
+            };
 
             return response()->json([
                 'ok' => true,
-                'message' => 'La licencia de Eventos se actualizó correctamente.',
+                'message' => match ($operacion) {
+                    'guardar' => 'La activación de la empresa se actualizó correctamente.',
+                    'eventos' => 'La licencia de Eventos se actualizó correctamente.',
+                    default => 'Datos de activación cargados correctamente.',
+                },
                 'data' => $detalle,
             ]);
         } catch (\Throwable $exception) {
@@ -902,7 +916,11 @@ class ProformasController extends Controller
 
             return response()->json([
                 'ok' => false,
-                'message' => $exception->getMessage() ?: 'No fue posible actualizar la licencia de Eventos.',
+                'message' => $exception->getMessage() ?: match ($operacion) {
+                    'guardar' => 'No fue posible guardar la activación de la empresa.',
+                    'eventos' => 'No fue posible actualizar la licencia de Eventos.',
+                    default => 'No fue posible consultar la activación de la empresa.',
+                },
             ], 422);
         }
     }
