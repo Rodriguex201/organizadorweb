@@ -23,6 +23,8 @@ class ProformaDashboardExportService
     public const SCOPE_CURRENT_MONTH = 'current_month';
     public const SCOPE_FULL_YEAR = 'full_year';
     public const SCOPE_MONTHLY_RANGE = 'monthly_range';
+    public const SOURCE_PROFORMAS = 'proformas';
+    public const SOURCE_RETIRED_CLIENTS = 'clientes_retirados';
     public const FORMAT_XLSX = 'xlsx';
     public const TEXT_PLACEHOLDER = 'N/D';
     private const TEMP_EXPORT_CACHE_PREFIX = 'proformas_dashboard_export:';
@@ -75,6 +77,10 @@ class ProformaDashboardExportService
                 ['value' => self::SCOPE_FULL_YEAR, 'label' => 'Todo el año'],
                 ['value' => self::SCOPE_MONTHLY_RANGE, 'label' => 'Rango mensual'],
             ],
+            'sources' => [
+                ['value' => self::SOURCE_PROFORMAS, 'label' => 'Período de proformas'],
+                ['value' => self::SOURCE_RETIRED_CLIENTS, 'label' => 'Clientes retirados por fecha de retiro'],
+            ],
             'modes' => [
                 ['value' => self::EXPORT_MODE_SUMMARY, 'label' => 'Resumen'],
                 ['value' => self::EXPORT_MODE_DETAILED, 'label' => 'Detallado'],
@@ -121,7 +127,7 @@ class ProformaDashboardExportService
             throw new InvalidArgumentException('Formato de exportación no soportado todavía.');
         }
 
-        $selectedColumns = $this->sanitizeSelectedColumns($columns, $mode);
+        $selectedColumns = $this->sanitizeSelectedColumns($columns, $mode, $filters['source'] ?? self::SOURCE_PROFORMAS);
         $dataset = $this->buildDataset($filters, $selectedColumns);
         $export = new ProformasDashboardExcelExport(
             $dataset['headings'],
@@ -142,7 +148,7 @@ class ProformaDashboardExportService
             throw new InvalidArgumentException('Formato de exportación no soportado todavía.');
         }
 
-        $selectedColumns = $this->sanitizeSelectedColumns($columns, $mode);
+        $selectedColumns = $this->sanitizeSelectedColumns($columns, $mode, $filters['source'] ?? self::SOURCE_PROFORMAS);
         $dataset = $this->buildDataset($filters, $selectedColumns);
         $filename = $this->buildFilename($filters, $mode, $format);
         $token = (string) Str::uuid();
@@ -206,6 +212,9 @@ class ProformaDashboardExportService
     public function resolveFilters(array $input, array $dashboardFilters = []): array
     {
         $scope = $input['scope'] ?? self::SCOPE_CURRENT_FILTERS;
+        $source = ($input['export_source'] ?? self::SOURCE_PROFORMAS) === self::SOURCE_RETIRED_CLIENTS
+            ? self::SOURCE_RETIRED_CLIENTS
+            : self::SOURCE_PROFORMAS;
         $dashboardMes = $this->normalizarMes($dashboardFilters['mes'] ?? null) ?? (int) now()->format('n');
         $dashboardAnio = $this->normalizarEntero($dashboardFilters['anio'] ?? null) ?? (int) now()->format('Y');
         $dashboardEstado = $this->normalizarEntero($dashboardFilters['estado'] ?? null);
@@ -227,6 +236,18 @@ class ProformaDashboardExportService
             'mes_desde' => $dashboardMes,
             'mes_hasta' => $dashboardMes,
         ];
+
+        if ($source === self::SOURCE_RETIRED_CLIENTS) {
+            return array_merge($filters, [
+                'source' => self::SOURCE_RETIRED_CLIENTS,
+                'scope' => self::SCOPE_FULL_YEAR,
+                'mes' => null,
+                'mes_desde' => null,
+                'mes_hasta' => null,
+                'estado' => null,
+                'grupo_fecha' => null,
+            ]);
+        }
 
         return match ($scope) {
             self::SCOPE_CURRENT_MONTH => array_merge($filters, [
@@ -262,23 +283,45 @@ class ProformaDashboardExportService
     private function buildDataset(array $filters, array $selectedColumns): array
     {
         $definitions = $this->columnDefinitions();
-        $query = DB::table('sg_proform as p');
-        $clienteJoinsApplied = false;
+        $retiredClients = ($filters['source'] ?? self::SOURCE_PROFORMAS) === self::SOURCE_RETIRED_CLIENTS;
 
-        if ($this->requiresClienteJoins($selectedColumns)) {
-            $this->applyClienteJoins($query);
-            $clienteJoinsApplied = true;
+        if ($retiredClients) {
+            $query = DB::table('clientes_potenciales as cp');
+
+            foreach ($selectedColumns as $key) {
+                $this->addRetiredClientSelect($query, $definitions[$key], $key);
+            }
+
+            $year = $this->normalizarEntero($filters['anio'] ?? null) ?? (int) now()->format('Y');
+            $parsedRetirementDate = $this->parsedRetirementDateSql();
+            $orderedQuery = $query
+                ->whereRaw("{$parsedRetirementDate} IS NOT NULL")
+                ->when(DB::connection()->getDriverName() === 'mysql', fn (Builder $query) => $query
+                    ->whereRaw("DAY({$parsedRetirementDate}) BETWEEN 1 AND DAY(LAST_DAY({$parsedRetirementDate}))"))
+                ->whereRaw("{$parsedRetirementDate} >= ?", [sprintf('%04d-01-01', $year)])
+                ->whereRaw("{$parsedRetirementDate} < ?", [sprintf('%04d-01-01', $year + 1)])
+                ->orderByRaw("{$parsedRetirementDate} DESC")
+                ->orderByDesc('cp.idclientes_potenciales');
+        } else {
+            // Flujo histórico por proformas: conservar consulta, joins y filtros sin cambios.
+            $query = DB::table('sg_proform as p');
+            $clienteJoinsApplied = false;
+
+            if ($this->requiresClienteJoins($selectedColumns)) {
+                $this->applyClienteJoins($query);
+                $clienteJoinsApplied = true;
+            }
+
+            foreach ($selectedColumns as $key) {
+                ($definitions[$key]['select'])($query);
+            }
+
+            $this->applyFilters($query, $filters, $clienteJoinsApplied);
+            $orderedQuery = $query
+                ->orderByDesc('p.anio')
+                ->orderByDesc('p.mes')
+                ->orderByDesc('p.id');
         }
-
-        foreach ($selectedColumns as $key) {
-            ($definitions[$key]['select'])($query);
-        }
-
-        $this->applyFilters($query, $filters, $clienteJoinsApplied);
-        $orderedQuery = $query
-            ->orderByDesc('p.anio')
-            ->orderByDesc('p.mes')
-            ->orderByDesc('p.id');
 
         $rows = $orderedQuery->get();
 
@@ -392,7 +435,7 @@ class ProformaDashboardExportService
             ->all();
     }
 
-    private function sanitizeSelectedColumns(array $columns, string $mode): array
+    private function sanitizeSelectedColumns(array $columns, string $mode, string $source = self::SOURCE_PROFORMAS): array
     {
         $allowed = $this->supportedColumnKeys();
         $aliases = [
@@ -405,17 +448,31 @@ class ProformaDashboardExportService
                 return $aliases[$key] ?? $key;
             })
             ->filter(fn (string $value) => in_array($value, $allowed, true))
+            ->filter(fn (string $value) => $source !== self::SOURCE_RETIRED_CLIENTS
+                || in_array($this->columnDefinitions()[$value]['group'], ['cliente', 'cliente_valores'], true))
             ->unique()
             ->values()
             ->all();
 
-        return $selected !== [] ? $selected : $this->defaultColumnsFor($mode);
+        if ($selected !== []) {
+            return $selected;
+        }
+
+        if ($source === self::SOURCE_RETIRED_CLIENTS) {
+            throw new InvalidArgumentException('Selecciona al menos una columna compatible de cliente.');
+        }
+
+        return $this->defaultColumnsFor($mode);
     }
 
     private function buildFilename(array $filters, string $mode, string $format): string
     {
         $scope = $filters['scope'] ?? self::SCOPE_CURRENT_FILTERS;
         $anio = $filters['anio'] ?? now()->format('Y');
+
+        if (($filters['source'] ?? self::SOURCE_PROFORMAS) === self::SOURCE_RETIRED_CLIENTS) {
+            return "clientes-retirados-{$mode}-anio-{$anio}.{$format}";
+        }
 
         $periodLabel = match ($scope) {
             self::SCOPE_FULL_YEAR => "anio-{$anio}",
@@ -449,6 +506,7 @@ class ProformaDashboardExportService
                 'group' => 'cliente',
                 'label' => 'Tipo cliente',
                 'type' => 'text',
+                'client_type_label' => true,
                 'select' => fn (Builder $query) => $this->addJoinedTipoClienteSelect($query, 'cliente_tipo_cliente'),
                 'value' => fn (object $row) => $this->displayTextValue($row->cliente_tipo_cliente ?? null),
             ],
@@ -462,6 +520,7 @@ class ProformaDashboardExportService
                 'group' => 'cliente',
                 'label' => 'Fecha de retiro',
                 'type' => 'date',
+                'client_field' => 'fecha_retiro',
                 'select' => fn (Builder $query) => $this->addClienteFieldSelect($query, 'fecha_retiro', 'cliente_fecha_retiro'),
                 'value' => fn (object $row) => $this->displayRetiroDateValue($row->cliente_fecha_retiro ?? null),
             ],
@@ -469,6 +528,7 @@ class ProformaDashboardExportService
                 'group' => 'cliente',
                 'label' => 'Motivo de retiro',
                 'type' => 'text',
+                'client_field' => 'tipoRetiro',
                 'select' => fn (Builder $query) => $this->addClienteFieldSelect($query, 'tipoRetiro', 'cliente_motivo_retiro'),
                 'value' => fn (object $row) => $this->displayRetiroReasonValue($row->cliente_motivo_retiro ?? null),
             ],
@@ -523,6 +583,7 @@ class ProformaDashboardExportService
             'group' => $group,
             'label' => $label,
             'type' => 'text',
+            'client_field' => $field,
             'select' => fn (Builder $query) => $this->addClienteFieldSelect($query, $field, $alias),
             'value' => fn (object $row) => $this->displayTextValue($row->{$alias} ?? null),
         ];
@@ -534,6 +595,7 @@ class ProformaDashboardExportService
             'group' => $group,
             'label' => $label,
             'type' => 'date',
+            'client_field' => $field,
             'select' => fn (Builder $query) => $this->addClienteFieldSelect($query, $field, $alias),
             'value' => fn (object $row) => $this->displayDateValue($row->{$alias} ?? null),
         ];
@@ -545,6 +607,7 @@ class ProformaDashboardExportService
             'group' => $group,
             'label' => $label,
             'type' => 'currency',
+            'client_field' => $field,
             'select' => fn (Builder $query) => $this->addClienteFieldSelect($query, $field, $alias),
             'value' => fn (object $row) => $this->toFloatOrNull($row->{$alias} ?? null),
         ];
@@ -556,6 +619,7 @@ class ProformaDashboardExportService
             'group' => $group,
             'label' => $label,
             'type' => 'number',
+            'client_field' => $field,
             'select' => fn (Builder $query) => $this->addClienteFieldSelect($query, $field, $alias),
             'value' => fn (object $row) => $this->toFloatOrNull($row->{$alias} ?? null),
         ];
@@ -614,6 +678,32 @@ class ProformaDashboardExportService
         }
 
         $query->addSelect(DB::raw($this->joinedClienteFieldExpression($field)." as {$alias}"));
+    }
+
+    private function addRetiredClientSelect(Builder $query, array $definition, string $alias): void
+    {
+        if (($definition['client_type_label'] ?? false) === true) {
+            if (!Schema::hasTable('tipos_cliente') || !Schema::hasColumn('clientes_potenciales', 'tipo_cliente_id')) {
+                $query->selectRaw("NULL as {$alias}");
+
+                return;
+            }
+
+            $query->leftJoin('tipos_cliente as tc_retiro', 'tc_retiro.id', '=', 'cp.tipo_cliente_id')
+                ->addSelect("tc_retiro.nombre as {$alias}");
+
+            return;
+        }
+
+        $field = $definition['client_field'] ?? null;
+
+        if (!is_string($field) || !Schema::hasColumn('clientes_potenciales', $field)) {
+            $query->selectRaw("NULL as {$alias}");
+
+            return;
+        }
+
+        $query->addSelect("cp.{$field} as {$alias}");
     }
 
     private function addJoinedTipoClienteSelect(Builder $query, string $alias): void
@@ -844,6 +934,13 @@ class ProformaDashboardExportService
         }
 
         return (int) $string;
+    }
+
+    private function parsedRetirementDateSql(): string
+    {
+        return DB::connection()->getDriverName() === 'sqlite'
+            ? 'date(TRIM(cp.fecha_retiro))'
+            : "STR_TO_DATE(TRIM(cp.fecha_retiro), '%Y-%m-%d')";
     }
 
     private function normalizarMes(null|string|int $value): ?int

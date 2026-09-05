@@ -23,6 +23,47 @@ use Tests\TestCase;
 
 class ProformasDashboardExportTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config([
+            'database.default' => 'dashboard_export_tests',
+            'database.connections.dashboard_export_tests' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => ''],
+            'session.driver' => 'array',
+            'cache.default' => 'array',
+        ]);
+        DB::purge('dashboard_export_tests');
+    }
+
+    public function test_modal_muestra_los_dos_origenes_y_marca_los_grupos_de_columnas(): void
+    {
+        $this->withoutExceptionHandling();
+        $this->withoutMiddleware();
+        $this->withoutVite();
+        Schema::create('configuracion_estados_proforma', function (Blueprint $table): void {
+            $table->integer('estado_codigo')->primary();
+            $table->string('estado_nombre');
+            $table->string('color_fondo');
+            $table->string('color_texto');
+            $table->boolean('activo');
+        });
+        DB::table('configuracion_estados_proforma')->insert([
+            ['estado_codigo' => 2, 'estado_nombre' => 'Generada', 'color_fondo' => '#DBEAFE', 'color_texto' => '#1D4ED8', 'activo' => 1],
+            ['estado_codigo' => 3, 'estado_nombre' => 'Enviada', 'color_fondo' => '#E0E7FF', 'color_texto' => '#3730A3', 'activo' => 1],
+            ['estado_codigo' => 4, 'estado_nombre' => 'Pagada', 'color_fondo' => '#D1FAE5', 'color_texto' => '#047857', 'activo' => 1],
+            ['estado_codigo' => 6, 'estado_nombre' => 'Facturada', 'color_fondo' => '#F3E8FF', 'color_texto' => '#7E22CE', 'activo' => 1],
+        ]);
+
+        $this->get('/proformas/dashboard')
+            ->assertOk()
+            ->assertSee('Exportar por')
+            ->assertSee('Período de proformas')
+            ->assertSee('Clientes retirados por fecha de retiro')
+            ->assertSee('data-column-section="cliente"', false)
+            ->assertSee('data-column-section="cliente_valores"', false)
+            ->assertSee('data-column-section="proforma"', false);
+    }
+
     public function test_dashboard_inicial_no_ejecuta_consultas_y_muestra_estado_vacio(): void
     {
         $service = Mockery::mock(ProformasService::class);
@@ -433,9 +474,164 @@ class ProformasDashboardExportTest extends TestCase
         ], $excel->array());
     }
 
+    public function test_modo_retirados_incluye_cliente_de_2026_sin_proformas(): void
+    {
+        $this->createRetiredClientsFixture();
+        $service = $this->makeRealExportService();
+        $rows = $this->retiredDatasetRows($service, ['cliente_codigo', 'cliente_fecha_retiro']);
+
+        $this->assertContains(['SIN-PROFORMA', '15/03/2026'], $rows);
+    }
+
+    public function test_modo_retirados_devuelve_una_fila_aunque_existan_varias_proformas_historicas(): void
+    {
+        $this->createRetiredClientsFixture();
+        $service = $this->makeRealExportService();
+        $rows = $this->retiredDatasetRows($service, ['cliente_codigo']);
+
+        $this->assertSame(1, collect($rows)->where(0, 'CON-HISTORIAL')->count());
+    }
+
+    public function test_modo_retirados_excluye_clientes_fuera_del_anio_o_con_fecha_invalida(): void
+    {
+        $this->createRetiredClientsFixture();
+        $service = $this->makeRealExportService();
+        $rows = $this->retiredDatasetRows($service, ['cliente_codigo']);
+        $codes = array_column($rows, 0);
+
+        $this->assertNotContains('RETIRO-2025', $codes);
+        $this->assertNotContains('FECHA-INVALIDA', $codes);
+    }
+
+    public function test_modo_retirados_resuelve_motivo_de_catalogo_y_conserva_texto_historico(): void
+    {
+        $this->createRetiredClientsFixture();
+        DB::table('conceptos_r')->insert(['id_retiro' => 2, 'conceptosretiro' => 'Cambio de contador']);
+        $service = $this->makeRealExportService();
+        $rows = $this->retiredDatasetRows($service, ['cliente_codigo', 'cliente_motivo_retiro']);
+        $reasons = collect($rows)->mapWithKeys(fn (array $row) => [$row[0] => $row[1]])->all();
+
+        $this->assertSame('Cambio de contador', $reasons['SIN-PROFORMA']);
+        $this->assertSame('Cierre histórico', $reasons['CON-HISTORIAL']);
+    }
+
+    public function test_modo_retirados_descarta_columnas_de_proforma_en_backend(): void
+    {
+        $service = $this->makeRealExportService();
+        $selected = $this->invokePrivateMethod($service, 'sanitizeSelectedColumns', [[
+            'proforma_numero',
+            'cliente_motivo_retiro',
+            'proforma_estado',
+            'cliente_fecha_retiro',
+        ], ProformaDashboardExportService::EXPORT_MODE_DETAILED, ProformaDashboardExportService::SOURCE_RETIRED_CLIENTS]);
+
+        $this->assertSame(['cliente_motivo_retiro', 'cliente_fecha_retiro'], $selected);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->invokePrivateMethod($service, 'sanitizeSelectedColumns', [[
+            'proforma_numero',
+            'proforma_estado',
+        ], ProformaDashboardExportService::EXPORT_MODE_DETAILED, ProformaDashboardExportService::SOURCE_RETIRED_CLIENTS]);
+    }
+
+    public function test_modo_retirados_aplica_solo_anio_de_retiro_en_filtros_resueltos(): void
+    {
+        $proformas = Mockery::mock(ProformasService::class);
+        $proformas->shouldReceive('normalizeGrupoFechaFilter')->twice()->andReturn(2);
+        $service = new ProformaDashboardExportService($proformas);
+        $filters = $service->resolveFilters([
+            'export_source' => ProformaDashboardExportService::SOURCE_RETIRED_CLIENTS,
+            'scope' => ProformaDashboardExportService::SCOPE_MONTHLY_RANGE,
+            'anio' => 2026,
+            'mes_desde' => 8,
+            'mes_hasta' => 9,
+            'estado' => 4,
+            'grupo_fecha' => 2,
+        ], ['mes' => 9, 'anio' => 2026, 'estado' => 4, 'grupo_fecha' => 2]);
+
+        $this->assertSame(ProformaDashboardExportService::SOURCE_RETIRED_CLIENTS, $filters['source']);
+        $this->assertSame(2026, $filters['anio']);
+        $this->assertNull($filters['mes']);
+        $this->assertNull($filters['mes_desde']);
+        $this->assertNull($filters['mes_hasta']);
+        $this->assertNull($filters['estado']);
+        $this->assertNull($filters['grupo_fecha']);
+    }
+
+    public function test_modo_actual_conserva_filtro_y_una_fila_por_proforma(): void
+    {
+        Schema::create('sg_proform', function (Blueprint $table): void {
+            $table->increments('id');
+            $table->string('nro_prof');
+            $table->integer('anio');
+            $table->integer('mes');
+            $table->integer('estado')->nullable();
+        });
+        DB::table('sg_proform')->insert([
+            ['nro_prof' => 'SEP-1', 'anio' => 2026, 'mes' => 9, 'estado' => 2],
+            ['nro_prof' => 'SEP-2', 'anio' => 2026, 'mes' => 9, 'estado' => 3],
+            ['nro_prof' => 'AGO-1', 'anio' => 2026, 'mes' => 8, 'estado' => 2],
+        ]);
+        $proformas = Mockery::mock(ProformasService::class);
+        $proformas->shouldReceive('normalizeGrupoFechaFilter')->once()->with(null)->andReturnNull();
+        $service = new ProformaDashboardExportService($proformas);
+        $dataset = $this->invokePrivateMethod($service, 'buildDataset', [[
+            'scope' => ProformaDashboardExportService::SCOPE_CURRENT_FILTERS,
+            'anio' => 2026,
+            'mes' => 9,
+            'estado' => null,
+            'grupo_fecha' => null,
+        ], ['proforma_numero']]);
+        $rows = $dataset['rows'];
+        array_pop($rows);
+
+        $this->assertSame(2, $dataset['record_count']);
+        $this->assertSame([['SEP-2'], ['SEP-1']], $rows);
+    }
+
     private function makeRealExportService(): ProformaDashboardExportService
     {
         return new ProformaDashboardExportService(Mockery::mock(ProformasService::class));
+    }
+
+    private function retiredDatasetRows(ProformaDashboardExportService $service, array $columns): array
+    {
+        $dataset = $this->invokePrivateMethod($service, 'buildDataset', [[
+            'source' => ProformaDashboardExportService::SOURCE_RETIRED_CLIENTS,
+            'anio' => 2026,
+        ], $columns]);
+        $rows = $dataset['rows'];
+        array_pop($rows);
+
+        return $rows;
+    }
+
+    private function createRetiredClientsFixture(): void
+    {
+        Schema::create('clientes_potenciales', function (Blueprint $table): void {
+            $table->integer('idclientes_potenciales')->primary();
+            $table->string('codigo')->nullable();
+            $table->string('nit')->nullable();
+            $table->string('fecha_retiro')->nullable();
+            $table->string('tipoRetiro')->nullable();
+        });
+        Schema::create('sg_proform', function (Blueprint $table): void {
+            $table->increments('id');
+            $table->string('nit')->nullable();
+            $table->integer('anio');
+            $table->integer('mes');
+        });
+        $this->createRetiroCatalog();
+        DB::table('clientes_potenciales')->insert([
+            ['idclientes_potenciales' => 1, 'codigo' => 'SIN-PROFORMA', 'nit' => '100', 'fecha_retiro' => '2026-03-15', 'tipoRetiro' => '2'],
+            ['idclientes_potenciales' => 2, 'codigo' => 'CON-HISTORIAL', 'nit' => '900', 'fecha_retiro' => '2026-08-20', 'tipoRetiro' => 'Cierre histórico'],
+            ['idclientes_potenciales' => 3, 'codigo' => 'RETIRO-2025', 'nit' => '300', 'fecha_retiro' => '2025-12-31', 'tipoRetiro' => '2'],
+            ['idclientes_potenciales' => 4, 'codigo' => 'FECHA-INVALIDA', 'nit' => '400', 'fecha_retiro' => 'sin-fecha', 'tipoRetiro' => '2'],
+        ]);
+        DB::table('sg_proform')->insert([
+            ['nit' => '900', 'anio' => 2024, 'mes' => 1],
+            ['nit' => '900', 'anio' => 2025, 'mes' => 6],
+        ]);
     }
 
     private function columnValue(ProformaDashboardExportService $service, string $key, mixed $value): mixed

@@ -383,6 +383,7 @@ class ProformasController extends Controller
             'dashboard_anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'dashboard_estado' => ['nullable', 'integer'],
             'dashboard_grupo_fecha' => ['nullable', GrupoFechaHelper::validationRule()],
+            'export_source' => ['nullable', 'in:proformas,clientes_retirados'],
             'scope' => ['required', 'in:current_filters,current_month,full_year,monthly_range'],
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'mes_desde' => ['nullable', 'integer', 'min:1', 'max:12'],

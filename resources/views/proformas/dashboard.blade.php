@@ -346,6 +346,16 @@
                     <div class="min-h-0 overflow-y-auto border-r border-slate-200 bg-slate-50 p-6">
                         <div class="space-y-6">
                             <div>
+                                <label for="export-source" class="mb-2 block text-sm font-semibold text-slate-700">Exportar por</label>
+                                <select id="export-source" name="export_source" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                    @foreach($exportOptions['sources'] as $sourceOption)
+                                        <option value="{{ $sourceOption['value'] }}" @selected(old('export_source', 'proformas') === $sourceOption['value'])>{{ $sourceOption['label'] }}</option>
+                                    @endforeach
+                                </select>
+                                <p id="export-source-help" class="mt-2 text-xs text-slate-500">El año y los demás filtros se aplican a las proformas.</p>
+                            </div>
+
+                            <div>
                                 <label for="mode" class="mb-2 block text-sm font-semibold text-slate-700">Tipo de exportación</label>
                                 <select id="mode" name="mode" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                                     @foreach($exportOptions['modes'] as $modeOption)
@@ -354,7 +364,7 @@
                                 </select>
                             </div>
 
-                            <div>
+                            <div id="export-scope-field">
                                 <label for="scope" class="mb-2 block text-sm font-semibold text-slate-700">Filtro base</label>
                                 <select id="scope" name="scope" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                                     @foreach($exportOptions['scopes'] as $scopeOption)
@@ -363,12 +373,12 @@
                                 </select>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
+                            <div id="export-year-state-fields" class="grid grid-cols-2 gap-3">
+                                <div id="export-year-field">
                                     <label for="export-anio" class="mb-2 block text-sm font-semibold text-slate-700">Año</label>
                                     <input id="export-anio" name="anio" type="number" min="1900" max="9999" value="{{ old('anio', $exportOptions['filters']['anio']) }}" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                                 </div>
-                                <div>
+                                <div id="export-state-field">
                                     <label for="export-estado" class="mb-2 block text-sm font-semibold text-slate-700">Estado</label>
                                     <select id="export-estado" name="estado" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                                         <option value="">Todos</option>
@@ -379,7 +389,7 @@
                                 </div>
                             </div>
 
-                            <div>
+                            <div id="export-date-group-field">
                                 <label for="export-grupo-fecha" class="mb-2 block text-sm font-semibold text-slate-700">Grupo fecha</label>
                                 <select id="export-grupo-fecha" name="grupo_fecha" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                                     <option value="">Todos</option>
@@ -443,7 +453,7 @@
                         <div class="min-h-0 flex-1 overflow-y-auto scroll-smooth px-6 py-5">
                             <div class="space-y-5">
                                 @foreach($exportOptions['column_groups'] as $group)
-                                    <section class="rounded-2xl border border-slate-200 bg-white p-5">
+                                    <section data-column-section="{{ $group['key'] }}" class="rounded-2xl border border-slate-200 bg-white p-5">
                                         <div class="mb-4 flex items-center justify-between gap-3">
                                             <div>
                                                 <h4 class="text-base font-semibold text-slate-800">{{ $group['label'] }}</h4>
@@ -541,9 +551,18 @@
         const exportLoadingMessage = document.getElementById('export-loading-message');
         const openButton = document.getElementById('open-export-modal');
         const closeButtons = document.querySelectorAll('[data-close-export-modal]');
+        const sourceSelect = document.getElementById('export-source');
+        const sourceHelp = document.getElementById('export-source-help');
         const modeSelect = document.getElementById('mode');
         const scopeSelect = document.getElementById('scope');
+        const scopeField = document.getElementById('export-scope-field');
+        const yearStateFields = document.getElementById('export-year-state-fields');
+        const stateField = document.getElementById('export-state-field');
+        const stateSelect = document.getElementById('export-estado');
+        const dateGroupField = document.getElementById('export-date-group-field');
+        const dateGroupSelect = document.getElementById('export-grupo-fecha');
         const rangeFields = document.getElementById('monthly-range-fields');
+        const proformaColumnsSection = document.querySelector('[data-column-section="proforma"]');
         const checkboxes = Array.from(document.querySelectorAll('[data-column-checkbox]'));
         const selectedCounter = document.getElementById('selected-columns-count');
         const selectAllButton = document.getElementById('select-all-columns');
@@ -557,7 +576,7 @@
         let isExporting = false;
         let toastTimer = null;
 
-        if (!modal || !openButton || !modeSelect || !scopeSelect || !exportForm || !submitExportButton) {
+        if (!modal || !openButton || !sourceSelect || !modeSelect || !scopeSelect || !exportForm || !submitExportButton) {
             return;
         }
 
@@ -571,7 +590,7 @@
         };
 
         const updateSelectedCount = () => {
-            selectedCounter.textContent = String(checkboxes.filter((checkbox) => checkbox.checked).length);
+            selectedCounter.textContent = String(checkboxes.filter((checkbox) => checkbox.checked && !checkbox.disabled).length);
         };
 
         const storeColumns = () => {
@@ -603,7 +622,7 @@
         };
 
         const getLoadingMessage = () => {
-            if (scopeSelect.value === 'current_filters' && currentRecordCount > 0) {
+            if (sourceSelect.value === 'proformas' && scopeSelect.value === 'current_filters' && currentRecordCount > 0) {
                 return `Exportando ${currentRecordCount} registros del dashboard actual...`;
             }
 
@@ -631,12 +650,41 @@
         };
 
         const syncScopeState = () => {
-            const isRange = scopeSelect.value === 'monthly_range';
+            const isRetiredClients = sourceSelect.value === 'clientes_retirados';
+            const isRange = !isRetiredClients && scopeSelect.value === 'monthly_range';
             rangeFields.classList.toggle('opacity-50', !isRange);
 
             rangeFields.querySelectorAll('select').forEach((select) => {
                 select.disabled = !isRange;
             });
+        };
+
+        const syncSourceState = () => {
+            const isRetiredClients = sourceSelect.value === 'clientes_retirados';
+
+            scopeField?.classList.toggle('hidden', isRetiredClients);
+            stateField?.classList.toggle('hidden', isRetiredClients);
+            yearStateFields?.classList.toggle('grid-cols-1', isRetiredClients);
+            yearStateFields?.classList.toggle('grid-cols-2', !isRetiredClients);
+            dateGroupField?.classList.toggle('hidden', isRetiredClients);
+            rangeFields.classList.toggle('hidden', isRetiredClients);
+            proformaColumnsSection?.classList.toggle('hidden', isRetiredClients);
+
+            if (stateSelect) stateSelect.disabled = isRetiredClients;
+            if (dateGroupSelect) dateGroupSelect.disabled = isRetiredClients;
+
+            checkboxes.forEach((checkbox) => {
+                checkbox.disabled = isRetiredClients && checkbox.dataset.columnGroup === 'proforma';
+            });
+
+            if (sourceHelp) {
+                sourceHelp.textContent = isRetiredClients
+                    ? 'El año se aplica a la fecha de retiro del cliente. No se usan filtros ni columnas de proforma.'
+                    : 'El año y los demás filtros se aplican a las proformas.';
+            }
+
+            syncScopeState();
+            updateSelectedCount();
         };
 
         const openModal = () => {
@@ -679,7 +727,7 @@
         });
 
         selectAllButton.addEventListener('click', () => {
-            setCheckedColumns(checkboxes.map((checkbox) => checkbox.value));
+            setCheckedColumns(checkboxes.filter((checkbox) => !checkbox.disabled).map((checkbox) => checkbox.value));
         });
 
         clearAllButton.addEventListener('click', () => {
@@ -690,7 +738,7 @@
             button.addEventListener('click', () => {
                 const groupKey = button.dataset.selectGroup;
                 const groupValues = checkboxes
-                    .filter((checkbox) => checkbox.dataset.columnGroup === groupKey)
+                    .filter((checkbox) => checkbox.dataset.columnGroup === groupKey && !checkbox.disabled)
                     .map((checkbox) => checkbox.value);
                 const currentValues = checkboxes
                     .filter((checkbox) => checkbox.checked)
@@ -709,8 +757,10 @@
 
         modeSelect.addEventListener('change', () => {
             setCheckedColumns(DEFAULTS[modeSelect.value] || []);
+            syncSourceState();
         });
 
+        sourceSelect.addEventListener('change', syncSourceState);
         scopeSelect.addEventListener('change', syncScopeState);
 
         const handleExportSubmit = async (event) => {
@@ -720,7 +770,7 @@
                 return;
             }
 
-            const selectedColumns = checkboxes.filter((checkbox) => checkbox.checked);
+            const selectedColumns = checkboxes.filter((checkbox) => checkbox.checked && !checkbox.disabled);
             if (selectedColumns.length === 0) {
                 showToast('Selecciona al menos una columna para exportar.', 'error');
                 return;
@@ -788,7 +838,7 @@
             updateSelectedCount();
         }
 
-        syncScopeState();
+        syncSourceState();
         setExportingState(false);
 
         if (shouldOpenOnLoad) {
