@@ -22,11 +22,16 @@ class CadenaGeneracionService
             }
         }
         foreach ($preview['clientes'] as $client) {
-            if (!$client['dv_valido']) {
+            $codes = array_keys($client['cantidades'] ?? []);
+            $supportOnly = $codes !== [] && array_diff($codes, ['05', '95']) === [];
+            if (!$client['dv_valido'] && !$supportOnly) {
                 $issues[] = 'NIT '.$client['nit_base'].'-'.$client['dv'].': '.$client['estado'].'. Pendiente de revisión; no se asigna automáticamente.';
             }
         }
-        foreach ($exports['omitidos'] ?? [] as $omitted) { $issues[] = implode(' · ', $omitted); }
+        foreach ($exports['omitidos'] ?? [] as $omitted) {
+            // Soporte pendiente queda en auditoría; no bloquea los clientes válidos.
+            if ($omitted[0] !== 'soporte') { $issues[] = implode(' · ', $omitted); }
+        }
         $wanted = $action === 'paquete' ? self::FILES : [$action => self::FILES[$action]];
         foreach ($wanted as $category => $filename) {
             if (!isset($exports['tables'][$filename])) {

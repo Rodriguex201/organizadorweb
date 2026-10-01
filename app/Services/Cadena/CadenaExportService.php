@@ -49,8 +49,9 @@ class CadenaExportService
                 if (!array_intersect($codes, array_keys($counts))) {
                     continue;
                 }
-                if (!$group['dv_valido']) {
-                    $omitted[] = [$category, $group['nit_base'].'-'.$group['dv'], $group['estado'], 'No exportado: DV inválido.'];
+                if (!$group['dv_valido'] || ($category === 'soporte' && $group['cliente_id'] === null)) {
+                    $omitted[] = [$category, $group['nit_base'].'-'.$group['dv'], $group['estado'],
+                        !$group['dv_valido'] ? 'No exportado: DV inválido.' : 'No exportado: soporte requiere cliente resuelto.'];
                     continue;
                 }
                 $name = $category === 'facturas' || $group['cliente_id'] === null

@@ -111,16 +111,30 @@ $check($multi['tables']['ResumenCombinado.xlsx']['rows'][0][5] === 2, 'Documento
 $ambiguous = $summary->build($files, [$client, array_replace($client, ['cliente_id' => 2])], []);
 $ambiguousExports = $exporter->prepare($ambiguous, $files);
 $check(count($ambiguousExports['tables']['Resumen.xlsx']['rows']) === 1, 'Factura ambigua exporta NIT, no asigna cliente');
-$check(count($ambiguousExports['tables']['ResumenDocumentoSoporte.xlsx']['rows']) === 1, 'Soporte ambiguo incluido');
-$check($ambiguousExports['omitidos'] === [], 'No omitir clientes pendientes');
+$check(count($ambiguousExports['tables']['ResumenDocumentoSoporte.xlsx']['rows']) === 0, 'Soporte ambiguo solo en auditoría');
+$check($ambiguousExports['omitidos'][0][0] === 'soporte', 'Solo soporte pendiente se omite del resumen');
 $check($ambiguous['clientes'][0]['cliente_id'] === null, 'No asignar automáticamente cliente ambiguo');
 $unknown = $exporter->prepare($summary->build($files, [], []), $files);
 $check(count($unknown['tables']['Resumen.xlsx']['rows']) === 1, 'Facturas sin cliente incluidas');
-$check(count($unknown['tables']['ResumenDocumentoSoporte.xlsx']['rows']) === 1, 'Soporte sin cliente incluido');
-$check($unknown['tables']['ResumenDocumentoSoporte.xlsx']['rows'][0][3] === 'CLIENTE SINTETICO SOLO TESTS', 'Soporte conserva nombre observado, no inventa cliente');
-$check($unknown['tables']['ResumenDocumentoSoporte.xlsx']['rows'][0][5] === 1, 'Nota de ajuste pendiente conserva cantidad');
+$check(count($unknown['tables']['ResumenDocumentoSoporte.xlsx']['rows']) === 0, 'Soporte sin cliente solo en auditoría');
 $check($unknown['tables']['Resumen.xlsx']['rows'] === $ambiguousExports['tables']['Resumen.xlsx']['rows'], 'Mismos NIT, nombre observado y cantidades sin cliente o ambiguo');
 $check(count($unknown['tables']['ResumenEventos.xlsx']['rows']) === 1, 'Evento pendiente conserva NIT para resolución legacy');
+$check(count($unknown['tables']['AuditoriaDocumentoSoporte.xlsx']['rows']) === count($tables['AuditoriaDocumentoSoporte.xlsx']['rows']), 'Soporte pendiente conserva todas sus filas en auditoría');
+// Resolved, unknown, ambiguous and invalid-DV groups share a batch. Counts stay intact.
+$mixed = $preview;
+$mixed['clientes'][0]['cantidades'] = ['05' => 2];
+foreach (['Sin cliente', 'NIT ambiguo', 'DV inválido'] as $i => $state) {
+    $mixed['clientes'][] = array_replace($mixed['clientes'][0], ['nit_base' => '80000000'.$i,
+        'cliente_id' => null, 'dv_valido' => $i !== 2, 'estado' => $state, 'cantidades' => ['05' => 31, '95' => 1]]);
+}
+$mixedExports = $exporter->prepare($mixed, $files);
+$supportRows = $mixedExports['tables']['ResumenDocumentoSoporte.xlsx']['rows'];
+$check(count($supportRows) === 1 && $supportRows[0][4] === 2, 'Soporte solo cliente válido: 1 fila / total 2');
+$check(count($mixedExports['omitidos']) === 3, 'Tres exclusiones de soporte registradas');
+$check(array_sum(array_map(fn ($g) => $g['cantidades']['05'], $mixed['clientes'])) === 95, 'No se alteran los 95 documentos observados');
+$check(count($mixedExports['tables']['AuditoriaCadena.xlsx']['rows']) === count($mixed['auditoria']) + 3, 'Exclusiones comerciales explícitas en auditoría');
+$mixed['consulta_disponible'] = true;
+$check((new App\Services\Cadena\CadenaGeneracionService())->issues($mixed, $mixedExports, 'soporte') === [], 'Exclusiones no bloquean el resumen válido');
 $zero = $preview;
 $zero['clientes'][0]['cantidades']['032'] = 0;
 $check($exporter->prepare($zero, $files)['tables']['ResumenEventos.xlsx']['rows'][0][4] === 0, 'Cero explícito conservado como número');
