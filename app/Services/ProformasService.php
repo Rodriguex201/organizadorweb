@@ -173,6 +173,31 @@ class ProformasService
 
     public function findProformaById(int $id): ?object
     {
+        return $this->findProformasByIds([$id])->first();
+    }
+
+    /**
+     * @param  array<int, int|string>  $ids
+     */
+    public function findProformasByIds(array $ids): Collection
+    {
+        $normalizedIds = collect($ids)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($normalizedIds->isEmpty()) {
+            return collect();
+        }
+
+        return $this->buildProformaLookupQuery()
+            ->whereIn('p.id', $normalizedIds->all())
+            ->get();
+    }
+
+    private function buildProformaLookupQuery(): Builder
+    {
         $query = DB::table('sg_proform as p');
         $this->applyClienteJoins($query);
 
@@ -181,11 +206,10 @@ class ProformasService
             ->selectRaw($this->joinedClienteFieldExpression('codigo').' as codigo')
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as id_cliente')
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as cliente_potencial_id')
+            ->selectRaw($this->joinedClienteFieldExpression('email').' as cliente_email')
             ->selectRaw($this->joinedClienteFieldExpression('nota_cobro').' as nota_cobro')
             ->selectRaw($this->joinedClienteFieldExpression('fecha_arriendo').' as cliente_fecha_arriendo')
-            ->selectRaw($this->clienteResolutionSourceExpression().' as cliente_resolution_source')
-            ->where('p.id', $id)
-            ->first();
+            ->selectRaw($this->clienteResolutionSourceExpression().' as cliente_resolution_source');
     }
 
     public function findComprobantePagoById(int $id): ?object

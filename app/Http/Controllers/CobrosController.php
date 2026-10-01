@@ -30,6 +30,12 @@ use Throwable;
 
 class CobrosController extends Controller
 {
+    /** @var array<string, float> */
+    private array $massProgressLastWriteAt = [];
+
+    /** @var array<string, array<string, mixed>> */
+    private array $massProgressPayloads = [];
+
     public function __construct(
         private readonly CobrosService $cobrosService,
         private readonly CobroExtraordinarioService $cobroExtraordinarioService,
@@ -253,6 +259,8 @@ $filters = [
 
     public function generarProformasMasivo(Request $request, int $grupo): RedirectResponse|JsonResponse
     {
+        $requestStartedAt = microtime(true);
+
         if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
@@ -318,15 +326,23 @@ $filters = [
         ]);
 
         try {
-            Log::info('Generacion masiva grupo: inicio.', [
+            $startContext = [
                 'grupo' => $grupo,
                 'filters' => $filters,
                 'database' => DB::connection()->getDatabaseName(),
-                'mass_generation_snapshot' => $this->cobrosService->buildMassGenerationDebugSnapshot($filters, $grupo),
                 'execution_id' => $executionId,
-            ]);
+                'debug_snapshot_enabled' => (bool) config('services.proforma_mass_generation_debug_snapshot', false),
+            ];
 
+            if ($startContext['debug_snapshot_enabled']) {
+                $startContext['mass_generation_snapshot'] = $this->cobrosService->buildMassGenerationDebugSnapshot($filters, $grupo);
+            }
+
+            Log::info('Generacion masiva grupo: inicio.', $startContext);
+
+            $candidateLoadStartedAt = microtime(true);
             $candidatos = $this->cobrosService->findCobroCandidatesForMassGeneration($filters, $grupo);
+            $candidateLoadDurationMs = (microtime(true) - $candidateLoadStartedAt) * 1000;
             $this->putMassGenerationProgress($progressKey, [
                 'execution_id' => $executionId,
                 'grupo' => $grupo,
@@ -341,6 +357,15 @@ $filters = [
 
             $resultado = $this->procesarGeneracionMasiva($grupo, $filters, $candidatos, $progressKey);
             $redirect = $this->buildMassGenerationRedirect($grupo, $filters, $resultado);
+
+            Log::info('Generacion masiva grupo: request finalizado.', [
+                'grupo' => $grupo,
+                'execution_id' => $executionId,
+                'total_candidatos' => $candidatos->count(),
+                'candidate_load_ms' => round($candidateLoadDurationMs, 2),
+                'processing_ms' => round((float) ($resultado['batch_duration_ms'] ?? 0), 2),
+                'request_total_ms' => round((microtime(true) - $requestStartedAt) * 1000, 2),
+            ]);
 
             $summary = [
                 'generadas' => (int) ($resultado['creadas'] ?? 0),
@@ -594,8 +619,21 @@ $filters = [
                 ->with('status_type', 'warning');
         }
 
-        $candidatos = collect($payload['items'] ?? [])->map(function (array $item): object {
-            return (object) $item;
+        $itemsPendientes = collect($payload['items'] ?? []);
+        $idsCobro = $itemsPendientes
+            ->pluck('id_cobro')
+            ->map(fn ($idCobro) => (int) $idCobro)
+            ->filter(fn (int $idCobro) => $idCobro > 0)
+            ->unique()
+            ->values()
+            ->all();
+        $cobrosById = $this->cobrosService
+            ->findCobrosByIdsForMassGeneration($idsCobro)
+            ->keyBy(fn (object $cobro) => (int) $cobro->id_cobro);
+        $candidatos = $itemsPendientes->map(function (array $item) use ($cobrosById): object {
+            $idCobro = (int) ($item['id_cobro'] ?? 0);
+
+            return $cobrosById->get($idCobro) ?? (object) ($item + ['_mass_preload_missing' => true]);
         });
 
         $resultado = $this->procesarGeneracionMasiva($grupo, $payload['filters'] ?? [], $candidatos);
@@ -628,7 +666,7 @@ $filters = [
             abort(404);
         }
 
-        $this->sanitizePendingProformasForEnvioSession();
+        $proformasById = $this->sanitizePendingProformasForEnvioSession();
         $payload = session('cobros.proformas_listas_para_envio');
 
         if (!is_array($payload) || (int) ($payload['grupo'] ?? 0) !== $grupo) {
@@ -642,6 +680,7 @@ $filters = [
         $proformas = is_array($payload['proformas'] ?? null) ? $payload['proformas'] : [];
         $delaySeconds = max(0, (int) config('services.proforma_bulk_send_delay_seconds', 2));
         $totalProformas = count($proformas);
+        $batchStartedAt = microtime(true);
 
         $enviadas = [];
         $omitidas = [];
@@ -656,7 +695,7 @@ $filters = [
                 continue;
             }
 
-            $proforma = $this->proformasService->findProformaById($proformaId);
+            $proforma = $proformasById->get($proformaId);
 
             if (!$proforma) {
                 $omitidas[] = ['empresa' => $empresa, 'motivo' => 'Proforma no encontrada.'];
@@ -669,8 +708,8 @@ $filters = [
             }
 
             try {
-                $this->asegurarPdfDeProforma($proformaId);
-                $proformaActualizada = $this->proformasService->findProformaById($proformaId);
+                $pdf = $this->asegurarPdfDeProforma($proformaId);
+                $proformaActualizada = $this->applyPdfResultToProforma($proforma, $pdf);
 
                 if (!$this->proformasService->canSendProforma($proformaActualizada)) {
                     $omitidas[] = ['empresa' => $empresa, 'motivo' => 'La proforma no quedo lista para envio.'];
@@ -706,6 +745,16 @@ $filters = [
         }
 
         session()->forget('cobros.proformas_listas_para_envio');
+
+        Log::info('Envio masivo desde cobros: lote finalizado.', [
+            'grupo' => $grupo,
+            'total' => $totalProformas,
+            'enviadas' => count($enviadas),
+            'omitidas' => count($omitidas),
+            'fallidas' => count($fallidas),
+            'delay_seconds' => $delaySeconds,
+            'batch_duration_ms' => round((microtime(true) - $batchStartedAt) * 1000, 2),
+        ]);
 
         $message = "Envio masivo grupo {$grupo} finalizado. Enviadas: ".count($enviadas).'. Omitidas: '.count($omitidas).'. Fallidas: '.count($fallidas).'.';
 
@@ -743,7 +792,7 @@ $filters = [
             abort(404);
         }
 
-        $this->sanitizePendingProformasForEnvioSession();
+        $proformasById = $this->sanitizePendingProformasForEnvioSession();
         $payload = session('cobros.proformas_listas_para_envio');
 
         if (!is_array($payload) || (int) ($payload['grupo'] ?? 0) !== $grupo) {
@@ -788,11 +837,11 @@ $filters = [
         ]);
 
         try {
+            $batchStartedAt = microtime(true);
             $enviadas = [];
             $omitidas = [];
             $fallidas = [];
             $processedCount = 0;
-
             foreach (array_values($proformas) as $index => $item) {
                 $proformaId = (int) ($item['id'] ?? 0);
                 $empresa = trim((string) ($item['empresa'] ?? 'Sin nombre'));
@@ -804,7 +853,7 @@ $filters = [
                     continue;
                 }
 
-                $proforma = $this->proformasService->findProformaById($proformaId);
+                $proforma = $proformasById->get($proformaId);
 
                 if (!$proforma) {
                     $omitidas[] = ['empresa' => $empresa, 'motivo' => 'Proforma no encontrada.'];
@@ -821,8 +870,8 @@ $filters = [
                 }
 
                 try {
-                    $this->asegurarPdfDeProforma($proformaId);
-                    $proformaActualizada = $this->proformasService->findProformaById($proformaId);
+                    $pdf = $this->asegurarPdfDeProforma($proformaId);
+                    $proformaActualizada = $this->applyPdfResultToProforma($proforma, $pdf);
 
                     if (!$this->proformasService->canSendProforma($proformaActualizada)) {
                         $omitidas[] = ['empresa' => $empresa, 'motivo' => 'La proforma no quedo lista para envio.'];
@@ -864,6 +913,17 @@ $filters = [
             }
 
             session()->forget('cobros.proformas_listas_para_envio');
+
+            Log::info('Envio masivo AJAX desde cobros: lote finalizado.', [
+                'grupo' => $grupo,
+                'execution_id' => $executionId,
+                'total' => $totalProformas,
+                'enviadas' => count($enviadas),
+                'omitidas' => count($omitidas),
+                'fallidas' => count($fallidas),
+                'delay_seconds' => $delaySeconds,
+                'batch_duration_ms' => round((microtime(true) - $batchStartedAt) * 1000, 2),
+            ]);
 
             $message = "Envio masivo grupo {$grupo} finalizado. Enviadas: ".count($enviadas).'. Omitidas: '.count($omitidas).'. Fallidas: '.count($fallidas).'.';
             $summary = [
@@ -1439,6 +1499,26 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         return $this->proformaPdfService->generateForProformaId($proformaId, $regenerar);
     }
 
+    private function applyPdfResultToProforma(object $proforma, array $pdf): object
+    {
+        $relativePath = str_replace('\\', '/', trim((string) ($pdf['relative_path'] ?? '')));
+        $filename = trim((string) ($pdf['filename'] ?? ''));
+
+        if ($relativePath !== '') {
+            $directory = str_replace('\\', '/', dirname($relativePath));
+
+            if ($directory !== '.' && $directory !== '') {
+                $proforma->rpdf = trim($directory, '/');
+            }
+        }
+
+        if ($filename !== '') {
+            $proforma->npdf = $filename;
+        }
+
+        return $proforma;
+    }
+
     private function buildFacturacionClienteData(object $cobro): array
     {
         $estado = ClientePotencial::normalizeEstadoFacturacion(
@@ -1490,10 +1570,15 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
     private function procesarGeneracionMasiva(int $grupo, array $filters, \Illuminate\Support\Collection $candidatos, ?string $progressKey = null): array
     {
+        $batchStartedAt = microtime(true);
         $idsCobro = $candidatos->pluck('id_cobro')
             ->map(fn ($idCobro) => (int) $idCobro)
             ->filter(fn (int $idCobro) => $idCobro > 0)
             ->values();
+
+        $preloadStartedAt = microtime(true);
+        $existingStates = $this->preloadMassGenerationExistingProformaStates($idsCobro->all());
+        $preloadDurationMs = (microtime(true) - $preloadStartedAt) * 1000;
 
         Log::info('Generacion masiva grupo: ids resueltos.', [
             'grupo' => $grupo,
@@ -1520,12 +1605,25 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         $totalCandidates = $candidatos->count();
 
         foreach ($candidatos as $candidato) {
+            $companyStartedAt = microtime(true);
             $idCobro = (int) ($candidato->id_cobro ?? 0);
             $codigoCliente = trim((string) ($candidato->codigo ?? 'Sin codigo'));
             $empresaCliente = trim((string) ($candidato->empresa ?? $candidato->nombre ?? 'Sin nombre'));
             $nitCliente = $this->resolveOmitidaNit($candidato);
-            $markProgress = function (string $message) use ($progressKey, $grupo, $totalCandidates, &$processedCount, &$creadas, &$actualizadas, &$omitidas, &$omitidasProtegidas, &$fallidas, &$pdfRegenerados, &$saltadasCompletas): void {
+            $markProgress = function (string $message) use ($progressKey, $grupo, $totalCandidates, &$processedCount, &$creadas, &$actualizadas, &$omitidas, &$omitidasProtegidas, &$fallidas, &$pdfRegenerados, &$saltadasCompletas, $companyStartedAt, $idCobro, $codigoCliente, $empresaCliente): void {
                 $processedCount++;
+
+                Log::info('Generacion masiva grupo: empresa procesada.', [
+                    'grupo' => $grupo,
+                    'id_cobro' => $idCobro,
+                    'codigo' => $codigoCliente,
+                    'empresa' => $empresaCliente,
+                    'resultado' => $message,
+                    'duration_ms' => round((microtime(true) - $companyStartedAt) * 1000, 2),
+                    'processed' => $processedCount,
+                    'total' => $totalCandidates,
+                ]);
+
                 $this->updateMassGenerationProgress($progressKey, $grupo, $totalCandidates, $processedCount, $message, [
                     'creadas' => $creadas,
                     'actualizadas' => $actualizadas,
@@ -1573,7 +1671,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 continue;
             }
 
-            $cobro = $this->cobrosService->findCobroById((int) $idCobro);
+            $cobro = ($candidato->_mass_preload_missing ?? false) === true ? null : $candidato;
 
             if (!$cobro) {
                 Log::warning('Generacion masiva grupo: cobro no encontrado en loop.', [
@@ -1593,7 +1691,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             $nitCliente = $this->resolveOmitidaNit($cobro, $nitCliente);
 
             try {
-                $estadoExistente = $this->resolveMassGenerationExistingProformaState($idCobro);
+                $estadoExistente = $existingStates[$idCobro] ?? null;
 
                 if ($estadoExistente !== null && $estadoExistente['has_pdf']) {
                     $saltadasCompletas++;
@@ -1734,6 +1832,8 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             'pdf_duration_ms_total' => round($pdfDurationMsTotal, 2),
             'store_duration_ms_promedio' => $storeInvocations > 0 ? round($storeDurationMsTotal / $storeInvocations, 2) : 0,
             'pdf_duration_ms_promedio' => ($creadas + $actualizadas + $pdfRegenerados) > 0 ? round($pdfDurationMsTotal / ($creadas + $actualizadas + $pdfRegenerados), 2) : 0,
+            'preload_existing_states_ms' => round($preloadDurationMs, 2),
+            'batch_duration_ms' => round((microtime(true) - $batchStartedAt) * 1000, 2),
             'omitidas_detalle' => $omitidasDetalle,
             'fallidas' => count($fallidas),
             'fallidas_detalle' => array_slice($fallidas, 0, 10),
@@ -1763,41 +1863,62 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             'omitidas_detalle' => $omitidasDetalle,
             'pendientes_facturacion' => $pendientesFacturacion,
             'proformas_listas' => array_values($proformasListas),
+            'batch_duration_ms' => (microtime(true) - $batchStartedAt) * 1000,
         ];
     }
 
-    private function resolveMassGenerationExistingProformaState(int $idCobro): ?array
+    /**
+     * @param  array<int, int|string>  $idsCobro
+     * @return array<int, array<string, int|bool>>
+     */
+    private function preloadMassGenerationExistingProformaStates(array $idsCobro): array
     {
-        if ($idCobro <= 0) {
-            return null;
+        $ids = collect($idsCobro)
+            ->map(fn ($idCobro) => (int) $idCobro)
+            ->filter(fn (int $idCobro) => $idCobro > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [];
         }
 
-        $proforma = DB::table('sg_proform')
-            ->select(['id', 'estado', 'enviado', 'rpdf', 'npdf', 'hpdf'])
-            ->where('id_cobro', $idCobro)
+        $proformas = DB::table('sg_proform')
+            ->select(['id', 'id_cobro', 'estado', 'enviado', 'rpdf', 'npdf', 'hpdf'])
+            ->whereIn('id_cobro', $ids->all())
             ->orderByDesc('id')
-            ->first();
+            ->get()
+            ->unique(fn (object $proforma) => (int) $proforma->id_cobro)
+            ->values();
 
-        if (!$proforma) {
-            return null;
+        if ($proformas->isEmpty()) {
+            return [];
         }
 
-        $detailCount = DB::table('sg_proford')
-            ->where('proforma_id', (int) $proforma->id)
-            ->count();
+        $detailCounts = DB::table('sg_proford')
+            ->select('proforma_id')
+            ->selectRaw('COUNT(*) as detail_count')
+            ->whereIn('proforma_id', $proformas->pluck('id')->all())
+            ->groupBy('proforma_id')
+            ->pluck('detail_count', 'proforma_id');
 
-        $hasPdf = trim((string) ($proforma->rpdf ?? '')) !== ''
-            && trim((string) ($proforma->npdf ?? '')) !== ''
-            && trim((string) ($proforma->hpdf ?? '')) !== '';
+        return $proformas
+            ->mapWithKeys(function (object $proforma) use ($detailCounts): array {
+                $detailCount = (int) ($detailCounts[(int) $proforma->id] ?? 0);
+                $hasPdf = trim((string) ($proforma->rpdf ?? '')) !== ''
+                    && trim((string) ($proforma->npdf ?? '')) !== ''
+                    && trim((string) ($proforma->hpdf ?? '')) !== '';
 
-        return [
-            'proforma_id' => (int) $proforma->id,
-            'estado' => (int) ($proforma->estado ?? 0),
-            'enviado' => (int) ($proforma->enviado ?? 0),
-            'has_pdf' => $hasPdf,
-            'has_detail' => $detailCount > 0,
-            'detail_count' => $detailCount,
-        ];
+                return [(int) $proforma->id_cobro => [
+                    'proforma_id' => (int) $proforma->id,
+                    'estado' => (int) ($proforma->estado ?? 0),
+                    'enviado' => (int) ($proforma->enviado ?? 0),
+                    'has_pdf' => $hasPdf,
+                    'has_detail' => $detailCount > 0,
+                    'detail_count' => $detailCount,
+                ]];
+            })
+            ->all();
     }
 
     private function massGenerationLockKey(int $grupo): string
@@ -1825,11 +1946,13 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
     private function putMassGenerationProgress(string $progressKey, array $payload): void
     {
+        $this->massProgressPayloads[$progressKey] = $payload;
         Cache::put($progressKey, $payload, now()->addHour());
     }
 
     private function putMassSendProgress(string $progressKey, array $payload): void
     {
+        $this->massProgressPayloads[$progressKey] = $payload;
         Cache::put($progressKey, $payload, now()->addHour());
     }
 
@@ -1839,8 +1962,12 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             return;
         }
 
+        if (!$this->shouldWriteMassProgress($progressKey, $processed, $total)) {
+            return;
+        }
+
         $percentage = $total > 0 ? min(100, (int) round(($processed / $total) * 100)) : 100;
-        $current = Cache::get($progressKey, []);
+        $current = $this->massProgressPayloads[$progressKey] ?? [];
 
         $this->putMassGenerationProgress($progressKey, array_merge(is_array($current) ? $current : [], [
             'grupo' => $grupo,
@@ -1860,8 +1987,12 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             return;
         }
 
+        if (!$this->shouldWriteMassProgress($progressKey, $processed, $total)) {
+            return;
+        }
+
         $percentage = $total > 0 ? min(100, (int) round(($processed / $total) * 100)) : 100;
-        $current = Cache::get($progressKey, []);
+        $current = $this->massProgressPayloads[$progressKey] ?? [];
 
         $this->putMassSendProgress($progressKey, array_merge(is_array($current) ? $current : [], [
             'grupo' => $grupo,
@@ -1875,6 +2006,30 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             'percentage' => $percentage,
             'updated_at' => now()->toDateTimeString(),
         ]));
+    }
+
+    private function shouldWriteMassProgress(string $progressKey, int $processed, int $total): bool
+    {
+        // El controlador persiste inmediatamente despues el estado completed/error.
+        // Evita una escritura running redundante para el ultimo elemento.
+        if ($total > 0 && $processed >= $total) {
+            return false;
+        }
+
+        $every = max(1, (int) config('services.proforma_mass_progress_every', 5));
+        $maxIntervalSeconds = max(1, (int) config('services.proforma_mass_progress_max_interval_seconds', 10));
+        $now = microtime(true);
+        $lastWriteAt = $this->massProgressLastWriteAt[$progressKey] ?? null;
+        $shouldWrite = $processed <= 1
+            || ($processed % $every) === 0
+            || $lastWriteAt === null
+            || ($now - $lastWriteAt) >= $maxIntervalSeconds;
+
+        if ($shouldWrite) {
+            $this->massProgressLastWriteAt[$progressKey] = $now;
+        }
+
+        return $shouldWrite;
     }
 
     private function buildMassGenerationRedirect(int $grupo, array $filters, array $resultado): RedirectResponse
@@ -2083,6 +2238,21 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             'anio' => $filters['anio'] ?? null,
         ];
         $candidatos = $this->cobrosService->findCobroCandidatesForMassGeneration($periodo, $grupo);
+        $idsCobro = $candidatos
+            ->pluck('id_cobro')
+            ->map(fn ($idCobro) => (int) $idCobro)
+            ->filter(fn (int $idCobro) => $idCobro > 0)
+            ->unique()
+            ->values();
+        $proformasByCobro = $idsCobro->isEmpty()
+            ? collect()
+            : DB::table('sg_proform')
+                ->select(['id', 'id_cobro', 'nro_prof', 'emp', 'nit', 'estado', 'enviado', 'rpdf', 'npdf', 'hpdf'])
+                ->whereIn('id_cobro', $idsCobro->all())
+                ->orderByDesc('id')
+                ->get()
+                ->unique(fn (object $proforma) => (int) $proforma->id_cobro)
+                ->keyBy(fn (object $proforma) => (int) $proforma->id_cobro);
         $candidatas = [];
         $discardedState = 0;
         $discardedPdf = 0;
@@ -2097,11 +2267,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 continue;
             }
 
-            $proforma = DB::table('sg_proform')
-                ->select(['id', 'id_cobro', 'nro_prof', 'emp', 'nit', 'estado', 'enviado', 'rpdf', 'npdf', 'hpdf'])
-                ->where('id_cobro', $idCobro)
-                ->orderByDesc('id')
-                ->first();
+            $proforma = $proformasByCobro->get($idCobro);
 
             if (!$proforma) {
                 $discardedState++;
@@ -2138,6 +2304,8 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             }
 
             try {
+                $proforma->cliente_email = $candidato->cliente_email ?? null;
+                $proforma->id_cliente = $candidato->cliente_id ?? $candidato->id_cliente ?? null;
                 $this->proformaEmailService->resolveDestinatarios($proforma, 'RECUPERACION LOTE MASIVO');
 
                 $candidatas[] = [
@@ -2213,12 +2381,12 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         );
     }
 
-    private function sanitizePendingProformasForEnvioSession(): void
+    private function sanitizePendingProformasForEnvioSession(): \Illuminate\Support\Collection
     {
         $payload = session('cobros.proformas_listas_para_envio');
 
         if (!is_array($payload)) {
-            return;
+            return collect();
         }
 
         $proformas = is_array($payload['proformas'] ?? null) ? $payload['proformas'] : [];
@@ -2226,7 +2394,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         if ($proformas === []) {
             session()->forget('cobros.proformas_listas_para_envio');
 
-            return;
+            return collect();
         }
 
         $resultado = $this->sanitizeProformasForEnvioLote(
@@ -2239,21 +2407,34 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
         if ($proformasSanitizadas === []) {
             session()->forget('cobros.proformas_listas_para_envio');
 
-            return;
+            return collect();
         }
 
         $payload['proformas'] = array_values($proformasSanitizadas);
         session()->put('cobros.proformas_listas_para_envio', $payload);
+
+        return $resultado['loaded'];
     }
 
     /**
      * @param array<int, mixed> $proformas
-     * @return array{proformas: array<int, array<string, mixed>>, discarded: int}
+     * @return array{proformas: array<int, array<string, mixed>>, discarded: int, loaded: \Illuminate\Support\Collection<int, object>}
      */
     private function sanitizeProformasForEnvioLote(int $grupo, array $proformas, string $context): array
     {
         $sanitizadas = [];
+        $loaded = collect();
         $discarded = 0;
+        $ids = collect($proformas)
+            ->filter(fn ($item) => is_array($item))
+            ->map(fn (array $item) => (int) ($item['id'] ?? 0))
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+        $proformasById = $this->proformasService
+            ->findProformasByIds($ids)
+            ->keyBy(fn (object $proforma) => (int) $proforma->id);
 
         foreach ($proformas as $item) {
             if (!is_array($item)) {
@@ -2270,7 +2451,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 continue;
             }
 
-            $proforma = $this->proformasService->findProformaById($proformaId);
+            $proforma = $proformasById->get($proformaId);
 
             if (!$proforma) {
                 $discarded++;
@@ -2304,11 +2485,13 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 'id' => $proformaId,
                 'empresa' => $empresa !== '' ? $empresa : trim((string) ($proforma->emp ?? 'Sin nombre')),
             ];
+            $loaded->put($proformaId, $proforma);
         }
 
         return [
             'proformas' => array_values($sanitizadas),
             'discarded' => $discarded,
+            'loaded' => $loaded,
         ];
     }
 

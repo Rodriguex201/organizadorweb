@@ -28,6 +28,9 @@ return [
     ],
 
     'proforma_bulk_send_delay_seconds' => (int) env('PROFORMA_BULK_SEND_DELAY_SECONDS', 2),
+    'proforma_mass_generation_debug_snapshot' => (bool) env('PROFORMA_MASS_GENERATION_DEBUG_SNAPSHOT', false),
+    'proforma_mass_progress_every' => (int) env('PROFORMA_MASS_PROGRESS_EVERY', 5),
+    'proforma_mass_progress_max_interval_seconds' => (int) env('PROFORMA_MASS_PROGRESS_MAX_INTERVAL_SECONDS', 10),
 
     'directorio_api' => [
         'url' => env('DIRECTORIO_API_URL'),

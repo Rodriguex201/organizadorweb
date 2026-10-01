@@ -163,6 +163,8 @@ class ProformasController extends Controller
 
     public function enviarMasivo(Request $request, int $grupo): RedirectResponse
     {
+        $batchStartedAt = microtime(true);
+
         if (!GrupoFechaHelper::isAllowed($grupo)) {
             abort(404);
         }
@@ -215,6 +217,19 @@ class ProformasController extends Controller
         }
 
         $omitidas += max(0, count($ids) - $candidatas->count());
+
+        Log::info('Envio masivo desde proformas: lote finalizado.', [
+            'grupo' => $grupo,
+            'mes' => $periodo['mes'],
+            'anio' => $periodo['anio'],
+            'total_solicitadas' => count($ids),
+            'total_candidatas' => $totalCandidatas,
+            'enviadas' => $enviadas,
+            'omitidas' => $omitidas,
+            'fallidas' => count($fallidas),
+            'delay_seconds' => $delaySeconds,
+            'batch_duration_ms' => round((microtime(true) - $batchStartedAt) * 1000, 2),
+        ]);
 
         $statusType = count($fallidas) > 0 ? 'error' : 'success';
         $message = "Envio masivo grupo {$grupo} finalizado. Enviadas: {$enviadas}. Omitidas: {$omitidas}. Fallidas: ".count($fallidas).'.';

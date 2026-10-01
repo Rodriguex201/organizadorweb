@@ -15,6 +15,9 @@ use Illuminate\Support\Facades\Schema;
 
 class CobrosService
 {
+    /** @var array<string, bool> */
+    private array $schemaColumnCache = [];
+
     public function __construct(
         private readonly ClienteRetiradoService $clienteRetiradoService,
     ) {
@@ -198,6 +201,27 @@ return $query
 
     public function findCobroById(int $idCobro): ?object
     {
+        $select = $this->cobroDetailSelect();
+
+        $select = $this->clienteRetiradoService->addSelectColumns(
+            $select,
+            'cp',
+            'cliente_fecha_retiro',
+            'cliente_retiro_flag',
+        );
+
+        return DB::table('valores_externos as ve')
+            ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
+            ->select($select)
+            ->where('ve.id_cobro', $idCobro)
+            ->first();
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function cobroDetailSelect(): array
+    {
         $select = [
             've.*',
             'cp.idclientes_potenciales as cliente_id',
@@ -228,42 +252,31 @@ return $query
             'cp.vlrextra2 as cliente_vlrextra2',
         ];
 
-        if (Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+        if ($this->hasColumn('clientes_potenciales', 'estado_facturacion')) {
             $select[] = 'cp.estado_facturacion as cliente_estado_facturacion';
         } else {
             $select[] = DB::raw("'".ClientePotencial::ESTADO_FACTURACION_ACTIVO."' as cliente_estado_facturacion");
         }
 
-        if (Schema::hasColumn('clientes_potenciales', 'fecha_inicio_facturacion')) {
+        if ($this->hasColumn('clientes_potenciales', 'fecha_inicio_facturacion')) {
             $select[] = 'cp.fecha_inicio_facturacion as cliente_fecha_inicio_facturacion';
         } else {
             $select[] = DB::raw('NULL as cliente_fecha_inicio_facturacion');
         }
 
-        if (Schema::hasColumn('clientes_potenciales', 'vlrpaginaweb')) {
+        if ($this->hasColumn('clientes_potenciales', 'vlrpaginaweb')) {
             $select[] = 'cp.vlrpaginaweb as cliente_vlrpaginaweb';
         }
 
-        if (Schema::hasColumn('clientes_potenciales', 'numextra')) {
+        if ($this->hasColumn('clientes_potenciales', 'numextra')) {
             $select[] = 'cp.numextra as cliente_numextra';
         }
 
-        if (Schema::hasColumn('clientes_potenciales', 'vlrextrae')) {
+        if ($this->hasColumn('clientes_potenciales', 'vlrextrae')) {
             $select[] = 'cp.vlrextrae as cliente_vlrextrae';
         }
 
-        $select = $this->clienteRetiradoService->addSelectColumns(
-            $select,
-            'cp',
-            'cliente_fecha_retiro',
-            'cliente_retiro_flag',
-        );
-
-        return DB::table('valores_externos as ve')
-            ->leftJoin('clientes_potenciales as cp', DB::raw('cp.idclientes_potenciales'), '=', DB::raw('CAST(ve.id_cliente AS UNSIGNED)'))
-            ->select($select)
-            ->where('ve.id_cobro', $idCobro)
-            ->first();
+        return $select;
     }
 
 
@@ -276,7 +289,7 @@ return $query
                 continue;
             }
 
-            if (!Schema::hasColumn('valores_externos', $column)) {
+            if (!$this->hasColumn('valores_externos', $column)) {
                 continue;
             }
 
@@ -301,7 +314,7 @@ return $query
                 continue;
             }
 
-            if (!Schema::hasColumn('clientes_potenciales', $column)) {
+            if (!$this->hasColumn('clientes_potenciales', $column)) {
                 continue;
             }
 
@@ -388,8 +401,10 @@ return $query
         $filters['exclude_retirados'] = true;
         $filters['only_facturacion_activa'] = true;
 
-        $massDebug = $this->buildMassGenerationDebugSnapshot($filters, $grupoFecha);
-        Log::info('Cobros masivos debug snapshot.', $massDebug);
+        if ((bool) config('services.proforma_mass_generation_debug_snapshot', false)) {
+            $massDebug = $this->buildMassGenerationDebugSnapshot($filters, $grupoFecha);
+            Log::info('Cobros masivos debug snapshot.', $massDebug);
+        }
 
         $query = $this->buildCobrosQuery($filters);
         $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
@@ -414,7 +429,8 @@ return $query
         $filters['grupo_fecha'] = (string) $grupoFecha;
         unset($filters['exclude_retirados'], $filters['only_facturacion_activa']);
 
-        $query = $this->buildCobrosQuery($filters);
+        $query = $this->buildCobrosQuery($filters)
+            ->addSelect($this->cobroDetailSelect());
         $ordenFecha = $this->normalizarOrdenFecha($filters['orden_fecha'] ?? null);
 
         return $query
@@ -426,6 +442,31 @@ return $query
                     ->orderByRaw($this->ordenMesSql() . ' DESC')
                     ->orderByDesc('ve.id_cobro'),
             )
+            ->get();
+    }
+
+    /**
+     * Recupera en una sola consulta los cobros completos requeridos por una
+     * regeneracion masiva iniciada desde la sesion.
+     *
+     * @param  array<int, int|string>  $idsCobro
+     */
+    public function findCobrosByIdsForMassGeneration(array $idsCobro): Collection
+    {
+        $ids = collect($idsCobro)
+            ->map(fn ($idCobro) => (int) $idCobro)
+            ->filter(fn (int $idCobro) => $idCobro > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return $this->buildCobrosQuery([])
+            ->addSelect($this->cobroDetailSelect())
+            ->whereIn('ve.id_cobro', $ids->all())
+            ->orderByDesc('ve.id_cobro')
             ->get();
     }
 
@@ -495,25 +536,25 @@ private function buildCobrosQuery(array $filters)
     $query = $this->buildFilteredCobrosQuery($filters)
         ->select($select);
 
-    if (Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+    if ($this->hasColumn('clientes_potenciales', 'estado_facturacion')) {
         $query->addSelect(DB::raw($this->billingStatusSql('cp.estado_facturacion').' as estado_facturacion'));
     } else {
         $query->addSelect(DB::raw("'".ClientePotencial::ESTADO_FACTURACION_ACTIVO."' as estado_facturacion"));
     }
 
-    if (Schema::hasColumn('clientes_potenciales', 'fecha_inicio_facturacion')) {
+    if ($this->hasColumn('clientes_potenciales', 'fecha_inicio_facturacion')) {
         $query->addSelect('cp.fecha_inicio_facturacion');
     } else {
         $query->addSelect(DB::raw('NULL as fecha_inicio_facturacion'));
     }
 
-    if (Schema::hasColumn('clientes_potenciales', 'fecha_llegada')) {
+    if ($this->hasColumn('clientes_potenciales', 'fecha_llegada')) {
         $query->addSelect('cp.fecha_llegada as cliente_fecha_creacion');
-    } elseif (Schema::hasColumn('clientes_potenciales', 'fecha_inicio')) {
+    } elseif ($this->hasColumn('clientes_potenciales', 'fecha_inicio')) {
         $query->addSelect('cp.fecha_inicio as cliente_fecha_creacion');
-    } elseif (Schema::hasColumn('clientes_potenciales', 'fechainicio')) {
+    } elseif ($this->hasColumn('clientes_potenciales', 'fechainicio')) {
         $query->addSelect('cp.fechainicio as cliente_fecha_creacion');
-    } elseif (Schema::hasColumn('clientes_potenciales', 'fecha_cotizacion')) {
+    } elseif ($this->hasColumn('clientes_potenciales', 'fecha_cotizacion')) {
         $query->addSelect('cp.fecha_cotizacion as cliente_fecha_creacion');
     } else {
         $query->addSelect(DB::raw('NULL as cliente_fecha_creacion'));
@@ -564,7 +605,7 @@ if (!empty($filters['anio'])) {
         $this->clienteRetiradoService->applyNoRetiradosConstraint($query, 'cp');
     }
 
-    if (($filters['only_facturacion_activa'] ?? false) === true && Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+    if (($filters['only_facturacion_activa'] ?? false) === true && $this->hasColumn('clientes_potenciales', 'estado_facturacion')) {
         $query->whereRaw($this->billingStatusSql('cp.estado_facturacion').' = ?', [
             ClientePotencial::ESTADO_FACTURACION_ACTIVO,
         ]);
@@ -675,7 +716,7 @@ if (!empty($filters['anio'])) {
             $this->clienteRetiradoService->applyNoRetiradosConstraint($query, 'cp');
         }
 
-        if (($filters['only_facturacion_activa'] ?? false) === true && Schema::hasColumn('clientes_potenciales', 'estado_facturacion')) {
+        if (($filters['only_facturacion_activa'] ?? false) === true && $this->hasColumn('clientes_potenciales', 'estado_facturacion')) {
             $query->whereRaw($this->billingStatusSql('cp.estado_facturacion').' = ?', [
                 ClientePotencial::ESTADO_FACTURACION_ACTIVO,
             ]);
@@ -910,6 +951,17 @@ if (!empty($filters['anio'])) {
         $valor = mb_strtolower(trim($filtroEnvio));
 
         return in_array($valor, ['enviadas', 'no_enviadas'], true) ? $valor : null;
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        $key = $table.'.'.$column;
+
+        if (!array_key_exists($key, $this->schemaColumnCache)) {
+            $this->schemaColumnCache[$key] = Schema::hasColumn($table, $column);
+        }
+
+        return $this->schemaColumnCache[$key];
     }
 
 }

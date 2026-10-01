@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Schema;
 class ProformaStoreService
 {
 
+    /** @var array<string, bool> */
+    private array $schemaColumnCache = [];
+
     private const CODIGOS_CONCEPTO_OFICIALES = ['0010', '0011', '0099', '0081', '0101', '0102', '0103', 'EXTRA'];
 
 
@@ -62,7 +65,7 @@ class ProformaStoreService
             ->where('anio', $anio)
             ->where('emisora', $emisora);
 
-        if (Schema::hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
+        if ($this->hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
             $query->where('id_cobro', $idCobro);
         }
 
@@ -136,7 +139,7 @@ class ProformaStoreService
                     ->where('anio', $anio)
                     ->where('emisora', $emisora);
 
-                if (Schema::hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
+                if ($this->hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
                     $proformaExistenteQuery->where('id_cobro', $idCobro);
                 }
 
@@ -234,7 +237,7 @@ class ProformaStoreService
                 'hpdf' => null,
             ];
 
-            if (Schema::hasColumn('sg_proform', 'id_cobro')) {
+            if ($this->hasColumn('sg_proform', 'id_cobro')) {
                 $cabecera['id_cobro'] = (int) ($cobro->id_cobro ?? 0) ?: null;
             }
 
@@ -282,7 +285,7 @@ class ProformaStoreService
 
     private function validateCobroReference(object $cobro): ?array
     {
-        if (!Schema::hasColumn('sg_proform', 'id_cobro')) {
+        if (!$this->hasColumn('sg_proform', 'id_cobro')) {
             return null;
         }
 
@@ -420,7 +423,7 @@ class ProformaStoreService
             'cnom' => (float) (($revision['valor_nomina'] ?? 0) > 0 ? 1 : 0),
         ];
 
-        if (Schema::hasColumn('sg_proform', 'id_cobro')) {
+        if ($this->hasColumn('sg_proform', 'id_cobro')) {
             $payload['id_cobro'] = (int) ($cobro->id_cobro ?? 0) ?: null;
         }
 
@@ -674,7 +677,7 @@ class ProformaStoreService
             return ['status' => 'none'];
         }
 
-        if (Schema::hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
+        if ($this->hasColumn('sg_proform', 'id_cobro') && $idCobro > 0) {
             $proforma = DB::table('sg_proform')
                 ->where('id_cobro', $idCobro)
                 ->first();
@@ -799,7 +802,7 @@ class ProformaStoreService
             'valor_mensualidad' => 'total_mensualidad',
             'valor_total' => 'valor_total_proforma',
         ] as $column => $key) {
-            if (!Schema::hasColumn('valores_externos', $column)) {
+            if (!$this->hasColumn('valores_externos', $column)) {
                 continue;
             }
 
@@ -892,6 +895,17 @@ class ProformaStoreService
         }
 
         return (float) ($cobro->cliente_vlrpaginaweb ?? 0);
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        $key = $table.'.'.$column;
+
+        if (!array_key_exists($key, $this->schemaColumnCache)) {
+            $this->schemaColumnCache[$key] = Schema::hasColumn($table, $column);
+        }
+
+        return $this->schemaColumnCache[$key];
     }
 
 

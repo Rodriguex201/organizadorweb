@@ -7,27 +7,70 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Throwable;
 
 class ProformaEmailService
 {
     public function sendProforma(object $proforma, array $options = []): void
     {
-        $logPrefix = $this->normalizeLogPrefix($options['log_prefix'] ?? null);
-        $destinatariosData = $options['destinatarios'] ?? $this->resolveDestinatarios($proforma, $logPrefix);
-        $destinatarios = $destinatariosData['emails'];
+        $startedAt = microtime(true);
+        $recipientDurationMs = 0.0;
+        $pdfDurationMs = 0.0;
+        $resendDurationMs = 0.0;
+        $resendStartedAt = null;
 
-        $pdf = $this->resolvePdfPath($proforma);
-        $payload = $this->buildProformaPayload($proforma, $destinatarios, $pdf);
+        try {
+            $logPrefix = $this->normalizeLogPrefix($options['log_prefix'] ?? null);
+            $recipientStartedAt = microtime(true);
+            $destinatariosData = $options['destinatarios'] ?? $this->resolveDestinatarios($proforma, $logPrefix);
+            $destinatarios = $destinatariosData['emails'];
+            $recipientDurationMs = (microtime(true) - $recipientStartedAt) * 1000;
 
-        $this->sendPayload(
-            $payload,
-            $destinatarios,
-            $logPrefix,
-            [
-                'proforma_id' => $proforma->id ?? null,
-                'proforma_numero' => $proforma->nro_prof ?? null,
-            ],
-        );
+            $pdfStartedAt = microtime(true);
+            $pdf = $this->resolvePdfPath($proforma);
+            $payload = $this->buildProformaPayload($proforma, $destinatarios, $pdf);
+            $pdfDurationMs = (microtime(true) - $pdfStartedAt) * 1000;
+
+            $resendStartedAt = microtime(true);
+            $this->sendPayload(
+                $payload,
+                $destinatarios,
+                $logPrefix,
+                [
+                    'proforma_id' => $proforma->id ?? null,
+                    'proforma_numero' => $proforma->nro_prof ?? null,
+                ],
+            );
+            $resendDurationMs = (microtime(true) - $resendStartedAt) * 1000;
+
+            Log::info('Proforma email: envio finalizado.', [
+                'proforma_id' => (int) ($proforma->id ?? 0),
+                'nro_prof' => $proforma->nro_prof ?? null,
+                'empresa' => $proforma->emp ?? null,
+                'destinatarios' => count($destinatarios),
+                'recipient_ms' => round($recipientDurationMs, 2),
+                'pdf_read_and_payload_ms' => round($pdfDurationMs, 2),
+                'resend_ms' => round($resendDurationMs, 2),
+                'total_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+            ]);
+        } catch (Throwable $exception) {
+            if ($resendStartedAt !== null && $resendDurationMs === 0.0) {
+                $resendDurationMs = (microtime(true) - $resendStartedAt) * 1000;
+            }
+
+            Log::warning('Proforma email: envio fallido.', [
+                'proforma_id' => (int) ($proforma->id ?? 0),
+                'nro_prof' => $proforma->nro_prof ?? null,
+                'empresa' => $proforma->emp ?? null,
+                'recipient_ms' => round($recipientDurationMs, 2),
+                'pdf_read_and_payload_ms' => round($pdfDurationMs, 2),
+                'resend_ms' => round($resendDurationMs, 2),
+                'total_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
     }
 
     public function sendDocument(array $documento, array $options = []): void
@@ -138,6 +181,12 @@ class ProformaEmailService
 
     private function resolveClienteEmailRaw(object $proforma): string
     {
+        $emailPrecargado = trim((string) ($proforma->cliente_email ?? ''));
+
+        if ($emailPrecargado !== '') {
+            return $emailPrecargado;
+        }
+
         if (!empty($proforma->id_cliente)) {
             $email = DB::table('clientes_potenciales')
                 ->where('idclientes_potenciales', $proforma->id_cliente)
