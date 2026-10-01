@@ -15,6 +15,12 @@
 /node_modules
 /public/build
 /public/hot
+/public/hot.bak
+/dist/
+# Evidencias locales y datos reales usados en la validación de Cadena.
+/docs/validacion-cadena/
+/tests/fixtures/cadena/browser-real-*
+/storage/framework/cadena-locks/
 /public/storage
 /storage/*.key
 /storage/pail

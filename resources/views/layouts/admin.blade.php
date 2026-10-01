@@ -48,6 +48,12 @@
                                 <a href="{{ route('configuracion.conceptos.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.conceptos.*') ? 'bg-slate-700' : '' }}">Conceptos</a>
                                 <a href="{{ route('configuracion.tarifas.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.tarifas.*') ? 'bg-slate-700' : '' }}">Tarifas</a>
                                 <a href="{{ route('configuracion.importaciones.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.importaciones.*') ? 'bg-slate-700' : '' }}">Importaciones</a>
+                                @if(esAdmin() || esUsuario())
+                                    <div class="ml-4 border-l border-slate-600 pl-2 text-xs">
+                                        <span class="block px-2 py-1">Cadena</span>
+                                        <a href="{{ route('configuracion.importaciones.cadena.index') }}" class="block rounded px-2 py-1 hover:bg-slate-700 {{ request()->routeIs('configuracion.importaciones.cadena.*') ? 'bg-slate-700' : '' }}">Cargar originales</a>
+                                    </div>
+                                @endif
                                 @if((int) session('rol_id', session('roles_idroles')) === 1)
                                     <a href="{{ route('configuracion.usuarios.index') }}" class="block rounded px-2 py-1 text-xs hover:bg-slate-700 {{ request()->routeIs('configuracion.usuarios.*') ? 'bg-slate-700' : '' }}">Usuarios</a>
                                 @endif
