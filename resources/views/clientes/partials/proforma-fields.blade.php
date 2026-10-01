@@ -30,6 +30,7 @@
         ['name' => 'vlracuse', 'label' => 'Valor recepción', 'column' => $mapping['vlracuse'] ?? null, 'step' => '0.01'],
         ['name' => 'vlrfactura', 'label' => 'Valor factura', 'column' => $mapping['vlrfactura'] ?? null, 'step' => '0.01'],
         ['name' => 'vlrsoporte', 'label' => 'Valor soporte', 'column' => $mapping['vlrsoporte'] ?? null, 'step' => '0.01'],
+        ['name' => 'vlrpaginaweb', 'label' => 'Valor Página web', 'column' => $mapping['vlrpaginaweb'] ?? null, 'step' => '1'],
         ['name' => 'vlrextra', 'label' => 'Otro valor (Extra)', 'column' => $mapping['vlrextra'] ?? null, 'step' => '0.01'],
         ['name' => 'vlrextra2', 'label' => 'Otro valor 2 (Extra)', 'column' => $mapping['vlrextra2'] ?? null, 'step' => '0.01'],
         ['name' => 'numeromoviles', 'label' => 'Número móviles', 'column' => $mapping['numeromoviles'] ?? null, 'step' => '1'],
@@ -124,7 +125,7 @@
     <input type="hidden" id="valor_total" name="valor_total" value="{{ $numberValue('valor_total', $mapping['valor_total'] ?? null) }}">
 
     <div class="mt-3 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-600">
-        Fórmula: valor principal + (valor terminal x equipos adicionales) + (valor equipo extra x equipos extra) + valor nómina + (valor móvil x número móviles)
+        Fórmula: valor principal + (valor terminal x equipos adicionales) + (valor equipo extra x equipos extra) + valor nómina + (valor móvil x número móviles) + otros valores extra + Página web
     </div>
 
     @if($missingProformaFields !== [])

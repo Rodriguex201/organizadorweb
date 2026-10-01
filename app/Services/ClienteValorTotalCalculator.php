@@ -29,6 +29,9 @@ class ClienteValorTotalCalculator
         $subtotalTerminales = $valorTerminal * $equiposAdicionales;
         $subtotalEquiposExtra = $valorEquipoExtra * $numeroEquiposExtra;
         $subtotalMoviles = $valorMovil * $numeroMoviles;
+        $valorPaginaWeb = $this->toFloat($input['vlrpaginaweb'] ?? $input['valor_pagina_web'] ?? 0);
+        $mensualidadSinPaginaWeb = $valorPrincipal + $subtotalTerminales + $subtotalEquiposExtra
+            + $valorExtra + $valorExtra2 + $valorNomina + $subtotalMoviles;
 
         return [
             'valor_principal' => $valorPrincipal,
@@ -43,13 +46,9 @@ class ClienteValorTotalCalculator
             'numero_moviles' => $numeroMoviles,
             'valor_movil' => $valorMovil,
             'subtotal_moviles' => $subtotalMoviles,
-            'total_mensualidad' => $valorPrincipal
-                + $subtotalTerminales
-                + $subtotalEquiposExtra
-                + $valorExtra
-                + $valorExtra2
-                + $valorNomina
-                + $subtotalMoviles,
+            'valor_pagina_web' => $valorPaginaWeb,
+            'total_mensualidad_sin_pagina_web' => $mensualidadSinPaginaWeb,
+            'total_mensualidad' => $mensualidadSinPaginaWeb + $valorPaginaWeb,
         ];
     }
 

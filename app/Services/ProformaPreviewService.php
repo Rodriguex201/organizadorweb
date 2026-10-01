@@ -12,6 +12,7 @@ class ProformaPreviewService
     private const CODIGO_FACTURACION = '0081';
     private const CODIGO_RECEPCION = '0101';
     private const CODIGO_SOPORTE = '0102';
+    private const CODIGO_PAGINA_WEB = '0103';
     private const CODIGO_EXTRA_MANUAL = 'EXTRA';
 
     public function __construct(
@@ -76,10 +77,12 @@ class ProformaPreviewService
             self::CODIGO_FACTURACION,
             self::CODIGO_RECEPCION,
             self::CODIGO_SOPORTE,
+            self::CODIGO_PAGINA_WEB,
             self::CODIGO_EXTRA_MANUAL,
         ]);
         $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
-        $valorMensualidad = $this->toFloat($revision['total_mensualidad'] ?? null);
+        $valorMensualidad = $this->toFloat($revision['total_mensualidad_sin_pagina_web'] ?? null);
+        $valorPaginaWeb = $this->toFloat($revision['valor_pagina_web'] ?? null);
         $valorNomina = $this->toFloat($revision['valor_nomina'] ?? ($cobro->vlrnomina ?? null));
         $numeroEquiposExtra = $this->toFloat($revision['numero_equipos_extra'] ?? null);
         $valorEquipoExtra = $this->toFloat($revision['valor_equipo_extra'] ?? null);
@@ -184,6 +187,19 @@ class ProformaPreviewService
             );
         }
 
+        if ($valorPaginaWeb > 0) {
+            $concepto = $this->resolverConceptoDesdeCatalogo(self::CODIGO_PAGINA_WEB, $catalogoConceptos, 'SERVICIO PAGINA WEB', [
+                'origen' => 'preview_pagina_web',
+                'id_cobro' => (int) ($cobro->id_cobro ?? 0),
+            ]);
+            $lineas[] = new LineaProforma(
+                codigo: $concepto['codigo'],
+                concepto: $concepto['nombre'],
+                cantidad: 1,
+                valorUnitario: $valorPaginaWeb,
+            );
+        }
+
         if ($valorExtra > 0) {
             $concepto = $this->resolverConceptoDesdeCatalogo(self::CODIGO_EXTRA_MANUAL, $catalogoConceptos, 'Cargo extra manual', [
                 'origen' => 'preview_extra_manual',
@@ -252,6 +268,7 @@ class ProformaPreviewService
 
         return [
             'numero_equipos' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_equipos ?? null, $cobro->cliente_numequipos ?? null),
+            'valor_pagina_web' => $this->valorPaginaWebPeriodo($cobro),
             'valor_principal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_principal ?? null, $cobro->cliente_vlrprincipal ?? null),
             'valor_terminal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal ?? null, $cobro->cliente_vlrterminal ?? null),
             'numero_equipos_extra' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numextra ?? null, $cobro->cliente_numextra ?? null),
@@ -315,6 +332,15 @@ class ProformaPreviewService
         }
 
         return 0.0;
+    }
+
+    private function valorPaginaWebPeriodo(object $cobro): float
+    {
+        if (property_exists($cobro, 'vlrpaginaweb') && $cobro->vlrpaginaweb !== null && $cobro->vlrpaginaweb !== '') {
+            return (float) $cobro->vlrpaginaweb;
+        }
+
+        return (float) ($cobro->cliente_vlrpaginaweb ?? 0);
     }
 
     private function toFloat(mixed $valor): float

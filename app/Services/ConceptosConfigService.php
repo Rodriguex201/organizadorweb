@@ -14,7 +14,7 @@ class ConceptosConfigService
      *
      * @var array<int, string>
      */
-    private const PREVIEW_PROTECTED_CODES = ['0010', '0011', '0099', '0081', '0101', '0102', 'EXTRA'];
+    private const PREVIEW_PROTECTED_CODES = ['0010', '0011', '0099', '0081', '0101', '0102', '0103', 'EXTRA'];
 
     /**
      * @return Collection<int, Concepto>

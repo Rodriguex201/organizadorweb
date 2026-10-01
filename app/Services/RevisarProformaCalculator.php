@@ -28,6 +28,7 @@ class RevisarProformaCalculator
         $data['subtotal_equipos_extra'] = $mensualidad['subtotal_equipos_extra'];
         $data['subtotal_moviles'] = $mensualidad['subtotal_moviles'];
         $data['total_mensualidad'] = $mensualidad['total_mensualidad'];
+        $data['total_mensualidad_sin_pagina_web'] = $mensualidad['total_mensualidad_sin_pagina_web'];
 
         $data['valor_total_proforma'] = $data['total_mensualidad']
             + $data['valor_facturas']
@@ -42,6 +43,7 @@ class RevisarProformaCalculator
         $keys = [
             'numero_equipos',
             'valor_principal',
+            'valor_pagina_web',
             'valor_terminal',
             'numero_equipos_extra',
             'valor_equipo_extra',

@@ -738,6 +738,7 @@ class ImportacionesServiceTest extends TestCase
             $table->string('id_cliente')->nullable();
             $table->string('mes')->nullable();
             $table->integer('aÃ±o')->nullable();
+            $table->decimal('vlrpaginaweb', 10, 1)->nullable();
         });
     }
     private function createProcessBatchTables(): void
@@ -750,6 +751,7 @@ class ImportacionesServiceTest extends TestCase
             $table->string('id_cliente')->nullable();
             $table->string('mes')->nullable();
             $table->integer('aÃƒÂ±o')->nullable();
+            $table->decimal('vlrpaginaweb', 10, 1)->nullable();
             $table->float('numero_facturas')->default(0);
             $table->float('numero_nota_debito')->default(0);
             $table->float('numero_nota_credito')->default(0);

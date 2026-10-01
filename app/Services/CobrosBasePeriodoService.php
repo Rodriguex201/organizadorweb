@@ -59,6 +59,7 @@ class CobrosBasePeriodoService
                     'numero_acuse' => 0,
                     'valor_extra' => (float) ($preview['otro_valor_extra'] ?? 0),
                     'valor_extra2' => (float) ($preview['otro_valor_extra_2'] ?? 0),
+                    'vlrpaginaweb' => (float) ($preview['valor_pagina_web'] ?? 0),
                     'valor_facturas' => (float) ($preview['valor_facturas'] ?? 0),
                     'valor_documentos' => (float) ($preview['valor_documentos'] ?? 0),
                     'valor_acuse' => (float) ($preview['valor_acuse'] ?? 0),
@@ -102,6 +103,10 @@ class CobrosBasePeriodoService
             'vlrextra2',
         ];
 
+        if (Schema::hasColumn('clientes_potenciales', 'vlrpaginaweb')) {
+            $select[] = 'vlrpaginaweb';
+        }
+
         if (Schema::hasColumn('clientes_potenciales', 'numextra')) {
             $select[] = 'numextra';
         }
@@ -128,6 +133,7 @@ class CobrosBasePeriodoService
         return $this->revisarProformaCalculator->calculate([
             'numero_equipos' => (float) ($cliente->numequipos ?? 0),
             'valor_principal' => (float) ($cliente->vlrprincipal ?? 0),
+            'valor_pagina_web' => (float) ($cliente->vlrpaginaweb ?? 0),
             'valor_terminal' => (float) ($cliente->vlrterminal ?? 0),
             'numero_equipos_extra' => (float) ($cliente->numextra ?? 0),
             'valor_equipo_extra' => (float) ($cliente->vlrextrae ?? 0),

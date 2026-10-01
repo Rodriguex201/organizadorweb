@@ -619,6 +619,7 @@ class ClientesController extends Controller
 
         $numericInputsToLogical = [
             'vlrprincipal' => 'vlrprincipal',
+            'vlrpaginaweb' => 'vlrpaginaweb',
             'numequipos' => 'numequipos',
             'vlrterminal' => 'vlrterminal',
             'vlrterminal_recepcion' => 'vlrterminal_recepcion',
@@ -637,6 +638,7 @@ class ClientesController extends Controller
         ];
 
         $numericOptionalDefaultsToZero = [
+            'vlrpaginaweb',
             'vlrterminal',
             'vlrnomina',
             'nominaterminal',
@@ -908,6 +910,7 @@ class ClientesController extends Controller
             'ciudad_codigo' => $this->citySelectionRules($mapping['departamento']),
             'regimen' => $this->requiredRule($mapping['regimen'], [Rule::in(['SAS', 'PCS', 'SMP'])]),
             'estado_facturacion' => $this->requiredRule($mapping['estado_facturacion'], [Rule::in(ClientePotencial::estadosFacturacion())]),
+            'vlrpaginaweb' => ['nullable', 'integer', 'min:0', 'max:2147483647'],
             'vlrprincipal' => ['nullable', 'numeric', 'min:0'],
             'numequipos' => ['nullable', 'numeric', 'min:0'],
             'vlrterminal' => ['nullable', 'numeric', 'min:0'],
@@ -1752,6 +1755,7 @@ private function normalizeFolderName(string $value): string
             'tipo_cliente' => $pick(['tipo_cliente_id']),
             'contrato' => $pick(['modalidad', 'contrato']),
             'vlrprincipal' => $pick(['vlrprincipal']),
+            'vlrpaginaweb' => $pick(['vlrpaginaweb']),
             'numequipos' => $pick(['numequipos']),
             'vlrterminal' => $pick(['vlrterminal']),
             'vlrterminal_recepcion' => $pick(['vlrterminal_recepcion', 'vlrterminalrecepcion']),

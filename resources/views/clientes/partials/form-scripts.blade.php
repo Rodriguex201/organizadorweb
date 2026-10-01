@@ -463,6 +463,7 @@
 
                     const calculateTotal = () => {
                         const valorPrincipal = getValue('vlrprincipal');
+                        const valorPaginaWeb = getValue('vlrpaginaweb');
                         const numeroEquipos = getValue('numequipos');
                         const valorTerminal = getValue('vlrterminal');
                         const numeroEquiposExtra = getValue('numextra');
@@ -475,7 +476,7 @@
 
                         const equiposAdicionales = Math.max(numeroEquipos - 1, 0);
 
-                        return valorPrincipal
+                        return valorPrincipal + valorPaginaWeb
                             + (valorTerminal * equiposAdicionales)
                             + (valorEquipoExtra * numeroEquiposExtra)
                             + valorExtra

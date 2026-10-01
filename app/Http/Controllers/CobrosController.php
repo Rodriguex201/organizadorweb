@@ -1006,6 +1006,7 @@ $filters = [
 
 $validated = $request->validate([
     'numero_equipos' => ['nullable', 'numeric', 'min:0'],
+    'valor_pagina_web' => ['nullable', 'numeric', 'min:0', 'max:999999999.9'],
     'valor_principal' => ['nullable', 'numeric', 'min:0'],
     'valor_terminal' => ['nullable', 'numeric', 'min:0'],
     'numero_equipos_extra' => ['nullable', 'numeric', 'min:0'],
@@ -1025,7 +1026,7 @@ $validated = $request->validate([
     'precio_factura' => ['nullable', 'numeric', 'min:0'],
     'precio_soporte' => ['nullable', 'numeric', 'min:0'],
     'precio_acuse' => ['nullable', 'numeric', 'min:0'],
-    'accion' => ['nullable', 'in:recalcular,guardar,generar'],
+    'accion' => ['nullable', 'in:recalcular,guardar,generar,regenerar'],
     'codigo_concepto_extra' => ['nullable', 'string', 'max:100'],
     'descripcion_concepto_extra' => ['nullable', 'string', 'max:500'],
 ]);
@@ -1063,6 +1064,10 @@ $validated['precio_soporte'] = $request->filled('precio_soporte')
 $validated['precio_acuse'] = $request->filled('precio_acuse')
     ? (float) $request->input('precio_acuse')
     : (float) ($preciosCliente->vlrecepcion ?? 0);
+        $valoresRevisionActuales = $this->cobrosService->mapCobroToRevisionValues($cobro);
+        $validated['valor_pagina_web'] = array_key_exists('valor_pagina_web', $validated)
+            ? (float) ($validated['valor_pagina_web'] ?? 0)
+            : (float) ($valoresRevisionActuales['valor_pagina_web'] ?? 0);
         $formData = $this->revisarProformaCalculator->calculate($validated);
         $accion = $validated['accion'] ?? 'guardar';
         $valorExtra = (float) ($formData['otro_valor_extra'] ?? 0);
@@ -1095,6 +1100,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 'acuse' => 'numero_acuse',
                 'otro_valor_extra' => 'valor_extra',
                 'otro_valor_extra_2' => 'valor_extra2',
+                'valor_pagina_web' => 'vlrpaginaweb',
                 'valor_facturas' => 'valor_facturas',
                 'valor_documentos' => 'valor_documentos',
                 'valor_acuse' => 'valor_acuse',
@@ -1146,6 +1152,12 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
                 ? DB::table('clientes_potenciales')->where('idclientes_potenciales', $idCliente)->first()
                 : null,
         ]);
+
+        if ($accion === 'regenerar') {
+            $request->merge(['redirect_to' => 'revisar']);
+
+            return $this->regenerateProforma($request, $id);
+        }
 
         if ($accion === 'generar') {
             if ($this->clienteTieneFacturacionPendiente($cobro)) {

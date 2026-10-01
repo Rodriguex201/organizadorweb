@@ -44,6 +44,7 @@ class CobrosService
         'acuse' => 'numero_acuse',
         'otro_valor_extra' => 'valor_extra',
         'otro_valor_extra_2' => 'valor_extra2',
+        'valor_pagina_web' => 'vlrpaginaweb',
         'valor_facturas' => 'valor_facturas',
         'valor_documentos' => 'valor_documentos',
         'valor_acuse' => 'valor_acuse',
@@ -239,6 +240,10 @@ return $query
             $select[] = DB::raw('NULL as cliente_fecha_inicio_facturacion');
         }
 
+        if (Schema::hasColumn('clientes_potenciales', 'vlrpaginaweb')) {
+            $select[] = 'cp.vlrpaginaweb as cliente_vlrpaginaweb';
+        }
+
         if (Schema::hasColumn('clientes_potenciales', 'numextra')) {
             $select[] = 'cp.numextra as cliente_numextra';
         }
@@ -317,6 +322,7 @@ return $query
         return [
             'numero_equipos' => $this->revisionValue($cobro, ['numero_equipos', 'cliente_numequipos']),
             'valor_principal' => $this->revisionValue($cobro, ['valor_principal', 'cliente_vlrprincipal']),
+            'valor_pagina_web' => $this->revisionValue($cobro, ['vlrpaginaweb', 'cliente_vlrpaginaweb']),
             'valor_terminal' => $this->revisionValue($cobro, ['valor_terminal', 'cliente_vlrterminal']),
             'numero_equipos_extra' => $this->revisionValue($cobro, ['numextra', 'cliente_numextra']),
             'valor_equipo_extra' => $this->revisionValue($cobro, ['vlrextrae', 'cliente_vlrextrae']),

@@ -68,6 +68,7 @@
                                 @endphp
                                 <option
                                     value="{{ $cliente->id }}"
+                                    data-vlrpaginaweb="{{ (float) ($cliente->vlrpaginaweb ?? 0) }}"
                                     data-vlrprincipal="{{ (float) ($cliente->vlrprincipal ?? 0) }}"
                                     data-numequipos="{{ (float) ($cliente->numequipos ?? 0) }}"
                                     data-vlrterminal="{{ (float) ($cliente->vlrterminal ?? 0) }}"
@@ -159,6 +160,7 @@
                 <div class="rounded border border-slate-200 bg-slate-50 px-4 py-3">
                     <p class="text-slate-500">Valor mensualidad</p>
                     <p id="preview_valor_mensualidad" class="mt-1 font-semibold text-slate-900">{{ number_format((float) ($preview['total_mensualidad'] ?? 0), 2, ',', '.') }}</p>
+                    <p class="mt-1 text-xs text-slate-500">Incluye Página web: <span id="preview_valor_pagina_web">{{ number_format((float) ($preview['valor_pagina_web'] ?? 0), 2, ',', '.') }}</span></p>
                 </div>
                 <div class="rounded border border-slate-200 bg-slate-50 px-4 py-3">
                     <p class="text-slate-500">Valor facturas</p>
@@ -288,6 +290,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const render = () => {
         const option = getSelectedOption();
         const codigo = option?.text?.split(' - ')[0] || 'N/D';
+        const valorPaginaWeb = toNumber(option?.dataset.vlrpaginaweb);
         const valorPrincipal = toNumber(option?.dataset.vlrprincipal);
         const numeroEquipos = toNumber(option?.dataset.numequipos);
         const valorTerminal = toNumber(option?.dataset.vlrterminal);
@@ -307,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const extra2 = toNumber(extra2Input.value);
 
         const equiposAdicionales = Math.max(numeroEquipos - 1, 0);
-        const valorMensualidad = valorPrincipal + (valorTerminal * equiposAdicionales) + (numextra * vlrextrae) + vlrnomina + (numeromoviles * vlrmovil) + extra + extra2;
+        const valorMensualidad = valorPrincipal + valorPaginaWeb + (valorTerminal * equiposAdicionales) + (numextra * vlrextrae) + vlrnomina + (numeromoviles * vlrmovil) + extra + extra2;
         const valorFacturas = facturas * vlrfactura;
         const valorDocumentos = soportes * vlrsoporte;
         const valorAcuse = acuses * vlrecepcion;
@@ -315,6 +318,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         document.getElementById('preview_codigo').textContent = codigo || 'N/D';
         document.getElementById('preview_valor_mensualidad').textContent = money(valorMensualidad);
+        document.getElementById('preview_valor_pagina_web').textContent = money(valorPaginaWeb);
         document.getElementById('preview_valor_facturas').textContent = money(valorFacturas);
         document.getElementById('preview_valor_documentos').textContent = money(valorDocumentos);
         document.getElementById('preview_valor_acuse').textContent = money(valorAcuse);

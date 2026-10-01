@@ -123,6 +123,7 @@ class CobrosBasePeriodoServiceTest extends TestCase
         Schema::create('clientes_potenciales', function (Blueprint $table): void {
             $table->increments('idclientes_potenciales');
             $table->decimal('vlrprincipal', 12, 2)->nullable();
+            $table->decimal('vlrpaginaweb', 10, 1)->nullable();
             $table->decimal('numequipos', 12, 2)->nullable();
             $table->decimal('vlrterminal', 12, 2)->nullable();
             $table->decimal('vlrnomina', 12, 2)->nullable();
@@ -151,6 +152,7 @@ class CobrosBasePeriodoServiceTest extends TestCase
             $table->decimal('numero_acuse', 12, 2)->nullable();
             $table->decimal('valor_extra', 12, 2)->nullable();
             $table->decimal('valor_extra2', 12, 2)->nullable();
+            $table->decimal('vlrpaginaweb', 10, 1)->nullable();
             $table->decimal('valor_facturas', 12, 2)->nullable();
             $table->decimal('valor_documentos', 12, 2)->nullable();
             $table->decimal('valor_acuse', 12, 2)->nullable();

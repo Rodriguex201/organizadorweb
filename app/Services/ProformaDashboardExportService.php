@@ -533,6 +533,7 @@ class ProformaDashboardExportService
                 'value' => fn (object $row) => $this->displayRetiroReasonValue($row->cliente_motivo_retiro ?? null),
             ],
 
+            'cliente_valor_pagina_web' => $this->subqueryCurrencyColumn('cliente_valor_pagina_web', 'cliente_valores', 'vlrpaginaweb', 'Valor Página web'),
             'cliente_valor_principal' => $this->subqueryCurrencyColumn('cliente_valor_principal', 'cliente_valores', 'vlrprincipal', 'Valor principal'),
             'cliente_numero_equipos' => $this->subqueryNumericColumn('cliente_numero_equipos', 'cliente_valores', 'numequipos', 'Número equipos'),
             'cliente_valor_terminal' => $this->subqueryCurrencyColumn('cliente_valor_terminal', 'cliente_valores', 'vlrterminal', 'Valor terminal'),

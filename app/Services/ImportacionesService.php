@@ -394,6 +394,7 @@ class ImportacionesService
                 'valor_total' => (float) ($calculated['valor_total_proforma'] ?? 0),
             ];
             $row['persist_payload'] = [
+                'vlrpaginaweb' => (float) ($input['valor_pagina_web'] ?? 0),
                 'numero_facturas' => (float) ($row['imported']['facturas'] ?? 0),
                 'numero_nota_debito' => (float) ($row['imported']['nota_debito'] ?? 0),
                 'numero_nota_credito' => (float) ($row['imported']['nota_credito'] ?? 0),
@@ -854,6 +855,7 @@ class ImportacionesService
                 'valor_total' => (float) ($calculated['valor_total_proforma'] ?? 0),
             ],
             'persist_payload' => [
+                'vlrpaginaweb' => (float) ($input['valor_pagina_web'] ?? 0),
                 'numero_facturas' => (float) ($entry['facturas'] ?? 0),
                 'numero_nota_debito' => (float) ($entry['nota_debito'] ?? 0),
                 'numero_nota_credito' => (float) ($entry['nota_credito'] ?? 0),

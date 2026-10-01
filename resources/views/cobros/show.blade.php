@@ -58,6 +58,7 @@
                         'numero_acuse' => 'Número Acuses',
                         'valor_extra' => 'Valor Extra',
                         'valor_extra2' => 'Valor Extra 2',
+                        'vlrpaginaweb' => 'Valor Página web',
                         'valor_facturas' => 'Valor Facturas',
                         'valor_documentos' => 'Valor Documentos',
                         'valor_acuse' => 'Valor Acuses',
@@ -96,6 +97,28 @@
 
                             return is_numeric($value);
                         });
+
+                    $moveFieldAfter = static function ($fields, string $field, string $after) {
+                        if (!$fields->has($field) || !$fields->has($after)) {
+                            return $fields;
+                        }
+
+                        $value = $fields->get($field);
+                        $ordered = collect();
+
+                        foreach ($fields->except([$field]) as $key => $currentValue) {
+                            $ordered->put($key, $currentValue);
+
+                            if ($key === $after) {
+                                $ordered->put($field, $value);
+                            }
+                        }
+
+                        return $ordered;
+                    };
+
+                    $numericFields = $moveFieldAfter($numericFields, 'Proforma', 'id_cliente');
+                    $numericFields = $moveFieldAfter($numericFields, 'vlrpaginaweb', 'valor_acuse');
                 @endphp
 
                 @if($numericFields->isEmpty())

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 class ProformaStoreService
 {
 
-    private const CODIGOS_CONCEPTO_OFICIALES = ['0010', '0011', '0099', '0081', '0101', '0102', 'EXTRA'];
+    private const CODIGOS_CONCEPTO_OFICIALES = ['0010', '0011', '0099', '0081', '0101', '0102', '0103', 'EXTRA'];
 
 
     private const MESES_ES = [
@@ -622,7 +622,8 @@ class ProformaStoreService
 
         $candidatos = $detalle
             ->filter(function (object $linea) use ($valorExtra) {
-                return (float) ($linea->cantidad ?? 0) === 1.0
+                return (string) ($linea->ref_codigo ?? '') !== '0103'
+                    && (float) ($linea->cantidad ?? 0) === 1.0
                     && (float) ($linea->vr_unidad ?? 0) === $valorExtra
                     && (float) ($linea->vr_parcial ?? 0) === $valorExtra;
             })
@@ -792,6 +793,7 @@ class ProformaStoreService
         $payload = [];
 
         foreach ([
+            'vlrpaginaweb' => 'valor_pagina_web',
             'numextra' => 'numero_equipos_extra',
             'vlrextrae' => 'valor_equipo_extra',
             'valor_mensualidad' => 'total_mensualidad',
@@ -818,6 +820,7 @@ class ProformaStoreService
         $existeRevisionGuardada = $this->existeRevisionGuardada($cobro);
 
         return [
+            'valor_pagina_web' => $this->valorPaginaWebPeriodo($cobro),
             'numero_equipos' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->numero_equipos ?? null, $cobro->cliente_numequipos ?? null),
             'valor_principal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_principal ?? null, $cobro->cliente_vlrprincipal ?? null),
             'valor_terminal' => $this->valorRevisionOBase($existeRevisionGuardada, $cobro->valor_terminal ?? null, $cobro->cliente_vlrterminal ?? null),
@@ -880,6 +883,15 @@ class ProformaStoreService
         }
 
         return 0.0;
+    }
+
+    private function valorPaginaWebPeriodo(object $cobro): float
+    {
+        if (property_exists($cobro, 'vlrpaginaweb') && $cobro->vlrpaginaweb !== null && $cobro->vlrpaginaweb !== '') {
+            return (float) $cobro->vlrpaginaweb;
+        }
+
+        return (float) ($cobro->cliente_vlrpaginaweb ?? 0);
     }
 
 

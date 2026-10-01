@@ -73,6 +73,7 @@
                 $inputLabels = [
                     'numero_equipos' => 'Numero equipos',
                     'valor_principal' => 'Valor principal',
+                    'valor_pagina_web' => 'Valor Página web',
                     'valor_terminal' => 'Valor terminal',
                     'numero_equipos_extra' => 'Numero equipos extra',
                     'valor_equipo_extra' => 'Valor equipo extra',
@@ -122,6 +123,7 @@
                         'nota_credito',
                         'nota_ajuste',
                     ],
+                    'Página web' => ['valor_pagina_web'],
                     'Extras' => [
                         'otro_valor_extra',
                         'otro_valor_extra_2',
@@ -145,7 +147,7 @@
                                     <span class="text-slate-500">{{ $inputLabels[$key] }}</span>
                                     <input
                                         type="number"
-                                        step="0.01"
+                                        step="{{ $key === 'valor_pagina_web' ? '0.1' : '0.01' }}"
                                         min="0"
                                         name="{{ $key }}"
                                         value="{{ old($key, $reviewValues[$key] ?? ($formData[$key] ?? 0)) }}"
@@ -194,7 +196,7 @@
                     Guardar revision
                 </button>
                 @if(!empty($proformaPersistidaId))
-                    <button type="submit" form="regenerarProformaForm" class="inline-flex items-center gap-2 rounded bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
+                    <button type="submit" name="accion" value="regenerar" onclick="return confirm('Primero se guardará esta revisión y luego se reemplazará la proforma actual. ¿Desea continuar?');" class="inline-flex items-center gap-2 rounded bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 1 1-9.588-3.368H3.5a.75.75 0 0 1 0-1.5h4a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-1.5 0V9.18a4 4 0 1 0 6.98 2.45.75.75 0 0 1 1.482-.206Z" clip-rule="evenodd" />
                         </svg>
@@ -212,18 +214,6 @@
         </section>
     </form>
 </div>
-
-@if(!empty($proformaPersistidaId))
-    <form
-        id="regenerarProformaForm"
-        method="POST"
-        action="{{ route('cobros.proforma.regenerar', $cobro->id_cobro) }}"
-        onsubmit="return confirm('Esto reemplazará la proforma actual y actualizará sus valores. ¿Desea continuar?');"
-    >
-        @csrf
-        <input type="hidden" name="redirect_to" value="revisar">
-    </form>
-@endif
 
 <div id="conceptoExtraModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 px-4" aria-hidden="true">
     <div class="w-full max-w-lg rounded-lg bg-white shadow-xl">
@@ -265,6 +255,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const inputKeys = [
         'numero_equipos',
         'valor_principal',
+        'valor_pagina_web',
         'valor_terminal',
         'numero_equipos_extra',
         'valor_equipo_extra',
@@ -318,6 +309,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const soporte = parseNumber('soporte');
         const notaAjuste = parseNumber('nota_ajuste');
         const acuse = parseNumber('acuse');
+        const valorPaginaWeb = parseNumber('valor_pagina_web');
         const otroValorExtra = parseNumber('otro_valor_extra');
         const otroValorExtra2 = parseNumber('otro_valor_extra_2');
         const precioFactura = parseNumber('precio_factura');
@@ -331,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const valorDocumentos = soporte * precioSoporte;
         const valorAcuse = acuse * precioAcuse;
         const subtotalMoviles = numeroMoviles * valorMovil;
-        const totalMensualidad = valorPrincipal
+        const totalMensualidad = valorPrincipal + valorPaginaWeb
             + (valorTerminal * equiposAdicionales)
             + (valorEquipoExtra * numeroEquiposExtra)
             + otroValorExtra
