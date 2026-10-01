@@ -26,6 +26,28 @@ class ImportacionCadenaController extends Controller
 
     private function prepare(Request $request, CadenaSpreadsheetReader $reader, CadenaResumenService $summary, CadenaConsultaService $query, CadenaExportService $exporter): array
     {
+        $uploadIssues = (new \App\Services\Cadena\CadenaUploadService())->inspect(
+            $request->files->all(), (string) ini_get('upload_max_filesize')
+        );
+        if ($uploadIssues !== []) {
+            $configuredTmp = trim((string) ini_get('upload_tmp_dir'));
+            $tmpDirectory = $configuredTmp !== '' ? $configuredTmp : sys_get_temp_dir();
+            foreach ($uploadIssues as $field => $issue) {
+                // No registrar contenido, nombres de clientes ni rutas temporales.
+                \Illuminate\Support\Facades\Log::warning('Cadena: fallo de recepción de archivo.', [
+                    'field' => $field, 'upload_error' => $issue['code'], 'upload_error_name' => $issue['symbol'],
+                    'upload_max_filesize' => ini_get('upload_max_filesize'), 'post_max_size' => ini_get('post_max_size'),
+                    'max_file_uploads' => ini_get('max_file_uploads'), 'max_input_time' => ini_get('max_input_time'),
+                    'max_execution_time' => ini_get('max_execution_time'), 'memory_limit' => ini_get('memory_limit'),
+                    'upload_tmp_dir_configured' => $configuredTmp !== '',
+                    'upload_tmp_dir_exists' => is_dir($tmpDirectory),
+                    'upload_tmp_dir_writable' => is_writable($tmpDirectory),
+                ]);
+            }
+            throw \Illuminate\Validation\ValidationException::withMessages(
+                array_map(fn (array $issue) => $issue['message'], $uploadIssues)
+            );
+        }
         $rules = ['mes' => ['required', 'string', 'in:'.implode(',', CobrosService::MESES)], 'anio' => ['required', 'integer', 'min:2000', 'max:9999']];
         foreach (['facturas', 'soporte', 'eventos'] as $category) {
             $rules[$category] = ['nullable', 'array', 'max:5'];
