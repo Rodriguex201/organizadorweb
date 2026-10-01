@@ -12,6 +12,8 @@
         </div>
     </div>
 
+    <a href="{{ route('configuracion.importaciones.cadena.index') }}" class="inline-block rounded bg-blue-700 px-4 py-2 text-sm text-white">Cadena · Cargar originales</a>
+
     @if (session('status'))
         <div class="rounded border px-4 py-3 text-sm {{
             session('status_type') === 'warning'
