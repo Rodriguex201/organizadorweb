@@ -28,7 +28,7 @@ El ZIP requiere las tres categorías e incluye los tres resúmenes comerciales a
 ## Validación y seguridad
 
 - Facturas/notas: 01, 91 y 92; soporte: 05 y 95; eventos: 030–034, con 032 como contador comercial heredado.
-- NIT y DV normalizados; no se asignan automáticamente clientes ambiguos. Errores y pendientes bloquean la descarga directa y se muestran sin perder la selección.
+- NIT y DV normalizados; no se asignan automáticamente clientes ambiguos. Los errores estructurales y DV inválidos bloquean la descarga. Los NIT ambiguos o sin cliente se exportan sin asignación automática y se advierten al descargar para resolverlos en Importaciones.
 - Documentos con identidad: deduplicación por NIT base, tipo, prefijo y número dentro de la carga; hashes de archivo por categoría. Un original puede usarse en soporte y eventos.
 - Se mantienen los límites de lector/exportador. El lector XLSX inspecciona contenido efectivo sin expandir columnas vacías declaradas hasta XFD.
 - Los tokens de descargas compatibles están cifrados, ligados a sesión/período/archivo y tienen caducidad. Un paquete exige tokens de la misma preparación.

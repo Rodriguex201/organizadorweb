@@ -111,10 +111,15 @@ $check($multi['tables']['ResumenCombinado.xlsx']['rows'][0][5] === 2, 'Documento
 $ambiguous = $summary->build($files, [$client, array_replace($client, ['cliente_id' => 2])], []);
 $ambiguousExports = $exporter->prepare($ambiguous, $files);
 $check(count($ambiguousExports['tables']['Resumen.xlsx']['rows']) === 1, 'Factura ambigua exporta NIT, no asigna cliente');
-$check($ambiguousExports['tables']['ResumenDocumentoSoporte.xlsx']['rows'] === [], 'Soporte ambiguo fuera del resumen');
-$check(count($ambiguousExports['omitidos']) === 1, 'Omisión explícita para revisión');
+$check(count($ambiguousExports['tables']['ResumenDocumentoSoporte.xlsx']['rows']) === 1, 'Soporte ambiguo incluido');
+$check($ambiguousExports['omitidos'] === [], 'No omitir clientes pendientes');
+$check($ambiguous['clientes'][0]['cliente_id'] === null, 'No asignar automáticamente cliente ambiguo');
 $unknown = $exporter->prepare($summary->build($files, [], []), $files);
-$check($unknown['tables']['Resumen.xlsx']['rows'] === [], 'Facturas sin cliente conocido excluidas como CadenaVista');
+$check(count($unknown['tables']['Resumen.xlsx']['rows']) === 1, 'Facturas sin cliente incluidas');
+$check(count($unknown['tables']['ResumenDocumentoSoporte.xlsx']['rows']) === 1, 'Soporte sin cliente incluido');
+$check($unknown['tables']['ResumenDocumentoSoporte.xlsx']['rows'][0][3] === 'CLIENTE SINTETICO SOLO TESTS', 'Soporte conserva nombre observado, no inventa cliente');
+$check($unknown['tables']['ResumenDocumentoSoporte.xlsx']['rows'][0][5] === 1, 'Nota de ajuste pendiente conserva cantidad');
+$check($unknown['tables']['Resumen.xlsx']['rows'] === $ambiguousExports['tables']['Resumen.xlsx']['rows'], 'Mismos NIT, nombre observado y cantidades sin cliente o ambiguo');
 $check(count($unknown['tables']['ResumenEventos.xlsx']['rows']) === 1, 'Evento pendiente conserva NIT para resolución legacy');
 $zero = $preview;
 $zero['clientes'][0]['cantidades']['032'] = 0;

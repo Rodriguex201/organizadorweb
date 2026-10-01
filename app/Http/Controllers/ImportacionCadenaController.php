@@ -136,6 +136,7 @@ class ImportacionCadenaController extends Controller
                 $mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
             }
             return response()->download($path, $filename, ['Content-Type' => $mime, 'Cache-Control' => 'no-store, private',
+                'X-Cadena-Pendientes' => (string) (new \App\Services\Cadena\CadenaGeneracionService())->pendingCount($preview),
                 'X-Cadena-Filename' => $filename])->deleteFileAfterSend(true);
         } catch (\Throwable $exception) {
             if ($path !== null && is_file($path)) { unlink($path); }

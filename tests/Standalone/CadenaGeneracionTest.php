@@ -13,9 +13,11 @@ foreach (['facturas', 'soporte', 'eventos', 'paquete'] as $action) { $check($ser
 $bad = $preview; $bad['consulta_disponible'] = false;
 $check($service->issues($bad, $exports, 'facturas') !== []);
 $bad = $preview; $bad['clientes'][] = ['cliente_id' => null, 'dv_valido' => true, 'nit_base' => '900123456', 'dv' => '8', 'estado' => 'Ambiguo'];
-$check(str_contains(implode(' ', $service->issues($bad, $exports, 'eventos')), 'Ambiguo'));
+$check($service->issues($bad, $exports, 'eventos') === []);
+$check($service->pendingCount($bad) === 1);
 $bad['clientes'][0]['estado'] = 'Sin coincidencia';
-$check($service->issues($bad, $exports, 'soporte') !== []);
+$check($service->issues($bad, $exports, 'soporte') === []);
+$check($service->issues($bad, $exports, 'paquete') === []);
 $bad['clientes'][0]['cliente_id'] = 1; $bad['clientes'][0]['dv_valido'] = false;
 $check($service->issues($bad, $exports, 'soporte') !== []);
 $bad = $preview; $bad['auditoria'][] = ['estado' => 'Error', 'categoria' => 'soporte', 'archivo' => 'a.xlsx', 'hoja' => 'Hoja1', 'fila' => 2, 'detalle' => 'Identidad contradictoria'];

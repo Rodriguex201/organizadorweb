@@ -59,7 +59,7 @@
         <p class="text-xs text-slate-500">CSV, XLSX o XLS. Hasta 5 archivos por categoría y 10 MB por archivo. Todos deben corresponder al período seleccionado; no se deduce del nombre. Se excluye el mismo archivo repetido dentro de una categoría. Un libro con soporte y eventos puede seleccionarse en ambas categorías.</p>
         <p class="text-sm">Cada botón procesa únicamente los archivos de su tarjeta para el período seleccionado.</p>
         <button type="submit" data-cadena-generate="paquete" disabled class="cadena-generate rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500">Generar paquete completo</button>
-        <p class="text-sm">Requiere archivos en las tres categorías. Descarga los tres resúmenes en un único ZIP. Si hay errores o clientes pendientes, se muestran aquí y no se entrega un archivo parcial.</p>
+        <p class="text-sm">Requiere archivos en las tres categorías. Descarga los tres resúmenes en un único ZIP. Los errores estructurales bloquean la descarga. Los NIT ambiguos o sin cliente se incluyen con advertencia para resolverlos en Importaciones.</p>
         <a href="{{ route('configuracion.importaciones.cadena.index') }}" class="ml-3 text-sm underline">Limpiar</a>
     </form>
     <section id="cadena-result" hidden tabindex="-1" class="rounded border bg-white p-4" aria-live="polite">
@@ -232,6 +232,12 @@
             link.textContent = 'Descargar ' + filename;
             link.hidden = false;
             message.textContent = 'Archivo generado: ' + filename + '. Descarga iniciada; si no comienza, utiliza el enlace.';
+            const pending = Number(response.headers.get('X-Cadena-Pendientes') || 0);
+            if (pending > 0) {
+                const warning = document.createElement('li');
+                warning.textContent = 'Advertencia: ' + pending + ' NIT ambiguos o sin cliente se incluyeron en el resumen sin asignación automática. Resuélvelos en Importaciones antes de aplicar los datos.';
+                issues.append(warning);
+            }
             link.click();
         } catch (error) {
             message.textContent = 'La generación o descarga no terminó. Conservamos tu selección para volver a intentar.';

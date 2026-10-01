@@ -21,8 +21,9 @@ class CadenaExportService
                     $raw[$this->originKey($file + ['hoja' => $sheet['hoja'], 'fila' => $row['fila']])] = $v;
                     try {
                         $nit = $validation->nit($v['nit'] ?? $v['receptor'] ?? '');
-                        if (trim($v['nombre'] ?? '') !== '') {
-                            $names[$nit['nit_base']] ??= $v['nombre'];
+                        // nombre es el emisor; no atribuirlo al receptor de eventos.
+                        if ($file['categoria'] !== 'eventos' && trim($v['nombre'] ?? '') !== '') {
+                            $names[$file['categoria']][$nit['nit_base']] ??= $v['nombre'];
                         }
                     } catch (\InvalidArgumentException) {
                         // Invalid rows remain in the audit, never repair an identity for export.
@@ -48,12 +49,12 @@ class CadenaExportService
                 if (!array_intersect($codes, array_keys($counts))) {
                     continue;
                 }
-                if (!$group['dv_valido'] || ($category === 'soporte' && $group['cliente_id'] === null)
-                    || ($category === 'facturas' && $group['candidatos'] === [])) {
-                    $omitted[] = [$category, $group['nit_base'].'-'.$group['dv'], $group['estado'], 'No exportado: DV inválido, facturas sin cliente conocido o soporte pendiente de asignación.'];
+                if (!$group['dv_valido']) {
+                    $omitted[] = [$category, $group['nit_base'].'-'.$group['dv'], $group['estado'], 'No exportado: DV inválido.'];
                     continue;
                 }
-                $name = $category === 'facturas' ? ($names[$group['nit_base']] ?? null) : null;
+                $name = $category === 'facturas' || $group['cliente_id'] === null
+                    ? ($names[$category][$group['nit_base']] ?? null) : null;
                 $name ??= $group['cliente_id'] !== null ? $group['cliente'] : $group['nit_base'].'-'.$group['dv'];
                 // Text NIT with separator matches the legacy normalizer (base + DV).
                 $row = ['RM SOFT', 'RM SOFT', $group['nit_base'].'-'.$group['dv'], $name];

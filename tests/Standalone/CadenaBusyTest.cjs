@@ -31,7 +31,7 @@ vm.runInNewContext(code, {document: {getElementById: id => els[id] ?? null, crea
     URL: {revokeObjectURL() {}, createObjectURL() { return 'blob:test'; }},
     fetch: () => { calls++; return new Promise((resolve, reject) => { settle = resolve; rejectRequest = reject; }); }});
 const submit = i => els['cadena-form'].fire('submit', {submitter: buttons[i], preventDefault() {}});
-const reply = status => ({ok: status === 200, status, headers: {get: k => k === 'X-Cadena-Filename' && status === 200 ? 'Resumen.xlsx' : 'application/json'}, json: async () => ({message: 'Error de prueba', errors: {mes: ['Revisa el período']}}), blob: async () => ({})});
+const reply = status => ({ok: status === 200, status, headers: {get: k => k === 'X-Cadena-Pendientes' ? '2' : k === 'X-Cadena-Filename' && status === 200 ? 'Resumen.xlsx' : 'application/json'}, json: async () => ({message: 'Error de prueba', errors: {mes: ['Revisa el período']}}), blob: async () => ({})});
 (async () => {
     for (const c of cats) { els['cadena-'+c].files = [{name: c, size: 1}]; await els['cadena-'+c].fire('change'); }
     for (const [i, status] of [200,422,409,500,'network'].entries()) {
@@ -50,6 +50,7 @@ const reply = status => ({ok: status === 200, status, headers: {get: k => k === 
         assert.equal(els['cadena-form'].attrs['aria-busy'], undefined);
         assert.ok(cats.every(c => els['cadena-'+c].files.length === 1));
         assert.equal(downloaded, priorDownloads + (status === 200 ? 1 : 0));
+        if (status === 200) assert.ok(els['cadena-result-issues'].children.some(item => item.textContent.includes('2 NIT ambiguos o sin cliente')));
     }
     console.log('OK: doble clic, otro botón, éxito, 422, 409, 500, red y recuperación de controles/selección.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

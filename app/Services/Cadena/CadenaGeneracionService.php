@@ -22,7 +22,7 @@ class CadenaGeneracionService
             }
         }
         foreach ($preview['clientes'] as $client) {
-            if ($client['cliente_id'] === null || !$client['dv_valido']) {
+            if (!$client['dv_valido']) {
                 $issues[] = 'NIT '.$client['nit_base'].'-'.$client['dv'].': '.$client['estado'].'. Pendiente de revisión; no se asigna automáticamente.';
             }
         }
@@ -39,5 +39,10 @@ class CadenaGeneracionService
             foreach ($preview['descargas']['paquete_errores'] ?? ['No se pudo preparar el paquete.'] as $error) { $issues[] = $error; }
         }
         return array_values(array_unique($issues));
+    }
+
+    public function pendingCount(array $preview): int
+    {
+        return count(array_filter($preview['clientes'], fn (array $client) => $client['cliente_id'] === null && $client['dv_valido']));
     }
 }
