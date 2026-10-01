@@ -109,7 +109,9 @@ function Test-IsExcluded {
         return $true
     }
 
-    if ($path -eq 'public/hot' -or
+    # El dominio de cPanel conserva su front controller con rutas adaptadas.
+    if ($path -eq 'public/index.php' -or
+        $path -eq 'public/hot' -or
         $path -eq '.phpunit.result.cache' -or
         $path -eq 'phpunit.xml' -or
         $leaf -eq 'auth.json' -or
@@ -313,3 +315,4 @@ Write-Host ("  Tamaño:  {0:N2} MB" -f ($appZip.Length / 1MB))
 Write-Host ("Público:    {0}" -f $publicZip.FullName)
 Write-Host ("  Archivos: {0:N0}" -f $publicFiles.Count)
 Write-Host ("  Tamaño:  {0:N2} MB" -f ($publicZip.Length / 1MB))
+Write-Warning 'IMPORTANTE: conservar el index.php existente del dominio en cPanel.'
