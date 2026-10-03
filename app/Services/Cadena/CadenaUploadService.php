@@ -7,6 +7,8 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 /** Diagnóstico de recepción, antes de lectores y consultas comerciales. */
 class CadenaUploadService
 {
+    public const MAX_KIB = ['facturas' => 10240, 'soporte' => 10240, 'eventos' => 20480];
+
     public function inspect(array $files, string $uploadLimit): array
     {
         $issues = [];

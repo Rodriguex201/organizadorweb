@@ -56,7 +56,7 @@
                 </div>
             @endforeach
         </div>
-        <p class="text-xs text-slate-500">CSV, XLSX o XLS. Hasta 5 archivos por categoría y 10 MB por archivo. Todos deben corresponder al período seleccionado; no se deduce del nombre. Se excluye el mismo archivo repetido dentro de una categoría. Un libro con soporte y eventos puede seleccionarse en ambas categorías.</p>
+        <p class="text-xs text-slate-500">CSV, XLSX o XLS. Hasta 5 archivos por categoría. Máximo por archivo: Facturas/notas y Documento soporte, 10 MiB; Eventos, 20 MiB. Todos deben corresponder al período seleccionado; no se deduce del nombre. Se excluye el mismo archivo repetido dentro de una categoría. Un libro con soporte y eventos puede seleccionarse en ambas categorías.</p>
         <p class="text-sm">Cada botón procesa únicamente los archivos de su tarjeta para el período seleccionado.</p>
         <button type="submit" data-cadena-generate="paquete" disabled class="cadena-generate rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500">Generar paquete completo</button>
         <p class="text-sm">Requiere archivos en las tres categorías. Descarga los tres resúmenes en un único ZIP. Los errores estructurales bloquean la descarga. Facturas/notas y eventos conservan NIT pendientes; soporte exporta solo clientes resueltos y deja los pendientes en auditoría.</p>

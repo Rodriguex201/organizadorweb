@@ -8,6 +8,16 @@ use RuntimeException;
 
 class CadenaSpreadsheetReader
 {
+    private const EVENT_SHEET_ALIASES = ['eventosfefacturacio'];
+
+    /** Prefer the explicitly identified events sheet; other books retain header detection. */
+    private function selectedSheets(array $names, string $category): array
+    {
+        if ($category !== 'eventos') { return $names; }
+        $known = array_values(array_filter($names, fn ($name) => in_array($this->normalize($name), self::EVENT_SHEET_ALIASES, true)));
+        return $known !== [] ? $known : $names;
+    }
+
     private const ALIASES = [
         'nit' => ['nitemisor', 'suppliernit'],
         'dv' => ['dv', 'dvemisor', 'supplierdv', 'digitoverificacion'],
@@ -41,7 +51,11 @@ class CadenaSpreadsheetReader
         }
         // Inspect dimensions before allocating all spreadsheet cells.
         $estimatedCells = 0;
-        foreach ($reader->listWorksheetInfo($path) as $info) {
+        $sheetInfo = $reader->listWorksheetInfo($path);
+        $selected = $this->selectedSheets(array_column($sheetInfo, 'worksheetName'), $category);
+        $reader->setLoadSheetsOnly($selected);
+        foreach ($sheetInfo as $info) {
+            if (!in_array($info['worksheetName'], $selected, true)) { continue; }
             $estimatedCells += $info['totalRows'] * $info['totalColumns'];
             if ($info['totalRows'] > 50000 || $info['totalColumns'] > 150 || $estimatedCells > 1000000) {
                 throw new RuntimeException('El archivo supera los límites de tamaño de las hojas. Divídelo en archivos más pequeños.');
@@ -149,7 +163,9 @@ class CadenaSpreadsheetReader
             $sheets = $ignored = [];
             $cells = 0;
             $contentCells = 0;
+            $selected = $this->selectedSheets(array_keys($sheetParts), $category);
             foreach ($sheetParts as $name => $part) {
+                if (!in_array($name, $selected, true)) { $ignored[] = $name; continue; }
                 $rows = $columns = $placeholders = [];
                 $headerRow = null;
                 $retainedColumns = [];

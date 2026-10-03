@@ -49,11 +49,19 @@ class ImportacionCadenaController extends Controller
             );
         }
         $rules = ['mes' => ['required', 'string', 'in:'.implode(',', CobrosService::MESES)], 'anio' => ['required', 'integer', 'min:2000', 'max:9999']];
+        $messages = $attributes = [];
         foreach (['facturas', 'soporte', 'eventos'] as $category) {
             $rules[$category] = ['nullable', 'array', 'max:5'];
-            $rules[$category.'.*'] = ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'extensions:csv,xlsx,xls', 'max:10240'];
+            $limit = \App\Services\Cadena\CadenaUploadService::MAX_KIB[$category];
+            $rules[$category.'.*'] = ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'extensions:csv,xlsx,xls', 'max:'.$limit];
+            $messages[$category.'.*.max'] = 'No se pudo subir ":attribute". El límite permitido para esta categoría es '.($limit / 1024).' MiB por archivo.';
+            foreach ((array) $request->file($category, []) as $index => $upload) {
+                if ($upload instanceof \Symfony\Component\HttpFoundation\File\UploadedFile) {
+                    $attributes[$category.'.'.$index] = $upload->getClientOriginalName();
+                }
+            }
         }
-        $data = $request->validate($rules);
+        $data = $request->validate($rules, $messages, $attributes);
         $files = [];
         foreach (['facturas', 'soporte', 'eventos'] as $category) {
             foreach ($request->file($category, []) as $upload) {
