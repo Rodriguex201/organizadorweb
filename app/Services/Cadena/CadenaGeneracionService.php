@@ -50,4 +50,17 @@ class CadenaGeneracionService
     {
         return count(array_filter($preview['clientes'], fn (array $client) => $client['cliente_id'] === null && $client['dv_valido']));
     }
+
+    public function duplicateWarnings(array $preview): array
+    {
+        $labels = ['facturas' => 'Facturas/notas', 'soporte' => 'Documento soporte', 'eventos' => 'Eventos'];
+        $warnings = [];
+        foreach ($preview['archivos'] as $file) {
+            if ($file['estado'] === 'Duplicado excluido') {
+                $warnings[] = 'El archivo "'.$file['archivo'].'" contiene el mismo contenido que un archivo ya cargado en '
+                    .$labels[$file['categoria']].' y fue omitido.';
+            }
+        }
+        return $warnings;
+    }
 }

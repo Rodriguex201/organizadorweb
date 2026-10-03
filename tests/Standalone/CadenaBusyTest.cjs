@@ -31,8 +31,34 @@ vm.runInNewContext(code, {document: {getElementById: id => els[id] ?? null, crea
     URL: {revokeObjectURL() {}, createObjectURL() { return 'blob:test'; }},
     fetch: () => { calls++; return new Promise((resolve, reject) => { settle = resolve; rejectRequest = reject; }); }});
 const submit = i => els['cadena-form'].fire('submit', {submitter: buttons[i], preventDefault() {}});
-const reply = status => ({ok: status === 200, status, headers: {get: k => k === 'X-Cadena-Pendientes' ? '2' : k === 'X-Cadena-Filename' && status === 200 ? 'Resumen.xlsx' : 'application/json'}, json: async () => ({message: 'Error de prueba', errors: {mes: ['Revisa el período']}}), blob: async () => ({})});
+const duplicateWarning = 'El archivo "copia á.xlsx" contiene el mismo contenido que un archivo ya cargado en Facturas/notas y fue omitido.';
+const reply = status => ({ok: status === 200, status, headers: {get: k => k === 'X-Cadena-Duplicados' ? encodeURIComponent(JSON.stringify([duplicateWarning])) : k === 'X-Cadena-Pendientes' ? '2' : k === 'X-Cadena-Filename' && status === 200 ? 'Resumen.xlsx' : 'application/json'}, json: async () => ({message: 'Error de prueba', errors: {mes: ['Revisa el período']}}), blob: async () => ({})});
 (async () => {
+    const a = {name: 'uno.xlsx', size: 10, lastModified: 100};
+    const b = {name: 'dos.xlsx', size: 20, lastModified: 200};
+    const select = async (category, files) => { els['cadena-'+category].files = files; await els['cadena-'+category].fire('change'); };
+    for (const c of ['facturas', 'soporte']) {
+        await select(c, [a]); await select(c, [{...a}]);
+        assert.equal(els['cadena-'+c].files.length, 1);
+        assert.ok(els['cadena-'+c+'-error'].textContent.includes('uno.xlsx'));
+        await select(c, [a, b, {...b}]);
+        assert.deepEqual(els['cadena-'+c].files.map(f => f.name), ['uno.xlsx', 'dos.xlsx']);
+        assert.ok(els['cadena-'+c+'-error'].textContent.includes('dos.xlsx'));
+        await els['cadena-'+c+'-list'].children[0].children[1].fire('click');
+        await select(c, [a]);
+        assert.equal(els['cadena-'+c].files.length, 2);
+        assert.equal(els['cadena-'+c+'-error'].textContent, '');
+    }
+    assert.ok(['facturas', 'soporte'].every(c => els['cadena-'+c].files.some(f => f.name === a.name)));
+    await select('eventos', [a, {...a}, b]);
+    assert.equal(els['cadena-eventos'].files.length, 2);
+    assert.ok(els['cadena-eventos-error'].textContent.includes('Eventos'));
+    await select('eventos', [a]);
+    assert.equal(els['cadena-eventos'].files.length, 1);
+    assert.ok(els['cadena-eventos-error'].textContent.includes('ya está cargado'));
+    await els['cadena-eventos'].fire('cancel');
+    assert.equal(els['cadena-eventos'].files.length, 1);
+    for (const c of ['facturas','soporte']) await els['cadena-'+c+'-clear'].fire('click');
     for (const c of cats) { els['cadena-'+c].files = [{name: c, size: 1}]; await els['cadena-'+c].fire('change'); }
     for (const [i, status] of [200,422,409,500,'network'].entries()) {
         const index = i % 4, before = calls, priorDownloads = downloaded;
@@ -51,6 +77,7 @@ const reply = status => ({ok: status === 200, status, headers: {get: k => k === 
         assert.ok(cats.every(c => els['cadena-'+c].files.length === 1));
         assert.equal(downloaded, priorDownloads + (status === 200 ? 1 : 0));
         if (status === 200) assert.ok(els['cadena-result-issues'].children.some(item => item.textContent.includes('2 NIT ambiguos o sin cliente')));
+        if (status === 200) assert.ok(els['cadena-result-issues'].children.some(item => item.textContent === duplicateWarning));
     }
-    console.log('OK: doble clic, otro botón, éxito, 422, 409, 500, red y recuperación de controles/selección.');
+    console.log('OK: duplicados por categoría, selección múltiple, quitar/reseleccionar, aviso backend, doble clic y recuperación de controles.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

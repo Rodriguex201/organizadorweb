@@ -90,7 +90,7 @@ class ImportacionCadenaController extends Controller
             $warnings[] = 'No fue posible consultar clientes y proformas. Todos los NIT quedan pendientes; la protección del destino NO está verificada.';
         }
         $preview = $summary->build($files, $snapshot['clientes'], $snapshot['destinos']);
-        $preview['advertencias'] = $warnings;
+        $preview['advertencias'] = array_merge($warnings, (new \App\Services\Cadena\CadenaGeneracionService())->duplicateWarnings($preview));
         $preview['consulta_disponible'] = $snapshotAvailable;
 
         try {
@@ -127,7 +127,8 @@ class ImportacionCadenaController extends Controller
         [$data, $preview, $exports] = $this->prepare($request, $reader, $summary, $query, $exporter);
         $issues = (new \App\Services\Cadena\CadenaGeneracionService())->issues($preview, $exports, $action);
         if ($issues !== []) {
-            return response()->json(['message' => 'No se generó ningún archivo. Corrige los errores o pendientes y vuelve a intentar.', 'issues' => $issues], 422);
+            return response()->json(['message' => 'No se generó ningún archivo. Corrige los errores o pendientes y vuelve a intentar.', 'issues' => $issues,
+                'warnings' => (new \App\Services\Cadena\CadenaGeneracionService())->duplicateWarnings($preview)], 422);
         }
         $path = null;
         try {
@@ -145,6 +146,7 @@ class ImportacionCadenaController extends Controller
             }
             return response()->download($path, $filename, ['Content-Type' => $mime, 'Cache-Control' => 'no-store, private',
                 'X-Cadena-Pendientes' => (string) (new \App\Services\Cadena\CadenaGeneracionService())->pendingCount($preview),
+                'X-Cadena-Duplicados' => rawurlencode(json_encode((new \App\Services\Cadena\CadenaGeneracionService())->duplicateWarnings($preview), JSON_THROW_ON_ERROR)),
                 'X-Cadena-Filename' => $filename])->deleteFileAfterSend(true);
         } catch (\Throwable $exception) {
             if ($path !== null && is_file($path)) { unlink($path); }

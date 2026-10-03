@@ -49,6 +49,7 @@
                     @else
                         <p id="cadena-{{ $category }}-count" class="mt-2" aria-live="polite">Ningún archivo seleccionado</p>
                         <ul id="cadena-{{ $category }}-list" class="mt-2 space-y-2 break-all"></ul>
+                        <p id="cadena-{{ $category }}-error" role="alert" class="text-amber-800"></p>
                     @endif
                     <div class="mt-2">
                         <button type="submit" data-cadena-generate="{{ $category }}" disabled class="cadena-generate rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500">{{ ['facturas' => 'Generar resumen combinado', 'soporte' => 'Generar resumen soporte', 'eventos' => 'Generar resumen eventos'][$category] }}</button>
@@ -81,6 +82,18 @@
     const month = document.getElementById('cadena-mes');
     const year = document.getElementById('cadena-anio');
     const categories = ['facturas', 'soporte', 'eventos'];
+    const categoryLabels = {facturas: 'Facturas/notas', soporte: 'Documento soporte', eventos: 'Eventos'};
+    const fileKey = file => JSON.stringify([file.name, file.size, file.lastModified]);
+    function uniqueFiles(category, previous, incoming) {
+        const seen = new Set(previous.map(fileKey)), added = [], warnings = [];
+        incoming.forEach(file => {
+            const key = fileKey(file);
+            if (seen.has(key)) {
+                warnings.push('El archivo "' + file.name + '" ya está cargado en ' + categoryLabels[category] + '.');
+            } else { seen.add(key); added.push(file); }
+        });
+        return {added, warnings: [...new Set(warnings)]};
+    }
     let busy = false;
     let downloadUrl = null;
     const generateButtons = Array.from(form.querySelectorAll('[data-cadena-generate]'));
@@ -112,6 +125,7 @@
         const category = button.dataset.cadenaPicker;
         const input = document.getElementById('cadena-' + category);
         button.addEventListener('click', () => input.click());
+        let eventSelection = Array.from(input.files);
         const showSelection = () => {
             if (category !== 'eventos') return; // Shared multi-file selector owns invoices and support.
             const files = Array.from(input.files);
@@ -127,7 +141,20 @@
             });
             updateGenerationButtons();
         };
-        input.addEventListener('change', showSelection);
+        input.addEventListener('change', () => {
+            if (category === 'eventos') {
+                const incoming = Array.from(input.files);
+                const {warnings} = uniqueFiles(category, eventSelection, incoming);
+                // Events keeps its existing replacement selection, without repeated entries.
+                const {added} = uniqueFiles(category, [], incoming);
+                const transfer = new DataTransfer();
+                added.forEach(file => transfer.items.add(file));
+                input.files = transfer.files;
+                eventSelection = added;
+                document.getElementById('cadena-eventos-error').textContent = warnings.join(' ');
+            }
+            showSelection();
+        });
         input.addEventListener('cancel', () => { showSelection(); button.focus(); });
         showSelection();
     });
@@ -159,11 +186,11 @@
             });
         }
         input.addEventListener('change', () => {
-            const added = Array.from(input.files);
+            const {added, warnings} = uniqueFiles(category, selected, Array.from(input.files));
             if (selected.length + added.length > 5 || added.some(file => file.size > 10240 * 1024)) {
-                error.textContent = 'Máximo 5 archivos y 10 MB por archivo. La selección anterior se conserva.';
+                error.textContent = [...warnings, 'Máximo 5 archivos y 10 MB por archivo. La selección anterior se conserva.'].join(' ');
             } else {
-                selected.push(...added); error.textContent = '';
+                selected.push(...added); error.textContent = warnings.join(' ');
             }
             renderFiles();
         });
@@ -221,7 +248,7 @@
                 if ((response.headers.get('Content-Type') || '').includes('application/json')) detail = await response.json();
                 message.textContent = [409, 422, 503].includes(response.status) ? (detail.message || 'Revisa los archivos y el período.')
                     : 'No se pudo generar el archivo. Comprueba tu sesión y vuelve a intentar.';
-                const errors = [...(detail.issues || []), ...Object.values(detail.errors || {}).flat()];
+                const errors = [...(detail.issues || []), ...(detail.warnings || []), ...Object.values(detail.errors || {}).flat()];
                 errors.forEach(text => { const item = document.createElement('li'); item.textContent = text; issues.append(item); });
                 result.focus();
                 return;
@@ -232,6 +259,12 @@
             link.textContent = 'Descargar ' + filename;
             link.hidden = false;
             message.textContent = 'Archivo generado: ' + filename + '. Descarga iniciada; si no comienza, utiliza el enlace.';
+            const duplicates = response.headers.get('X-Cadena-Duplicados');
+            if (duplicates) {
+                JSON.parse(decodeURIComponent(duplicates)).forEach(text => {
+                    const warning = document.createElement('li'); warning.textContent = text; issues.append(warning);
+                });
+            }
             const pending = Number(response.headers.get('X-Cadena-Pendientes') || 0);
             if (pending > 0) {
                 const warning = document.createElement('li');
