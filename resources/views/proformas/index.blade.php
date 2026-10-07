@@ -97,6 +97,7 @@
                     <option value="">Todas</option>
                     <option value="con" @selected((string) ($filters['filtro_nota'] ?? '') === 'con')>Con nota</option>
                     <option value="sin" @selected((string) ($filters['filtro_nota'] ?? '') === 'sin')>Sin nota</option>
+                    <option value="pendientes" @selected(($filters['filtro_nota'] ?? '') === 'pendientes')>Tareas pendientes</option>
                 </select>
             </div>
             <div class="acciones-filtros flex items-end gap-[10px] self-end">
@@ -148,6 +149,7 @@
                         $envioEstado = $proformasService->envioLabel($proforma->enviado ?? 0);
                         $envioClasses = $proformasService->envioBadgeClass($proforma->enviado ?? 0);
                         $notaCobro = trim((string) ($proforma->nota_cobro ?? ''));
+                        $tieneNotas = $notaCobro !== '' || (bool) ($proforma->tiene_notas_nuevas ?? false);
                         $notaResumen = $notaCobro !== '' ? \Illuminate\Support\Str::limit($notaCobro, 50) : 'Sin nota de cobro';
                         $clientePotencialId = (int) ($proforma->cliente_potencial_id ?? 0);
                         $fechaArriendo = \Illuminate\Support\Carbon::make($proforma->cliente_fecha_arriendo)?->format('d/m/Y') ?: 'N/D';
@@ -225,12 +227,13 @@
                             @if($clientePotencialId > 0)
                                 <button
                                     type="button"
-                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border text-base transition {{ $notaCobro !== '' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-slate-300 text-slate-400 hover:bg-slate-100' }}"
+                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border text-base transition {{ $tieneNotas ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-slate-300 text-slate-400 hover:bg-slate-100' }}"
                                     data-cliente-id="{{ $clientePotencialId }}"
+                                    data-notas-contexto="{{ \App\Services\ClienteNotasService::contexto('proforma', (int) $proforma->id, $clientePotencialId) }}"
                                     data-cliente-nombre="{{ $proforma->emp ?: 'Sin nombre' }}"
                                     data-nota="{{ $notaCobro }}"
-                                    title="{{ $notaCobro !== '' ? 'Tiene nota registrada' : 'Sin nota de cobro' }}"
-                                    aria-label="Editar nota de cobro"
+                                    title="{{ $tieneNotas ? 'Tiene notas registradas' : 'Sin notas' }}"
+                                    aria-label="Abrir notas del cliente"
                                 >&#128221;</button>
                             @else
                                 <span class="text-slate-300" title="Cliente no disponible">&#128221;</span>

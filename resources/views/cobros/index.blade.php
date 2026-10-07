@@ -412,6 +412,7 @@
                     <option value="">Todas</option>
                     <option value="con" @selected(($filters['filtro_nota'] ?? '') === 'con')>Con nota</option>
                     <option value="sin" @selected(($filters['filtro_nota'] ?? '') === 'sin')>Sin nota</option>
+                    <option value="pendientes" @selected(($filters['filtro_nota'] ?? '') === 'pendientes')>Tareas pendientes</option>
                 </select>
             </div>
 
@@ -556,6 +557,7 @@
                         }
 
                         $notaCobro = trim((string) ($cobro->nota_cobro ?? ''));
+                        $tieneNotas = $notaCobro !== '' || (bool) ($cobro->tiene_notas_nuevas ?? false);
                         $notaResumen = $notaCobro !== '' ? \Illuminate\Support\Str::limit($notaCobro, 50) : 'Sin nota de cobro';
                         $clienteId = (int) ($cobro->cliente_id ?? 0);
                         $estadoFacturacion = \App\Models\ClientePotencial::normalizeEstadoFacturacion($cobro->estado_facturacion ?? null);
@@ -577,12 +579,13 @@
                             @if($clienteId > 0)
                                 <button
                                     type="button"
-                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border text-base transition {{ $notaCobro !== '' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-slate-300 text-slate-400 hover:bg-slate-100' }}"
+                                    class="nota-cobro-btn inline-flex h-8 w-8 items-center justify-center rounded-full border text-base transition {{ $tieneNotas ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'border-slate-300 text-slate-400 hover:bg-slate-100' }}"
                                     data-cliente-id="{{ $clienteId }}"
+                                    data-notas-contexto="{{ \App\Services\ClienteNotasService::contexto('cobro', (int) $cobro->id_cobro, $clienteId) }}"
                                     data-cliente-nombre="{{ $cobro->nombre ?: 'Sin nombre' }}"
                                     data-nota="{{ $notaCobro }}"
-                                    title="{{ $notaCobro !== '' ? 'Tiene nota registrada' : 'Sin nota de cobro' }}"
-                                    aria-label="Editar nota de cobro"
+                                    title="{{ $tieneNotas ? 'Tiene notas registradas' : 'Sin notas' }}"
+                                    aria-label="Abrir notas del cliente"
                                 >
                                     📝
                                 </button>
@@ -1321,155 +1324,6 @@
         window.addEventListener('scroll', ocultarMenu);
         window.addEventListener('resize', ocultarMenu);
 
-        const notaButtons = document.querySelectorAll('.nota-cobro-btn');
-        const notaModal = document.getElementById('nota-cobro-modal');
-        const notaCliente = document.getElementById('nota-cobro-cliente');
-        const notaTextarea = document.getElementById('nota-cobro-textarea');
-        const notaFeedback = document.getElementById('nota-cobro-feedback');
-        const notaGuardar = document.getElementById('nota-cobro-guardar');
-        const notaLimpiar = document.getElementById('nota-cobro-limpiar');
-        const notaCancelar = document.getElementById('nota-cobro-cancelar');
-        const notaCancelarTop = document.getElementById('nota-cobro-cancelar-top');
-
-        if (!notaModal || !notaTextarea || !notaCliente || !notaGuardar || !notaLimpiar || !notaCancelar || !notaCancelarTop || !notaFeedback) {
-            return;
-        }
-
-        const csrfToken = '{{ csrf_token() }}';
-        const updateUrlTemplate = '{{ route('cobros.nota.update', ['id' => '__CLIENTE_ID__']) }}';
-        const clearUrlTemplate = '{{ route('cobros.nota.clear', ['id' => '__CLIENTE_ID__']) }}';
-
-        let selectedClientId = null;
-        let selectedButton = null;
-
-        const closeNotaModal = () => {
-            notaModal.classList.add('hidden');
-            notaModal.classList.remove('flex');
-            selectedClientId = null;
-            selectedButton = null;
-            notaFeedback.classList.add('hidden');
-            notaFeedback.textContent = '';
-            notaFeedback.classList.remove('text-rose-600', 'text-emerald-600');
-        };
-
-        const openNotaModal = (button) => {
-            selectedButton = button;
-            selectedClientId = button.dataset.clienteId;
-            notaCliente.textContent = `Cliente: ${button.dataset.clienteNombre || 'Sin nombre'}`;
-            notaTextarea.value = button.dataset.nota || '';
-            notaFeedback.classList.add('hidden');
-            notaFeedback.textContent = '';
-            notaFeedback.classList.remove('text-rose-600', 'text-emerald-600');
-            notaModal.classList.remove('hidden');
-            notaModal.classList.add('flex');
-            notaTextarea.focus();
-        };
-
-        const resumenNota = (nota) => {
-            const notaNormalizada = (nota || '').trim();
-            if (!notaNormalizada) {
-                return 'Sin nota de cobro';
-            }
-
-            return notaNormalizada.length > 50 ? `${notaNormalizada.substring(0, 50)}…` : notaNormalizada;
-        };
-
-        const updateVisualState = (nota) => {
-            if (!selectedButton) return;
-
-            const hasNota = (nota || '').trim().length > 0;
-            selectedButton.dataset.nota = nota || '';
-            selectedButton.title = hasNota ? 'Tiene nota registrada' : 'Sin nota de cobro';
-            selectedButton.classList.toggle('border-emerald-200', hasNota);
-            selectedButton.classList.toggle('bg-emerald-50', hasNota);
-            selectedButton.classList.toggle('hover:bg-emerald-100', hasNota);
-            selectedButton.classList.toggle('text-emerald-700', hasNota);
-            selectedButton.classList.toggle('border-slate-300', !hasNota);
-            selectedButton.classList.toggle('hover:bg-slate-100', !hasNota);
-            selectedButton.classList.toggle('text-slate-400', !hasNota);
-        };
-
-        const showFeedback = (message, isError = false) => {
-            notaFeedback.textContent = message;
-            notaFeedback.classList.remove('hidden', 'text-rose-600', 'text-emerald-600');
-            notaFeedback.classList.add(isError ? 'text-rose-600' : 'text-emerald-600');
-        };
-
-        const setButtonsDisabled = (disabled) => {
-            [notaGuardar, notaLimpiar, notaCancelar, notaCancelarTop].forEach((element) => {
-                element.disabled = disabled;
-            });
-        };
-
-        const requestNota = async (url, method, nota = null) => {
-            const body = method === 'PATCH' ? JSON.stringify({ nota_cobro: nota }) : null;
-
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                },
-                body,
-            });
-
-            const payload = await response.json();
-
-            if (!response.ok) {
-                const errorMessage = payload?.message || 'No fue posible actualizar la nota de cobro.';
-                throw new Error(errorMessage);
-            }
-
-            return payload;
-        };
-
-        notaButtons.forEach((button) => {
-            button.addEventListener('click', () => openNotaModal(button));
-        });
-
-        notaGuardar.addEventListener('click', async () => {
-            if (!selectedClientId) return;
-
-            setButtonsDisabled(true);
-
-            try {
-                const payload = await requestNota(updateUrlTemplate.replace('__CLIENTE_ID__', selectedClientId), 'PATCH', notaTextarea.value);
-                updateVisualState(payload.nota_cobro || '');
-                showFeedback(payload.message || 'Nota guardada correctamente.');
-            } catch (error) {
-                showFeedback(error.message || 'Error al guardar la nota.', true);
-            } finally {
-                setButtonsDisabled(false);
-            }
-        });
-
-        notaLimpiar.addEventListener('click', async () => {
-            if (!selectedClientId) return;
-
-            setButtonsDisabled(true);
-
-            try {
-                const payload = await requestNota(clearUrlTemplate.replace('__CLIENTE_ID__', selectedClientId), 'DELETE');
-                notaTextarea.value = '';
-                updateVisualState('');
-                showFeedback(payload.message || 'Nota eliminada correctamente.');
-            } catch (error) {
-                showFeedback(error.message || 'Error al limpiar la nota.', true);
-            } finally {
-                setButtonsDisabled(false);
-            }
-        });
-
-        [notaCancelar, notaCancelarTop].forEach((button) => {
-            button.addEventListener('click', closeNotaModal);
-        });
-
-        notaModal.addEventListener('click', (event) => {
-            if (event.target === notaModal) {
-                closeNotaModal();
-            }
-        });
     });
 </script>
 @endpush
@@ -1525,3 +1379,5 @@
     });
 </script>
 @endpush
+
+@include('partials.nota-cobro-script')

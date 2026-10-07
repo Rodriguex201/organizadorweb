@@ -73,7 +73,7 @@ class ProformasController extends Controller
             'anio' => ['nullable', 'integer', 'min:1900', 'max:9999'],
             'estado' => ['nullable', 'integer', 'min:0'],
             'envio' => ['nullable', 'in:0,1'],
-            'filtro_nota' => ['nullable', 'in:con,sin'],
+            'filtro_nota' => ['nullable', 'in:con,sin,pendientes'],
         ])->validate();
 
         $periodo = $this->proformasService->normalizePeriodoFilters(

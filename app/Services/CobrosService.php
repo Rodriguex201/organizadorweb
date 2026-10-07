@@ -536,6 +536,9 @@ private function buildCobrosQuery(array $filters)
     $query = $this->buildFilteredCobrosQuery($filters)
         ->select($select);
 
+    $query->selectSub(DB::table('cliente_notas as cn')->selectRaw('COUNT(*)')
+        ->whereColumn('cn.cliente_id', 'cp.idclientes_potenciales')->whereNull('cn.deleted_at'), 'tiene_notas_nuevas');
+
     if ($this->hasColumn('clientes_potenciales', 'estado_facturacion')) {
         $query->addSelect(DB::raw($this->billingStatusSql('cp.estado_facturacion').' as estado_facturacion'));
     } else {
@@ -609,15 +612,6 @@ if (!empty($filters['anio'])) {
         $query->whereRaw($this->billingStatusSql('cp.estado_facturacion').' = ?', [
             ClientePotencial::ESTADO_FACTURACION_ACTIVO,
         ]);
-    }
-
-    // 🔥 FILTRO NOTA
-    if (!empty($filters['filtro_nota'])) {
-        if ($filters['filtro_nota'] === 'con') {
-            $query->whereNotNull('cp.nota_cobro');
-        } elseif ($filters['filtro_nota'] === 'sin') {
-            $query->whereNull('cp.nota_cobro');
-        }
     }
 
     if (!empty($filters['filtro_envio'])) {
@@ -722,13 +716,7 @@ if (!empty($filters['anio'])) {
             ]);
         }
 
-        if (!empty($filters['filtro_nota'])) {
-            if ($filters['filtro_nota'] === 'con') {
-                $query->whereNotNull('cp.nota_cobro');
-            } elseif ($filters['filtro_nota'] === 'sin') {
-                $query->whereNull('cp.nota_cobro');
-            }
-        }
+        ClienteNotasService::aplicarFiltro($query, (string) ($filters['filtro_nota'] ?? ''));
 
         if (!empty($filters['filtro_envio'])) {
             if ($filters['filtro_envio'] === 'enviadas') {

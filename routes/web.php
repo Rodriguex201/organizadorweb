@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CiudadesController;
 use App\Http\Controllers\ClientesController;
+use App\Http\Controllers\ClienteNotasController;
 use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\DebugEmpresaServidorController;
@@ -40,6 +41,11 @@ Route::middleware('auth.custom')->group(function (): void {
         ->middleware('role.admin')
         ->name('debug.empresa-servidor.show');
     Route::get('/clientes', [ClientesController::class, 'index'])->name('clientes.index');
+    Route::get('/clientes/{clienteId}/notas', [ClienteNotasController::class, 'index'])->whereNumber('clienteId')->name('clientes.notas.index');
+    Route::post('/clientes/{clienteId}/notas', [ClienteNotasController::class, 'store'])->whereNumber('clienteId')->name('clientes.notas.store');
+    Route::patch('/clientes/{clienteId}/notas/{notaId}', [ClienteNotasController::class, 'update'])->whereNumber(['clienteId', 'notaId'])->name('clientes.notas.update');
+    Route::patch('/clientes/{clienteId}/notas/{notaId}/completada', [ClienteNotasController::class, 'completada'])->whereNumber(['clienteId', 'notaId'])->name('clientes.notas.completada');
+    Route::delete('/clientes/{clienteId}/notas/{notaId}', [ClienteNotasController::class, 'destroy'])->whereNumber(['clienteId', 'notaId'])->name('clientes.notas.destroy');
     Route::get('/clientes/create', [ClientesController::class, 'create'])->name('clientes.create');
     Route::get('/clientes/codigo/disponibilidad', [ClientesController::class, 'checkCodigoAvailability'])->name('clientes.codigo.disponibilidad');
     Route::get('/clientes/codigo/siguiente', [ClientesController::class, 'nextCodigo'])->name('clientes.codigo.siguiente');

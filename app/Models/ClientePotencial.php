@@ -16,6 +16,11 @@ class ClientePotencial extends Model
 
     public $timestamps = false;
 
+    public function notas(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ClienteNota::class, 'cliente_id', 'idclientes_potenciales');
+    }
+
     /**
      * @return list<string>
      */

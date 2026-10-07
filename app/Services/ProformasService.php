@@ -566,23 +566,29 @@ class ProformasService
 
     private function applyNotaFilterConstraint(Builder $query, string $filtroNota): void
     {
-        if ($filtroNota === 'con') {
-            $query->whereExists(
-                $this->buildClienteRelacionSubquery()
-                    ->selectRaw('1')
-                    ->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) <> ''")
-            );
-
+        if (!in_array($filtroNota, ['con', 'sin', 'pendientes'], true)) {
             return;
         }
-
+        $clientes = $this->buildClienteRelacionSubquery()->selectRaw('1');
+        ClienteNotasService::aplicarFiltro($clientes, $filtroNota === 'sin' ? 'con' : $filtroNota);
         if ($filtroNota === 'sin') {
-            $query->whereNotExists(
-                $this->buildClienteRelacionSubquery()
-                    ->selectRaw('1')
-                    ->whereRaw("TRIM(COALESCE(cp.nota_cobro, '')) <> ''")
-            );
+            $query->whereNotExists($clientes);
+        } else {
+            $query->whereExists($clientes);
         }
+    }
+
+    /** Todos los candidatos: nunca elegir arbitrariamente para escribir notas. */
+    public function clientesParaNotas(int $proformaId): array
+    {
+        $relacion = $this->buildClienteRelacionSubquery()
+            ->selectRaw('1')->reorder()
+            ->whereColumn('cp.idclientes_potenciales', 'nota_cliente.idclientes_potenciales');
+
+        return DB::table('clientes_potenciales as nota_cliente')
+            ->whereExists(DB::table('sg_proform as p')->selectRaw('1')
+                ->where('p.id', $proformaId)->whereExists($relacion))
+            ->pluck('nota_cliente.idclientes_potenciales')->map(fn ($id) => (int) $id)->all();
     }
 
     private function enrichPaginatedProformas(Collection $proformas): Collection
@@ -631,7 +637,7 @@ class ProformasService
             $proformas->filter(fn (object $proforma) => (int) ($proforma->id_cobro ?? 0) <= 0)->values()
         );
 
-        return $proformas->map(function (object $proforma) use ($byCobro, $fallbackBySignature): object {
+        $proformas = $proformas->map(function (object $proforma) use ($byCobro, $fallbackBySignature): object {
             $cliente = null;
             $resolutionSource = null;
             $idCobro = (int) ($proforma->id_cobro ?? 0);
@@ -653,6 +659,15 @@ class ProformasService
 
             return $proforma;
         });
+
+        $clientesConNotas = DB::table('cliente_notas')->whereNull('deleted_at')
+            ->whereIn('cliente_id', $proformas->pluck('cliente_potencial_id')->filter()->unique()->all())
+            ->distinct()->pluck('cliente_id')->map(fn ($id) => (int) $id)->all();
+        foreach ($proformas as $proforma) {
+            $proforma->tiene_notas_nuevas = in_array((int) $proforma->cliente_potencial_id, $clientesConNotas, true);
+        }
+
+        return $proformas;
     }
 
     private function resolveFallbackClientesForProformas(Collection $proformas): array

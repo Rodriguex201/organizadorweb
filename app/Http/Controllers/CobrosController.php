@@ -60,7 +60,7 @@ public function index(Request $request): View
         'buscar' => ['nullable', 'string', 'max:100'],
         'orden_fecha' => ['nullable', 'in:asc,desc'],
         'grupo_fecha' => ['nullable', GrupoFechaHelper::validationRule()],
-        'filtro_nota' => ['nullable', 'in:con,sin'],
+        'filtro_nota' => ['nullable', 'in:con,sin,pendientes'],
         'filtro_envio' => ['nullable', 'in:enviadas,no_enviadas'],
         'debug' => ['nullable'],
     ]);
@@ -274,7 +274,7 @@ $filters = [
             'buscar' => ['nullable', 'string', 'max:100'],
             'orden_fecha' => ['nullable', 'in:asc,desc'],
             'grupo_fecha' => ['nullable', GrupoFechaHelper::validationRule()],
-            'filtro_nota' => ['nullable', 'in:con,sin'],
+            'filtro_nota' => ['nullable', 'in:con,sin,pendientes'],
             'filtro_envio' => ['nullable', 'in:enviadas,no_enviadas'],
         ]);
 
@@ -1322,6 +1322,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
     public function updateNotaCobro(Request $request, int $id): RedirectResponse|JsonResponse
     {
+        app(\App\Services\ClienteNotasService::class)->verificarContexto($id, $request->header('X-Notas-Contexto'));
         $validated = $request->validate([
             'nota_cobro' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -1345,6 +1346,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
     public function clearNotaCobro(Request $request, int $id): RedirectResponse|JsonResponse
     {
+        app(\App\Services\ClienteNotasService::class)->verificarContexto($id, $request->header('X-Notas-Contexto'));
         $clienteActualizado = DB::table('clientes_potenciales')
             ->where('idclientes_potenciales', $id)
             ->update([
