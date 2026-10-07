@@ -9,7 +9,10 @@
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="mb-6 flex items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-bold">Listado de Proformas</h1>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-bold">Listado de Proformas</h1>
+                @include('partials.notificaciones-notas')
+            </div>
             <p class="text-sm text-slate-600">Consulta administrativa sobre <code>sg_proform</code>.</p>
         </div>
 

@@ -3,6 +3,7 @@
 use App\Http\Controllers\CiudadesController;
 use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\ClienteNotasController;
+use App\Http\Controllers\ClienteNotaNotificacionesController;
 use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
 use App\Http\Controllers\DebugEmpresaServidorController;
@@ -28,6 +29,8 @@ if (!app()->isProduction()) {
 }
 
 Route::middleware('auth.custom')->group(function (): void {
+    Route::get('/notificaciones/notas', [ClienteNotaNotificacionesController::class, 'index'])->name('notificaciones.notas.index');
+    Route::patch('/notificaciones/notas/{notaId}/leida', [ClienteNotaNotificacionesController::class, 'leida'])->whereNumber('notaId')->name('notificaciones.notas.leida');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::redirect('/', '/clientes')->name('home');

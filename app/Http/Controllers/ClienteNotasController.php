@@ -19,7 +19,7 @@ class ClienteNotasController extends Controller
     public function store(Request $request, int $clienteId): JsonResponse
     {
         $this->verificar($request, $clienteId);
-        $this->notas->crear($clienteId, $this->datos($request));
+        $this->notas->crear($clienteId, $this->datos($request), (int) $request->session()->get('idusuario'));
         return response()->json($this->notas->listado($clienteId), 201);
     }
 

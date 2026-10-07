@@ -68,10 +68,12 @@ class ClienteNotasService
         ];
     }
 
-    public function crear(int $clienteId, array $data): void
+    public function crear(int $clienteId, array $data, int $usuarioId): void
     {
+        abort_unless($usuarioId > 0, 401);
         $nota = new ClienteNota($data);
         $nota->cliente_id = $clienteId;
+        $nota->creado_por = $usuarioId;
         $nota->completada = false;
         $nota->save();
     }
