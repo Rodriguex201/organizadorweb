@@ -801,7 +801,7 @@ class ProformasController extends Controller
 
     public function buscarClientesActivacion(Request $request): JsonResponse
     {
-        if ($response = $this->denyIfNotActivationAdmin()) {
+        if ($response = $this->denyIfNotActivationOperator()) {
             return $response;
         }
 
@@ -869,7 +869,7 @@ class ProformasController extends Controller
 
     private function ejecutarActivacion(Request $request, int $id, string $operacion, bool $desdeCliente = false): JsonResponse
     {
-        if ($response = $this->denyIfNotActivationAdmin()) {
+        if ($response = $this->denyIfNotActivationOperator()) {
             return $response;
         }
 
@@ -1090,11 +1090,9 @@ class ProformasController extends Controller
         throw new \RuntimeException('No fue posible determinar el código de la empresa desde la proforma seleccionada.');
     }
 
-    private function denyIfNotActivationAdmin(): ?JsonResponse
+    private function denyIfNotActivationOperator(): ?JsonResponse
     {
-        $roleId = session('rol_id', session('roles_idroles'));
-
-        if ((int) $roleId === 1) {
+        if (puedeOperar()) {
             return null;
         }
 

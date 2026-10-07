@@ -25,9 +25,9 @@ class ConfiguracionEstadoProformaController extends Controller
     public function update(Request $request, int $estadoCodigo): RedirectResponse
     {
         abort_unless(
-            strtolower(session('rol_nombre', '')) === 'admin',
+            puedeOperar(),
             403,
-            'Esta seccion es solo para administradores.'
+            'No tienes permisos para realizar esta operación.'
         );
 
         $validated = $request->validate([

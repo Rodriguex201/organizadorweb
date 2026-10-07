@@ -41,7 +41,7 @@ Route::middleware('auth.custom')->group(function (): void {
         ->name('cobros.proformas-masivo.envio.progress');
     Route::get('/ciudades/buscar', [CiudadesController::class, 'buscar'])->name('ciudades.buscar');
     Route::get('/debug/empresa-servidor/{codigo}', [DebugEmpresaServidorController::class, 'show'])
-        ->middleware('role.admin')
+        ->middleware('role:admin,user')
         ->name('debug.empresa-servidor.show');
     Route::get('/clientes', [ClientesController::class, 'index'])->name('clientes.index');
     Route::get('/clientes/{clienteId}/notas', [ClienteNotasController::class, 'index'])->whereNumber('clienteId')->name('clientes.notas.index');
@@ -92,7 +92,7 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::get('/proformas/cartera', [ProformaCarteraController::class, 'index'])->name('proformas.cartera.index');
     Route::post('/proformas/cartera/export', [ProformaCarteraController::class, 'export'])->name('proformas.cartera.export');
 
-    Route::middleware('role.admin')->group(function (): void {
+    Route::middleware('role:admin,user')->group(function (): void {
         Route::get('/proformas/activacion/clientes', [ProformasController::class, 'buscarClientesActivacion'])->name('proformas.activacion.clientes.buscar');
         Route::get('/proformas/activacion/clientes/{clienteId}', [ProformasController::class, 'obtenerActivacionCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.show');
         Route::post('/proformas/activacion/clientes/{clienteId}', [ProformasController::class, 'guardarActivacionCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.update');
@@ -140,7 +140,7 @@ Route::middleware('auth.custom')->group(function (): void {
         Route::post('/configuracion/importaciones/clear', [ImportacionesController::class, 'clear'])->name('configuracion.importaciones.clear');
     });
 
-    Route::middleware('role.admin')->group(function (): void {
+    Route::middleware('role:admin,user')->group(function (): void {
         Route::put('/configuracion/directorio', [ConfiguracionDirectorioController::class, 'update'])->name('configuracion.directorio.update');
         Route::patch('/configuracion/estados-proforma/{estadoCodigo}', [ConfiguracionEstadoProformaController::class, 'update'])->name('configuracion.estados-proforma.update');
         Route::post('/configuracion/conceptos', [ConfiguracionConceptoController::class, 'store'])->name('configuracion.conceptos.store');
@@ -148,6 +148,9 @@ Route::middleware('auth.custom')->group(function (): void {
         Route::patch('/configuracion/conceptos/{concepto}/toggle', [ConfiguracionConceptoController::class, 'toggle'])->name('configuracion.conceptos.toggle');
         Route::delete('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'destroy'])->name('configuracion.conceptos.destroy');
         Route::put('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'update'])->name('configuracion.tarifas.update');
+    });
+
+    Route::middleware('role.admin')->group(function (): void {
         Route::get('/configuracion/usuarios', [ConfiguracionUsuarioController::class, 'index'])->name('configuracion.usuarios.index');
         Route::get('/configuracion/usuarios/crear', [ConfiguracionUsuarioController::class, 'create'])->name('configuracion.usuarios.create');
         Route::post('/configuracion/usuarios', [ConfiguracionUsuarioController::class, 'store'])->name('configuracion.usuarios.store');

@@ -25,9 +25,9 @@ class ConfiguracionConceptoController extends Controller
     public function store(StoreConceptoRequest $request): RedirectResponse
     {
         abort_unless(
-            strtolower(session('rol_nombre', '')) === 'admin',
+            puedeOperar(),
             403,
-            'Esta seccion es solo para administradores.'
+            'No tienes permisos para realizar esta operación.'
         );
 
         $this->conceptosConfigService->create($request->validated());
@@ -41,9 +41,9 @@ class ConfiguracionConceptoController extends Controller
     public function update(UpdateConceptoRequest $request, Concepto $concepto): RedirectResponse
     {
         abort_unless(
-            strtolower(session('rol_nombre', '')) === 'admin',
+            puedeOperar(),
             403,
-            'Esta seccion es solo para administradores.'
+            'No tienes permisos para realizar esta operación.'
         );
 
         $this->conceptosConfigService->update($concepto, $request->validated());
@@ -57,9 +57,9 @@ class ConfiguracionConceptoController extends Controller
     public function destroy(Concepto $concepto): RedirectResponse
     {
         abort_unless(
-            strtolower(session('rol_nombre', '')) === 'admin',
+            puedeOperar(),
             403,
-            'Esta seccion es solo para administradores.'
+            'No tienes permisos para realizar esta operación.'
         );
 
         $result = $this->conceptosConfigService->delete($concepto);
@@ -73,9 +73,9 @@ class ConfiguracionConceptoController extends Controller
     public function toggle(Concepto $concepto): RedirectResponse
     {
         abort_unless(
-            strtolower(session('rol_nombre', '')) === 'admin',
+            puedeOperar(),
             403,
-            'Esta seccion es solo para administradores.'
+            'No tienes permisos para realizar esta operación.'
         );
 
         $activo = $this->conceptosConfigService->toggleActive($concepto);

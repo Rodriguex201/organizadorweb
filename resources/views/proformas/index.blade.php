@@ -4,7 +4,7 @@
 
 @section('content')
 @php
-    $canManageActivation = (int) session('rol_id', session('roles_idroles')) === 1;
+    $canManageActivation = puedeOperar();
 @endphp
 <div class="max-w-7xl mx-auto px-4 py-8">
     <div class="mb-6 flex items-center justify-between gap-3">

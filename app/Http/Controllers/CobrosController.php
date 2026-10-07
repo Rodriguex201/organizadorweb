@@ -2366,7 +2366,7 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
 
     private function canManagePendingBatchCleanup(): bool
     {
-        return app()->environment(['local', 'testing']) || esAdmin();
+        return puedeOperar();
     }
 
     private function emptyCobrosPaginator(Request $request): LengthAwarePaginator
