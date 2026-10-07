@@ -22,6 +22,7 @@ DB::swap($db);
 $clientes = Mockery::mock('alias:App\Models\ClientePotencial');
 $config = Mockery::mock('alias:App\Models\ClienteProformaWhatsapp');
 $validator = new Factory(new Translator(new ArrayLoader(), 'es'));
+$container->instance('validator', $validator);
 function check(bool $ok, string $message): void { if (!$ok) throw new RuntimeException($message); }
 $valid = ['grupo_fecha' => 7, 'telefono_fuente' => 'ALTERNATIVO', 'whatsapp_alternativo' => '+573001234567'];
 check($validator->make($valid, ClienteProformaWhatsappService::reglas())->passes(), 'Alternativo válido');
@@ -48,11 +49,19 @@ $existing->shouldReceive('exists')->once()->andReturn(true);
 try { $service->agregar(556, $valid); throw new RuntimeException('No rechazó duplicado'); }
 catch (RuntimeException $e) { check($e->getCode() === 409, 'Duplicado rechazado antes de guardar'); }
 $item = Mockery::mock();
-$config->shouldReceive('findOrFail')->with(556)->times(3)->andReturn($item);
+$clientes->shouldReceive('findOrFail')->with(556)->once()->andReturn($cliente);
+$config->shouldReceive('findOrFail')->with(556)->times(2)->andReturn($item);
 $item->shouldReceive('fill')->with($valid)->once()->andReturnSelf();
-$item->shouldReceive('save')->times(3)->andReturn(true);
+$item->shouldReceive('save')->once()->andReturn(true);
+$item->shouldReceive('delete')->once()->andReturn(true);
 $service->editar(556, $valid);
-$service->cambiarEstado(556, false); check($item->activo === false, 'Desactivación');
-$service->cambiarEstado(556, true); check($item->activo === true, 'Reactivación');
+$service->eliminar(556);
+try {
+    $service->validarFuente($cliente, ['telefono_fuente'=>'CELULAR2']);
+    throw new RuntimeException('Permitió guardar celular vacío');
+} catch (Illuminate\Validation\ValidationException $error) {
+    check(isset($error->errors()['telefono_fuente']), 'Error de fuente vacía');
+}
+$service->validarFuente($cliente, ['telefono_fuente'=>'CELULAR1']);
 Mockery::close();
-echo "OK: validaciones, teléfonos, duplicado, edición y estado; sin BD.\n";
+echo "OK: validaciones, teléfonos vacíos, duplicado, edición y eliminación; sin BD.\n";

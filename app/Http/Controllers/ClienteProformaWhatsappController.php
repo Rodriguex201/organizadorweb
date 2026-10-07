@@ -34,10 +34,9 @@ class ClienteProformaWhatsappController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function estado(Request $request, int $clienteId): JsonResponse
+    public function destroy(int $clienteId): JsonResponse
     {
-        $data = $request->validate(['activo' => ['required', 'boolean']]);
-        $this->service->cambiarEstado($clienteId, (bool) $data['activo']);
+        $this->service->eliminar($clienteId);
         return response()->json(['ok' => true]);
     }
 

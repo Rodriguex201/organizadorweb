@@ -98,7 +98,7 @@ Route::middleware('auth.custom')->group(function (): void {
         Route::get('/proformas/whatsapp/clientes', [ClienteProformaWhatsappController::class, 'index'])->name('proformas.whatsapp.index');
         Route::post('/proformas/whatsapp/clientes/{clienteId}', [ClienteProformaWhatsappController::class, 'store'])->whereNumber('clienteId')->name('proformas.whatsapp.store');
         Route::patch('/proformas/whatsapp/clientes/{clienteId}', [ClienteProformaWhatsappController::class, 'update'])->whereNumber('clienteId')->name('proformas.whatsapp.update');
-        Route::patch('/proformas/whatsapp/clientes/{clienteId}/estado', [ClienteProformaWhatsappController::class, 'estado'])->whereNumber('clienteId')->name('proformas.whatsapp.estado');
+        Route::delete('/proformas/whatsapp/clientes/{clienteId}', [ClienteProformaWhatsappController::class, 'destroy'])->whereNumber('clienteId')->name('proformas.whatsapp.destroy');
         Route::get('/proformas/activacion/clientes', [ProformasController::class, 'buscarClientesActivacion'])->name('proformas.activacion.clientes.buscar');
         Route::get('/proformas/activacion/clientes/{clienteId}', [ProformasController::class, 'obtenerActivacionCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.show');
         Route::post('/proformas/activacion/clientes/{clienteId}', [ProformasController::class, 'guardarActivacionCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.update');

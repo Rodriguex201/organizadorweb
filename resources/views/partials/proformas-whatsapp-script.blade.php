@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
         search: @json(route('proformas.whatsapp.buscar')),
         store: @json(route('proformas.whatsapp.store', ['clienteId' => '__ID__'])),
         update: @json(route('proformas.whatsapp.update', ['clienteId' => '__ID__'])),
-        state: @json(route('proformas.whatsapp.estado', ['clienteId' => '__ID__'])),
+        destroy: @json(route('proformas.whatsapp.destroy', ['clienteId' => '__ID__'])),
     };
     const csrf = @json(csrf_token());
     let group = '', page = 1, pages = 1, busy = false, selected = null, editing = false;
@@ -18,8 +18,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     function controls() {
         modal.querySelectorAll('button, input, select').forEach(el => el.disabled = busy);
+        get('guardar').disabled = busy || !canSave();
         get('anterior').disabled = busy || page <= 1;
         get('siguiente').disabled = busy || page >= pages;
+        get('anterior').hidden = pages <= 1;
+        get('siguiente').hidden = pages <= 1;
+    }
+    function canSave() {
+        if (!selected || !['7', '27'].includes(get('grupo').value)) return false;
+        const source = get('fuente').value;
+        if (!['CELULAR1', 'CELULAR2', 'ALTERNATIVO'].includes(source)) return false;
+        if (source !== 'ALTERNATIVO') return String(selected[source.toLowerCase()] || '').trim().length > 0;
+        return /^\+[1-9][0-9]{7,14}$/.test(get('alternativo').value.trim().replace(/[\s().-]+/g, ''));
     }
     async function request(url, method = 'GET', data) {
         const response = await fetch(url, {method, cache: 'no-store', headers: {
@@ -45,6 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const show = get('fuente').value === 'ALTERNATIVO';
         get('alternativo-campo').classList.toggle('hidden', !show);
         get('alternativo').required = show;
+        const source = get('fuente').value;
+        get('numero-estado').textContent = !selected ? '' : show
+            ? (canSave() ? '' : 'Introduce un número válido con prefijo internacional, por ejemplo +573001234567.')
+            : (String(selected[source.toLowerCase()] || '').trim() ? '' : 'Número pendiente: esta fuente está vacía. Elige otro celular o un número alternativo.');
+        controls();
     }
     function edit(item, existing) {
         selected = item; editing = existing;
@@ -63,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         payload.data.forEach(item => {
             const row = node('div', '', 'flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm');
             row.append(node('span', item.codigo + ' | ' + item.empresa + ' | NIT ' + item.nit + ' | Cel. 1: ' + (item.celular1 || '—') + ' | Cel. 2: ' + (item.celular2 || '—')));
-            if (item.configurado) row.append(node('span', item.activo ? 'Ya agregado' : 'Ya agregado (inactivo): reactívalo en la lista'));
+            if (item.configurado) row.append(node('span', 'Ya agregado'));
             else row.append(action('Agregar', () => edit(item, false)));
             get('resultados').append(row);
         });
@@ -71,17 +86,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function list() {
         const payload = await request(urls.index + '?grupo=' + group + '&pagina=' + page);
-        page = payload.pagina; pages = payload.paginas;
+        page = payload.pagina; pages = payload.last_page ?? payload.paginas;
         get('lista').replaceChildren();
         payload.data.forEach(item => {
             const row = node('tr', '', 'border-b');
             [item.codigo, item.empresa, item.whatsapp + (item.telefono_valido ? '' : ' — Número pendiente'), 'Grupo ' + item.grupo_fecha, item.activo ? 'Activo' : 'Inactivo'].forEach(value => row.append(node('td', value, 'p-2')));
             const actions = node('td', '', 'p-2');
-            actions.append(action('Editar', () => edit(item, true)), action(item.activo ? 'Desactivar' : 'Reactivar', () => run(async () => {
-                await request(urls.state.replace('__ID__', item.cliente_id), 'PATCH', {activo: !item.activo});
+            actions.append(action('Editar', () => edit(item, true)), action('Eliminar de la lista', () => {
+                if (busy || !window.confirm('¿Eliminar de la lista de WhatsApp a ' + item.codigo + ' — ' + item.empresa + '? Podrás agregarlo nuevamente.')) return;
+                run(async () => {
+                await request(urls.destroy.replace('__ID__', item.cliente_id), 'DELETE');
                 get('form').classList.add('hidden'); selected = null;
-                await list(); await search(); get('estado').textContent = item.activo ? 'Cliente desactivado.' : 'Cliente reactivado.';
-            })));
+                await list(); await search(); get('estado').textContent = 'Cliente eliminado de la lista de WhatsApp.';
+                });
+            }));
             row.append(actions); get('lista').append(row);
         });
         if (!payload.data.length) {
@@ -110,6 +128,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     get('fuente').addEventListener('change', alternate);
+    get('grupo').addEventListener('change', alternate);
+    get('alternativo').addEventListener('input', alternate);
     get('cancelar').addEventListener('click', () => { selected = null; get('form').classList.add('hidden'); });
     get('busqueda').addEventListener('submit', event => {
         event.preventDefault(); run(async () => { await search(); get('estado').textContent = get('buscar').value.trim().length < 2 ? 'Escribe al menos dos caracteres.' : 'Hasta 20 resultados. Afina la búsqueda si no encuentras al cliente.'; });
@@ -123,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     get('anterior').addEventListener('click', () => run(async () => { page--; await list(); get('estado').textContent = ''; }));
     get('siguiente').addEventListener('click', () => run(async () => { page++; await list(); get('estado').textContent = ''; }));
     get('form').addEventListener('submit', event => {
-        event.preventDefault(); if (!selected) return;
+        event.preventDefault(); if (!canSave()) { alternate(); return; }
         run(async () => {
             await request((editing ? urls.update : urls.store).replace('__ID__', selected.cliente_id), editing ? 'PATCH' : 'POST', {
                 grupo_fecha: Number(get('grupo').value), telefono_fuente: get('fuente').value,

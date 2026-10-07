@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ClientePotencial;
 use App\Models\ClienteProformaWhatsapp;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ClienteProformaWhatsappService
 {
@@ -89,8 +90,9 @@ class ClienteProformaWhatsappService
     {
         DB::transaction(function () use ($clienteId, $data): void {
             // Serializa altas del mismo cliente; la PK también impide duplicados.
-            ClientePotencial::whereKey($clienteId)->lockForUpdate()->firstOrFail();
-            abort_if(ClienteProformaWhatsapp::whereKey($clienteId)->exists(), 409, 'El cliente ya está configurado. Edítelo o reactívelo desde la lista.');
+            $cliente = ClientePotencial::whereKey($clienteId)->lockForUpdate()->firstOrFail();
+            abort_if(ClienteProformaWhatsapp::whereKey($clienteId)->exists(), 409, 'El cliente ya está configurado. Edítelo desde la lista.');
+            $this->validarFuente($cliente, $data);
             $item = new ClienteProformaWhatsapp($data);
             $item->cliente_id = $clienteId;
             $item->activo = true;
@@ -100,13 +102,21 @@ class ClienteProformaWhatsappService
 
     public function editar(int $clienteId, array $data): void
     {
+        $this->validarFuente(ClientePotencial::findOrFail($clienteId), $data);
         ClienteProformaWhatsapp::findOrFail($clienteId)->fill($data)->save();
     }
 
-    public function cambiarEstado(int $clienteId, bool $activo): void
+    public function validarFuente(object $cliente, array $data): void
     {
-        $item = ClienteProformaWhatsapp::findOrFail($clienteId);
-        $item->activo = $activo;
-        $item->save();
+        $source = $data['telefono_fuente'];
+        if (in_array($source, ['CELULAR1', 'CELULAR2'], true)
+            && trim((string) ($cliente->{strtolower($source)} ?? '')) === '') {
+            throw ValidationException::withMessages(['telefono_fuente' => 'Número pendiente: el celular seleccionado está vacío. Elige otra fuente.']);
+        }
+    }
+
+    public function eliminar(int $clienteId): void
+    {
+        ClienteProformaWhatsapp::findOrFail($clienteId)->delete();
     }
 }

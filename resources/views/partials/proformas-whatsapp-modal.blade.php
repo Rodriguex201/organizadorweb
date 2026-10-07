@@ -1,3 +1,6 @@
+<style>
+    #whatsapp-guardar:disabled { opacity: .5; cursor: not-allowed; }
+</style>
 <div id="whatsapp-modal" role="dialog" aria-modal="true" aria-labelledby="whatsapp-titulo" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4">
     <div class="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
         <div class="flex items-center justify-between gap-4">
@@ -26,7 +29,8 @@
             </div>
             <p id="whatsapp-telefonos" class="text-sm text-slate-600"></p>
             <div id="whatsapp-alternativo-campo" class="hidden"><label for="whatsapp-alternativo" class="block text-sm">Número alternativo con prefijo internacional</label><input id="whatsapp-alternativo" type="tel" maxlength="30" placeholder="+573001234567" class="w-full rounded border p-2"></div>
-            <button type="submit" class="rounded bg-emerald-700 px-4 py-2 text-white">Guardar</button>
+            <p id="whatsapp-numero-estado" role="status" class="text-sm text-amber-800"></p>
+            <button id="whatsapp-guardar" type="submit" disabled class="rounded px-4 py-2 disabled:cursor-not-allowed" style="background-color:#047857;color:#fff">Guardar</button>
             <button id="whatsapp-cancelar" type="button" class="rounded bg-white px-4 py-2">Cancelar</button>
         </form>
         <h3 class="mt-4 font-semibold">Clientes configurados</h3>

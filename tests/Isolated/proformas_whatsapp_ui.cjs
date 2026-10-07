@@ -1,7 +1,7 @@
 // DOM y fetch simulados: sin navegador, red ni base de datos.
 const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict'), path = require('node:path');
 const read = file => fs.readFileSync(path.resolve(__dirname, '../../resources/views/partials/' + file), 'utf8');
-const elements = {}, requests = []; let ready, rows = [], search = [], fail = false;
+const elements = {}, requests = []; let ready, rows = [], search = [], fail = false, confirmed = false, lastPage = 1;
 class Element {
     constructor() {
         this.children = []; this.handlers = {}; this.value = ''; this.dataset = {}; this.attrs = {};
@@ -24,15 +24,16 @@ const filters = ['7','27',''].map(group => { const e = new Element(); e.dataset.
 const client = {cliente_id:556, codigo:'B543', empresa:'<script>cliente</script>', nit:'123', celular1:'3001234567', celular2:'', configurado:false};
 const configured = {...client, grupo_fecha:7, telefono_fuente:'CELULAR1', whatsapp_alternativo:null, whatsapp:'+573001234567', telefono_valido:true, activo:true};
 let source = read('proformas-whatsapp-script.blade.php').split('<script>')[1].split('</script>')[0];
-source = source.replace(/@json\(route\('proformas\.whatsapp\.(\w+)'[^\n]*\)\)/g, (_, name) => JSON.stringify('/' + name + (['store','update','estado'].includes(name)?'/__ID__':''))).replace('@json(csrf_token())', '"csrf"');
+source = source.replace(/@json\(route\('proformas\.whatsapp\.(\w+)'[^\n]*\)\)/g, (_, name) => JSON.stringify('/' + name + (['store','update','destroy'].includes(name)?'/__ID__':''))).replace('@json(csrf_token())', '"csrf"');
 vm.runInNewContext(source, {
     document:{getElementById:id=>elements[id],createElement:()=>new Element(),addEventListener:(name,fn)=>{ready=fn;}},
+    window:{confirm:()=>confirmed},
     fetch:async (url, options) => {
         requests.push({url,...options});
         if (fail) return {ok:false,status:409,json:async()=>({message:'Ya agregado'})};
-        let payload = url.startsWith('/buscar') ? {data:search} : {data:rows,pagina:1,paginas:1,total:rows.length};
+        let payload = url.startsWith('/buscar') ? {data:search} : {data:rows,pagina:1,last_page:lastPage,total:rows.length};
         if (options.method === 'POST') { rows = [configured]; search = [{...client,configurado:true,activo:true}]; }
-        if (url.startsWith('/estado')) rows = [{...configured,activo:JSON.parse(options.body).activo}];
+        if (options.method === 'DELETE') { rows = []; search = [client]; }
         return {ok:true,status:200,json:async()=>payload};
     },
 });
@@ -40,9 +41,21 @@ function flush() { return new Promise(resolve=>setImmediate(resolve)); }
 async function run() {
     ready(); await get('abrir').trigger('click');
     assert.equal(requests.length, 1); assert.equal(requests[0].method, 'GET');
+    assert.equal(get('guardar').disabled, true);
+    assert.equal(get('anterior').hidden, true); assert.equal(get('siguiente').hidden, true);
     search = [client]; get('buscar').value = 'B543'; await get('busqueda').trigger('submit');
     assert.equal(get('resultados').children[0].children[0].textContent.includes(client.empresa), true);
     await get('resultados').children[0].children[1].trigger('click');
+    assert.equal(get('guardar').disabled, false, 'Agregar con celular 1 habilita Guardar inmediatamente');
+    get('fuente').value = 'CELULAR2'; await get('fuente').trigger('change');
+    assert.equal(get('guardar').disabled, true);
+    assert.match(get('numero-estado').textContent, /Número pendiente/);
+    await get('form').trigger('submit'); assert.equal(requests.filter(r=>r.method==='POST').length, 0);
+    get('fuente').value = 'ALTERNATIVO'; await get('fuente').trigger('change');
+    assert.equal(get('guardar').disabled, true);
+    get('alternativo').value = '+57 (300) 123-4567'; await get('alternativo').trigger('input');
+    assert.equal(get('guardar').disabled, false);
+    get('grupo').value = '10'; await get('grupo').trigger('change'); assert.equal(get('guardar').disabled, true);
     get('grupo').value = '7'; get('fuente').value = 'CELULAR1';
     await get('form').trigger('submit');
     assert.equal(requests.filter(r=>r.method==='POST').length, 1);
@@ -55,14 +68,23 @@ async function run() {
     assert.equal(JSON.parse(edit.body).grupo_fecha, 27);
     assert.equal(JSON.parse(edit.body).whatsapp_alternativo, '+14155550123');
     await get('lista').children[0].children[5].children[1].trigger('click');
-    assert.equal(get('lista').children[0].children[4].textContent, 'Inactivo');
+    assert.equal(requests.filter(r=>r.method==='DELETE').length, 0, 'Cancelar no elimina');
+    confirmed = true;
     await get('lista').children[0].children[5].children[1].trigger('click');
-    assert.equal(get('lista').children[0].children[4].textContent, 'Activo');
+    assert.equal(requests.filter(r=>r.method==='DELETE').length, 1);
+    assert.equal(get('resultados').children[0].children[1].textContent, 'Agregar');
+    await get('resultados').children[0].children[1].trigger('click');
+    await get('form').trigger('submit');
+    assert.equal(requests.filter(r=>r.method==='POST').length, 2, 'Puede volver a agregar');
+    lastPage = 2;
     await filters[1].trigger('click'); assert.ok(requests.some(r=>r.url==='/index?grupo=27&pagina=1'));
+    assert.equal(get('anterior').hidden, false); assert.equal(get('siguiente').hidden, false);
+    lastPage = 1;
     await filters[2].trigger('click'); assert.ok(requests.some(r=>r.url==='/index?grupo=&pagina=1'));
     fail = true; await get('busqueda').trigger('submit');
     assert.equal(get('estado').textContent, 'Ya agregado');
     assert.equal(get('buscar').disabled, false);
-    console.log('OK: alta, duplicados UI, edición, estado, filtros, errores y texto seguro; sin red.');
+    assert.equal(get('anterior').hidden, true); assert.equal(get('siguiente').hidden, true);
+    console.log('OK: Guardar, fuentes vacías, alternativo, eliminación confirmada, reingreso y paginación; sin red.');
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});
