@@ -3,6 +3,7 @@
 use App\Http\Controllers\CiudadesController;
 use App\Http\Controllers\ClientesController;
 use App\Http\Controllers\ClienteNotasController;
+use App\Http\Controllers\ClienteProformaWhatsappController;
 use App\Http\Controllers\ClienteNotaNotificacionesController;
 use App\Http\Controllers\ConfiguracionConceptoController;
 use App\Http\Controllers\CobrosController;
@@ -93,6 +94,11 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::post('/proformas/cartera/export', [ProformaCarteraController::class, 'export'])->name('proformas.cartera.export');
 
     Route::middleware('role:admin,user')->group(function (): void {
+        Route::get('/proformas/whatsapp/clientes/buscar', [ClienteProformaWhatsappController::class, 'buscar'])->name('proformas.whatsapp.buscar');
+        Route::get('/proformas/whatsapp/clientes', [ClienteProformaWhatsappController::class, 'index'])->name('proformas.whatsapp.index');
+        Route::post('/proformas/whatsapp/clientes/{clienteId}', [ClienteProformaWhatsappController::class, 'store'])->whereNumber('clienteId')->name('proformas.whatsapp.store');
+        Route::patch('/proformas/whatsapp/clientes/{clienteId}', [ClienteProformaWhatsappController::class, 'update'])->whereNumber('clienteId')->name('proformas.whatsapp.update');
+        Route::patch('/proformas/whatsapp/clientes/{clienteId}/estado', [ClienteProformaWhatsappController::class, 'estado'])->whereNumber('clienteId')->name('proformas.whatsapp.estado');
         Route::get('/proformas/activacion/clientes', [ProformasController::class, 'buscarClientesActivacion'])->name('proformas.activacion.clientes.buscar');
         Route::get('/proformas/activacion/clientes/{clienteId}', [ProformasController::class, 'obtenerActivacionCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.show');
         Route::post('/proformas/activacion/clientes/{clienteId}', [ProformasController::class, 'guardarActivacionCliente'])->whereNumber('clienteId')->name('proformas.activacion.clientes.update');

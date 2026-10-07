@@ -16,6 +16,11 @@ class ClientePotencial extends Model
 
     public $timestamps = false;
 
+    public function proformaWhatsapp(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ClienteProformaWhatsapp::class, 'cliente_id', 'idclientes_potenciales');
+    }
+
     public function notas(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(ClienteNota::class, 'cliente_id', 'idclientes_potenciales');
