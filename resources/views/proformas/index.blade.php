@@ -456,6 +456,19 @@
     </div>
 </div>
 
+@if($canManageActivation)
+<div id="pago-activacion-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-900/50 px-4" role="dialog" aria-modal="true" aria-labelledby="pago-activacion-titulo">
+    <div class="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+        <h2 id="pago-activacion-titulo" class="text-base font-semibold text-slate-900">Pago registrado correctamente.</h2>
+        <p class="mt-3 text-slate-700">¿Deseas activar esta empresa ahora?</p>
+        <div class="mt-5 flex justify-end gap-2">
+            <button id="pago-activacion-no" type="button" class="rounded bg-slate-200 px-3 py-2 text-sm text-slate-700">No, terminar</button>
+            <button id="pago-activacion-si" type="button" class="rounded bg-indigo-600 px-3 py-2 text-sm text-white">Sí, abrir Activación</button>
+        </div>
+    </div>
+</div>
+@endif
+
 <div id="envio-masivo-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 px-4">
     <div class="w-full max-w-5xl rounded-lg bg-white shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -1542,6 +1555,56 @@
             }
         };
 
+        const activationContextForRow = (row) => ({
+            showUrl: row.dataset.activacionShowUrl,
+            updateUrl: row.dataset.activacionUpdateUrl,
+            eventosUpdateUrl: row.dataset.activacionEventosUpdateUrl,
+            codigo: row.dataset.codigo,
+            proforma: row.dataset.proformaId,
+            nit: row.dataset.nit,
+            clienteId: row.dataset.clienteId,
+        });
+
+        const paymentActivationModal = document.getElementById('pago-activacion-modal');
+        const paymentActivationNo = document.getElementById('pago-activacion-no');
+        const paymentActivationYes = document.getElementById('pago-activacion-si');
+        let paidActivationContext = null;
+        let paidActivationRow = null;
+
+        const closePaymentActivation = () => {
+            paymentActivationModal?.classList.add('hidden');
+            paymentActivationModal?.classList.remove('flex');
+            paidActivationRow?.querySelector('[data-proforma-actions]')?.focus();
+            paidActivationContext = null;
+            paidActivationRow = null;
+        };
+
+        const offerPaymentActivation = (row, result) => {
+            if (!result?.ok || result.from == null || Number(result.from) === ESTADO_PAGADA
+                || Number(result.to) !== ESTADO_PAGADA || !paymentActivationModal) return;
+            const context = activationContextForRow(row);
+            if (!context.showUrl || !context.updateUrl) return;
+            paidActivationContext = context;
+            paidActivationRow = row;
+            paymentActivationModal.classList.remove('hidden');
+            paymentActivationModal.classList.add('flex');
+            paymentActivationNo?.focus();
+        };
+
+        paymentActivationNo?.addEventListener('click', closePaymentActivation);
+        paymentActivationYes?.addEventListener('click', async () => {
+            const context = paidActivationContext;
+            closePaymentActivation();
+            if (context) await loadActivationData(context);
+        });
+        paymentActivationModal?.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closePaymentActivation();
+            if (event.key === 'Tab') {
+                event.preventDefault();
+                (document.activeElement === paymentActivationNo ? paymentActivationYes : paymentActivationNo)?.focus();
+            }
+        });
+
         const runPaymentAction = async (row, metodoPago, comprobante) => {
             const url = row.dataset.updateUrl;
             if (!url) {
@@ -1582,7 +1645,7 @@
                 updateRowState(row, Number(payload.to || ESTADO_PAGADA));
                 showFeedback(payload.message || 'Estado actualizado correctamente.', 'success');
 
-                return true;
+                return payload;
             } catch (error) {
                 console.error(error);
                 showFeedback(error.message || 'No se pudo actualizar el estado.', 'error');
@@ -1625,15 +1688,7 @@
             }
 
             if (targetButton.dataset.activacionAction) {
-                await loadActivationData({
-                    showUrl: row.dataset.activacionShowUrl,
-                    updateUrl: row.dataset.activacionUpdateUrl,
-                    eventosUpdateUrl: row.dataset.activacionEventosUpdateUrl,
-                    codigo: row.dataset.codigo,
-                    proforma: row.dataset.proformaId,
-                    nit: row.dataset.nit,
-                    clienteId: row.dataset.clienteId,
-                });
+                await loadActivationData(activationContextForRow(row));
                 return;
             }
 
@@ -1682,7 +1737,8 @@
             paymentConfirmButton.disabled = true;
             paymentConfirmButton.textContent = 'Confirmando...';
 
-            const updated = await runPaymentAction(pendingPaymentRow, paymentMethod.value, receiptFile);
+            const paidRow = pendingPaymentRow;
+            const updated = await runPaymentAction(paidRow, paymentMethod.value, receiptFile);
 
             paymentSubmitting = false;
             paymentConfirmButton.disabled = false;
@@ -1690,6 +1746,7 @@
 
             if (updated) {
                 closePaymentModal();
+                offerPaymentActivation(paidRow, updated);
                 return;
             }
 
