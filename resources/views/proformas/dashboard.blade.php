@@ -20,6 +20,10 @@
         </div>
     </div>
 
+    @if(puedeOperar())
+        @include('proformas.partials.comprobantes-zip')
+    @endif
+
     <div class="mb-6 flex flex-wrap gap-2">
         <a href="{{ route('proformas.dashboard', ['tab' => 'proformas', 'mes' => $filters['mes'], 'anio' => $filters['anio'], 'estado' => $filters['estado'], 'grupo_fecha' => $filters['grupo_fecha']]) }}" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium {{ $activeTab === 'proformas' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-700 shadow hover:bg-slate-100' }}">Proformas</a>
         <a href="{{ route('proformas.dashboard', ['tab' => 'crecimiento', 'anio' => $filters['anio']]) }}" class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium {{ $activeTab === 'crecimiento' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-700 shadow hover:bg-slate-100' }}">Crecimiento</a>
