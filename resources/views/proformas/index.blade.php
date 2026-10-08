@@ -867,6 +867,9 @@
             menu.style.top = `${y}px`;
             menu.classList.remove('pointer-events-none', 'opacity-0', 'scale-95');
             menu.classList.add('opacity-100', 'scale-100');
+            const bounds = menu.getBoundingClientRect();
+            menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - bounds.width - 8))}px`;
+            menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - bounds.height - 8))}px`;
         };
 
         const versionedPdfUrl = (url) => `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`;
@@ -886,6 +889,7 @@
             }
 
             if (estadoActual === ESTADO_PAGADA) {
+                acciones.push({ type: 'estado', estado: ESTADO_PAGADA, label: hasComprobante === 1 ? 'Reemplazar comprobante' : 'Agregar comprobante' });
                 acciones.push({ type: 'estado', estado: ESTADO_FACTURADA, label: 'Marcar facturada' });
                 return acciones;
             }
@@ -1595,6 +1599,7 @@
             const button = row.querySelector('[data-proforma-actions]');
             button?.addEventListener('click', (event) => {
                 event.preventDefault();
+                event.stopPropagation();
                 const rect = button.getBoundingClientRect();
                 showMenu(rect.left, rect.bottom + 6, row);
             });

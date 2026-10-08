@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ClienteCrecimientoReportService;
+use App\Services\ComprobantePagoService;
 use App\Services\EmpresaActivacionService;
 use App\Services\FinanzasDashboardService;
 use App\Services\ProformaEmailService;
@@ -532,8 +533,7 @@ class ProformasController extends Controller
         }
 
         $mimeType = $disk->mimeType($relativePath) ?: 'application/octet-stream';
-        $extension = strtolower((string) pathinfo($relativePath, PATHINFO_EXTENSION));
-        $filename = 'comprobante-proforma-'.$id.($extension !== '' ? '.'.$extension : '');
+        $filename = ComprobantePagoService::nombreVisible($relativePath);
 
         $response = response()->file($disk->path($relativePath), [
             'Content-Type' => $mimeType,
@@ -699,39 +699,13 @@ class ProformasController extends Controller
         $comprobantePath = null;
 
         try {
-            if (
-                $nuevoEstado === ProformasService::ESTADO_PAGADA
-                && in_array($metodoPago, ['TRANSFERENCIA', 'CONSIGNACIÓN'], true)
-            ) {
-                $comprobante = $request->file('comprobante_pago');
-                $extension = strtolower((string) $comprobante->extension());
-                $filename = Str::uuid()->toString().'.'.$extension;
-                $comprobantePath = Storage::disk('local')->putFileAs(
-                    'proformas/comprobantes/'.$id,
-                    $comprobante,
-                    $filename,
-                );
-
-                if ($comprobantePath === false) {
-                    throw new \RuntimeException('No fue posible almacenar el comprobante de pago.');
-                }
-            }
-
-            $resultado = $this->proformasService->updateEstado(
-                $id,
-                $nuevoEstado,
-                $metodoPago,
-                $comprobantePath,
-            );
-
-            if (!$resultado['ok'] && $comprobantePath !== null) {
-                Storage::disk('local')->delete($comprobantePath);
+            if ($nuevoEstado === ProformasService::ESTADO_PAGADA) {
+                $resultado = app(ComprobantePagoService::class)->registrar($id, $metodoPago, $request->file('comprobante_pago'));
+                $comprobantePath = $resultado['comprobante_pago'] ?? null;
+            } else {
+                $resultado = $this->proformasService->updateEstado($id, $nuevoEstado, $metodoPago);
             }
         } catch (\Throwable $exception) {
-            if ($comprobantePath !== null) {
-                Storage::disk('local')->delete($comprobantePath);
-            }
-
             report($exception);
 
             $message = 'No se pudo actualizar el estado de la proforma.';

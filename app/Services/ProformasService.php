@@ -212,6 +212,24 @@ class ProformasService
             ->selectRaw($this->clienteResolutionSourceExpression().' as cliente_resolution_source');
     }
 
+    public function contextoComprobante(int $id): ?array
+    {
+        $relacion = $this->buildClienteRelacionSubquery()->selectRaw('1')->reorder()
+            ->whereColumn('cp.idclientes_potenciales', 'cliente_comprobante.idclientes_potenciales');
+        $rows = DB::table('sg_proform as p')
+            ->leftJoin('clientes_potenciales as cliente_comprobante', function ($join) use ($relacion): void {
+                $join->whereExists($relacion);
+            })
+            ->where('p.id', $id)
+            ->select(['p.id', 'p.estado', 'p.mes', 'p.anio', 'p.comprobante_pago',
+                'cliente_comprobante.idclientes_potenciales', 'cliente_comprobante.codigo',
+                'cliente_comprobante.empresa', 'cliente_comprobante.nombre'])
+            ->lockForUpdate()->get();
+        if ($rows->isEmpty()) return null;
+        $clientes = $rows->filter(fn ($row) => $row->idclientes_potenciales !== null)->unique('idclientes_potenciales');
+        return ['proforma' => $rows->first(), 'cliente' => $clientes->count() === 1 ? $clientes->first() : null];
+    }
+
     public function findComprobantePagoById(int $id): ?object
     {
         return DB::table('sg_proform')
