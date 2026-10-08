@@ -96,6 +96,9 @@ Route::middleware('auth.custom')->group(function (): void {
     Route::post('/proformas/cartera/export', [ProformaCarteraController::class, 'export'])->name('proformas.cartera.export');
 
     Route::middleware('role:admin,user')->group(function (): void {
+        Route::get('/proformas/activacion-eventos/buscar', [\App\Http\Controllers\ActivacionEventosController::class, 'buscar'])->name('proformas.eventos.buscar');
+        Route::get('/proformas/activacion-eventos/detalle', [\App\Http\Controllers\ActivacionEventosController::class, 'mostrar'])->name('proformas.eventos.detalle');
+        Route::post('/proformas/activacion-eventos', [\App\Http\Controllers\ActivacionEventosController::class, 'guardar'])->name('proformas.eventos.guardar');
         Route::get('/proformas/whatsapp/clientes/buscar', [ClienteProformaWhatsappController::class, 'buscar'])->name('proformas.whatsapp.buscar');
         Route::get('/proformas/whatsapp/clientes', [ClienteProformaWhatsappController::class, 'index'])->name('proformas.whatsapp.index');
         Route::post('/proformas/whatsapp/clientes/{clienteId}', [ClienteProformaWhatsappController::class, 'store'])->whereNumber('clienteId')->name('proformas.whatsapp.store');

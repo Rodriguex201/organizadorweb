@@ -12,7 +12,7 @@ class EmpresaActivacionService
 {
     private const TABLA_INDIVIDUAL = 'xxxxsegx';
     private const SEG_CLAVE_TEMPORAL = 'dropzxz';
-    private const SQL_CONSULTA_LICENCIA_EVENTOS = 'SELECT empresa, fecha_vencimiento FROM `api`.`licencia` WHERE LOWER(TRIM(empresa)) = LOWER(TRIM(?)) LIMIT 1';
+    private const SQL_CONSULTA_LICENCIA_EVENTOS = 'SELECT empresa, fecha_vencimiento FROM `api`.`licencia` WHERE LOWER(TRIM(empresa)) = LOWER(TRIM(?))';
     private const ADVERTENCIA_REGISTRO_INDIVIDUAL = 'No existe registro individual de activación. Se utilizarán las fechas globales como referencia. Al guardar se creará el registro individual.';
 
     public function obtenerDetalle(string $codigo): array
@@ -128,11 +128,21 @@ class EmpresaActivacionService
 
     public function actualizarLicenciaEventos(string $empresa, string $fechaVencimiento, string $usuario): array
     {
+        $fecha = \DateTimeImmutable::createFromFormat('!Y-m-d', $fechaVencimiento);
+        if (!$fecha || $fecha->format('Y-m-d') !== $fechaVencimiento) {
+            throw new RuntimeException('La fecha de vencimiento debe ser válida y tener formato Y-m-d.');
+        }
+        return DB::transaction(function () use ($empresa, $fechaVencimiento, $usuario): array {
         $empresaNormalizada = strtoupper(trim($empresa));
-        $registroActual = $this->consultarLicenciaEventos($empresaNormalizada);
+        $registroActual = $this->detalleEventos($empresaNormalizada, true);
 
         if ($registroActual === null) {
-            throw new RuntimeException('La empresa no tiene licencia registrada en Eventos.');
+            throw new RuntimeException('Empresa no encontrada en Eventos.');
+        }
+
+        if ($registroActual['fecha_vencimiento_actual'] === $fechaVencimiento) {
+            return ['empresa' => $registroActual['empresa'], 'sin_cambios' => true,
+                'fecha_vencimiento_anterior' => $fechaVencimiento, 'fecha_vencimiento_nueva' => $fechaVencimiento];
         }
 
         $payloadLog = [
@@ -149,7 +159,7 @@ class EmpresaActivacionService
                 [$fechaVencimiento, $empresaNormalizada],
             );
 
-            if ($filasActualizadas < 1) {
+            if ($filasActualizadas !== 1) {
                 throw new RuntimeException('No fue posible actualizar la licencia de Eventos.');
             }
 
@@ -157,6 +167,7 @@ class EmpresaActivacionService
 
             return [
                 'empresa' => $registroActual['empresa'],
+                'sin_cambios' => false,
                 'fecha_vencimiento_anterior' => $registroActual['fecha_vencimiento_actual'],
                 'fecha_vencimiento_nueva' => $fechaVencimiento,
             ];
@@ -167,6 +178,22 @@ class EmpresaActivacionService
 
             throw $exception;
         }
+        });
+    }
+
+    public function buscarEventos(string $termino): array
+    {
+        return DB::select('SELECT LOWER(TRIM(empresa)) AS empresa, COUNT(*) AS coincidencias FROM `api`.`licencia` WHERE LOWER(TRIM(empresa)) LIKE ? GROUP BY LOWER(TRIM(empresa)) ORDER BY empresa LIMIT 20',
+            ['%'.mb_strtolower(trim($termino)).'%']);
+    }
+
+    public function detalleEventos(string $empresa, bool $bloquear = false): ?array
+    {
+        $registros = DB::select(self::SQL_CONSULTA_LICENCIA_EVENTOS.($bloquear ? ' FOR UPDATE' : ''), [trim($empresa)]);
+        if (count($registros) > 1) throw new RuntimeException('Existen registros ambiguos en Eventos para esta empresa. No se permite actualizar.');
+        if (!$registros) return null;
+        return ['empresa' => trim((string) $registros[0]->empresa),
+            'fecha_vencimiento_actual' => $this->normalizarFecha($registros[0]->fecha_vencimiento)];
     }
 
     private function resolverContexto(string $codigo): array
@@ -306,16 +333,7 @@ class EmpresaActivacionService
             return null;
         }
 
-        $licencia = DB::selectOne(self::SQL_CONSULTA_LICENCIA_EVENTOS, [$empresaNormalizada]);
-
-        if ($licencia === null) {
-            return null;
-        }
-
-        return [
-            'empresa' => trim((string) ($licencia->empresa ?? $empresaNormalizada)),
-            'fecha_vencimiento_actual' => $this->normalizarFecha($licencia->fecha_vencimiento ?? null),
-        ];
+        return $this->detalleEventos($empresaNormalizada);
     }
 
     private function consultarLicenciaEventosOpcional(string $empresa, string $usuario): array

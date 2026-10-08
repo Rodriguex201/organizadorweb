@@ -7,6 +7,7 @@
     $canManageActivation = puedeOperar();
 @endphp
 @if($canManageActivation)
+    @include('partials.activacion-eventos')
     @include('partials.proformas-whatsapp-modal')
     @include('partials.proformas-whatsapp-script')
 @endif
@@ -23,6 +24,7 @@
         <div class="flex flex-wrap gap-2">
             @if($canManageActivation)
                 <button id="activacion-global-abrir" type="button" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-800 hover:bg-cyan-200">Activación</button>
+                <button id="eventos-independiente-abrir" type="button" class="inline-flex items-center rounded bg-cyan-100 px-4 py-2 text-sm font-medium text-cyan-800 hover:bg-cyan-200">Activación eventos</button>
                 <button id="whatsapp-abrir" type="button" aria-haspopup="dialog" aria-controls="whatsapp-modal" class="inline-flex items-center gap-2 rounded bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-200">
                     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5"><path d="M21 11.5a9 9 0 0 1-13.4 7.9L3 21l1.5-4.7A9 9 0 1 1 21 11.5Z"/><path d="m8 7 2 3-1 1c1 2 2 3 4 4l1-1 3 1c0 2-2 3-4 2-3-1-6-4-7-7 0-2 1-3 2-3Z"/></svg>
                     WhatsApp
