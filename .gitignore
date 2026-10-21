@@ -24,6 +24,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/app/private/portal-otp/
 /vendor
 Homestead.json
 Homestead.yaml
