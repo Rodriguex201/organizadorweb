@@ -18,7 +18,7 @@
                 return old($input, $tarifasDefaults[$input] ?? null);
             };
             $fieldUnavailable = static fn (?string $column): bool => $column === null;
-            $stepOneFields = ['nit', 'dv', 'nombre', 'codigo', 'empresa', 'celular1', 'email', 'departamento', 'ciudad_codigo', 'fecha_inicio', 'fecha_arriendo', 'ip_empresa', 'clase', 'modalidad', 'regimen', 'tipo_cliente_id', 'llego', 'estado_facturacion'];
+            $stepOneFields = ['nit', 'dv', 'nombre', 'codigo', 'empresa', 'celular1', 'email', 'departamento', 'ciudad_codigo', 'fecha_inicio', 'fecha_arriendo', 'ip_empresa', 'clase', 'modalidad', 'regimen', 'tipo_cliente_id', 'retencion_fuente_id', 'llego', 'estado_facturacion'];
             $stepOneHasErrors = collect($stepOneFields)->contains(fn (string $field): bool => $errors->has($field));
             $initialStep = old('wizard_step', $errors->any() && !$stepOneHasErrors ? '2' : '1');
         @endphp

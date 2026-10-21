@@ -261,6 +261,21 @@
     </div>
 
     <div>
+        <label class="mb-1 block text-sm font-medium" for="retencion_fuente_id">Retención en la fuente</label>
+        <select id="retencion_fuente_id" name="retencion_fuente_id"
+                @disabled($fieldUnavailable($mapping['retencion_fuente_id'] ?? null))
+                class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">
+            <option value="">No aplica</option>
+            @foreach($catalogos['retenciones_fuente']['options'] ?? [] as $retencion)
+                <option value="{{ $retencion['id'] }}" @selected((string) $value('retencion_fuente_id', $mapping['retencion_fuente_id'] ?? null) === (string) $retencion['id'])>{{ $retencion['label'] }}</option>
+            @endforeach
+        </select>
+        @error('retencion_fuente_id')
+            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+        @enderror
+    </div>
+
+    <div>
         <label class="mb-1 block text-sm font-medium" for="estado_facturacion">Estado Facturacion</label>
         <select id="estado_facturacion" name="estado_facturacion" @required(!$fieldUnavailable($mapping['estado_facturacion'] ?? null)) @disabled($fieldUnavailable($mapping['estado_facturacion'] ?? null))
                 class="w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100">

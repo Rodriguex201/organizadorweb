@@ -252,6 +252,7 @@
                 </div>
             </div>
         </form>
+        @include('configuracion.partials.retenciones-fuente')
     </div>
 @endsection
 

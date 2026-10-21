@@ -159,6 +159,9 @@ Route::middleware('auth.custom')->group(function (): void {
         Route::patch('/configuracion/conceptos/{concepto}/toggle', [ConfiguracionConceptoController::class, 'toggle'])->name('configuracion.conceptos.toggle');
         Route::delete('/configuracion/conceptos/{concepto}', [ConfiguracionConceptoController::class, 'destroy'])->name('configuracion.conceptos.destroy');
         Route::put('/configuracion/tarifas', [ConfiguracionTarifaController::class, 'update'])->name('configuracion.tarifas.update');
+        Route::post('/configuracion/tarifas/retenciones', [ConfiguracionTarifaController::class, 'storeRetencion'])->name('configuracion.tarifas.retenciones.store');
+        Route::put('/configuracion/tarifas/retenciones/{retencion}', [ConfiguracionTarifaController::class, 'updateRetencion'])->whereNumber('retencion')->name('configuracion.tarifas.retenciones.update');
+        Route::patch('/configuracion/tarifas/retenciones/{retencion}/estado', [ConfiguracionTarifaController::class, 'estadoRetencion'])->whereNumber('retencion')->name('configuracion.tarifas.retenciones.estado');
     });
 
     Route::middleware('role.admin')->group(function (): void {

@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use App\Services\TarifaConfigService;
+use App\Services\RetencionFuenteConfigService;
 
 class ClientesController extends Controller
 {
@@ -346,7 +347,7 @@ class ClientesController extends Controller
             'cliente' => $cliente,
             'clienteId' => $id,
             'mapping' => $mapping,
-            'catalogos' => $this->loadFormCatalogs(),
+            'catalogos' => $this->loadFormCatalogs(isset($cliente->retencion_fuente_id) ? (int) $cliente->retencion_fuente_id : null),
             'motivosReactivacion' => $this->loadReactivationReasons(),
             'motivosRetiro' => $motivosRetiro,
             'estadosFacturacion' => ClientePotencial::estadosFacturacion(),
@@ -359,10 +360,10 @@ class ClientesController extends Controller
     public function update(Request $request, int $id): RedirectResponse
     {
         $mapping = $this->resolveColumnMapping();
-        $catalogos = $this->loadFormCatalogs();
         $clienteActual = $this->findClienteById($id, $mapping);
 
         abort_if(!$clienteActual, 404);
+        $catalogos = $this->loadFormCatalogs(isset($clienteActual->retencion_fuente_id) ? (int) $clienteActual->retencion_fuente_id : null);
 
         $validated = $request->validate(
             $this->rules($catalogos, $mapping, false, $clienteActual->{$mapping['ip_empresa'] ?? 'ip_empresa'} ?? null),
@@ -597,6 +598,7 @@ class ClientesController extends Controller
             'ip_empresa' => 'ip_empresa',
             'regimen' => 'regimen',
             'estado_facturacion' => 'estado_facturacion',
+            'retencion_fuente_id' => 'retencion_fuente_id',
         ];
 
         foreach ($inputToLogical as $input => $logicalKey) {
@@ -932,6 +934,7 @@ class ClientesController extends Controller
             'modalidad' => $this->catalogRule($catalogos['modalidad'], $mapping['modalidad']),
             'llego' => $this->catalogRule($catalogos['llego'], $mapping['llego']),
             'tipo_cliente_id' => $this->catalogRule($catalogos['tipos_cliente'], $mapping['tipo_cliente']),
+            'retencion_fuente_id' => app(RetencionFuenteConfigService::class)->selectionRules($catalogos['retenciones_fuente']),
         ];
 
         if ($withUnique) {
@@ -952,6 +955,8 @@ class ClientesController extends Controller
             'dv.max' => 'El DV no puede tener más de 3 caracteres.',
             'dv.regex' => 'El DV solo permite números y la letra X.',
             'regimen.in' => 'Selecciona un regimen válido: SAS, PCS o SMP.',
+            'retencion_fuente_id.in' => 'Selecciona una retención en la fuente válida o elige No aplica.',
+            'retencion_fuente_id.integer' => 'Selecciona una retención en la fuente válida o elige No aplica.',
         ];
     }
 
@@ -1245,9 +1250,10 @@ class ClientesController extends Controller
         return preg_replace('/\s+/', ' ', trim($this->toUppercase($value))) ?? '';
     }
 
-    private function loadFormCatalogs(): array
+    private function loadFormCatalogs(?int $currentRetencionId = null): array
     {
         return [
+            'retenciones_fuente' => app(RetencionFuenteConfigService::class)->catalog($currentRetencionId),
             'clases' => $this->loadCatalog('clases', ['idclases', 'id'], ['clase', 'nombre']),
             'modalidad' => $this->loadCatalog('modalidad', ['idmodalidad', 'id'], ['modalidad', 'nombre']),
             'llego' => $this->loadCatalog('llego', ['idllego', 'id'], ['llego', 'nombre']),
@@ -1753,6 +1759,7 @@ private function normalizeFolderName(string $value): string
             'modalidad' => $pick(['modalidad']),
             'llego' => $pick(['llego', 'idllego']),
             'tipo_cliente' => $pick(['tipo_cliente_id']),
+            'retencion_fuente_id' => $pick(['retencion_fuente_id']),
             'contrato' => $pick(['modalidad', 'contrato']),
             'vlrprincipal' => $pick(['vlrprincipal']),
             'vlrpaginaweb' => $pick(['vlrpaginaweb']),
