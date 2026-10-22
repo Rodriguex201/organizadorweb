@@ -140,6 +140,7 @@
                     <th class="px-3 py-2">Número</th>
                     <th class="px-3 py-2">Código</th>
                     <th class="px-3 py-2">Empresa</th>
+                    <th class="w-20 px-2 py-2 text-center whitespace-nowrap" title="Retención en la fuente configurada actualmente en el cliente">RET.</th>
                     <th class="px-3 py-2">Periodo</th>
                     <th class="px-3 py-2">Origen</th>
                     <th class="px-3 py-2 text-right">Valor total</th>
@@ -152,7 +153,7 @@
                 <tbody class="divide-y divide-slate-100">
                 @if(!($hasSearched ?? true))
                     <tr>
-                        <td colspan="11" class="px-4 py-8 text-center text-slate-500">Seleccione los filtros y pulse Filtrar para consultar proformas.</td>
+                        <td colspan="12" class="px-4 py-8 text-center text-slate-500">Seleccione los filtros y pulse Filtrar para consultar proformas.</td>
                     </tr>
                 @else
                 @forelse($proformas as $proforma)
@@ -229,6 +230,7 @@
                             <p class="text-xs text-slate-500">NIT: {{ $proforma->nit ?: 'N/D' }}</p>
                             <p class="text-xs text-slate-500">Emisora: {{ strtoupper((string) ($proforma->emisora ?? 'N/D')) }}</p>
                         </td>
+                        <td class="w-20 px-2 py-2 text-center whitespace-nowrap text-slate-700" title="Configuración actual del cliente; no modifica el importe emitido">{{ isset($proforma->retencion_cliente_porcentaje) ? number_format((float) $proforma->retencion_cliente_porcentaje, 3, ',', '.') . ' %' : '—' }}</td>
                         <td class="px-3 py-2 text-slate-700">{{ $proformasService->monthLabel($proforma->mes) }} {{ $proforma->anio ?: 'N/D' }}</td>
                         <td class="px-3 py-2">
                             <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold {{ $proformasService->resolutionSourceBadgeClass($proforma->cliente_resolution_source ?? null) }}">
@@ -296,7 +298,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="11" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
+                        <td colspan="12" class="px-4 py-8 text-center text-slate-500">No hay proformas para los filtros seleccionados.</td>
                     </tr>
                 @endforelse
                 @endif

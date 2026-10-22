@@ -626,6 +626,7 @@ class ProformasService
         if ($idCobros->isNotEmpty()) {
             $rowsByCobro = DB::table('valores_externos as ve')
                 ->leftJoin('clientes_potenciales as cp', 'cp.idclientes_potenciales', '=', DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)'))
+                ->leftJoin('config_retenciones_fuente as ret_cliente', 'ret_cliente.id', '=', 'cp.retencion_fuente_id')
                 ->whereIn('ve.id_cobro', $idCobros->all())
                 ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
                 ->select([
@@ -634,6 +635,7 @@ class ProformasService
                     'cp.codigo',
                     'cp.nota_cobro',
                     'cp.fecha_arriendo',
+                    'ret_cliente.porcentaje as retencion_cliente_porcentaje',
                     DB::raw("CASE WHEN TRIM(COALESCE(cp.codigo, '')) <> '' THEN 1 ELSE 0 END as codigo_present"),
                     DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED) as resolved_cliente_id'),
                 ])
@@ -647,6 +649,9 @@ class ProformasService
 
                 if ($idCobro > 0 && !isset($byCobro[$idCobro])) {
                     $byCobro[$idCobro] = $row;
+                } elseif ($idCobro > 0 && (int) $byCobro[$idCobro]->resolved_cliente_id !== (int) $row->resolved_cliente_id) {
+                    // Preserve existing resolution, but never attribute retention to an ambiguous client.
+                    $byCobro[$idCobro]->retencion_cliente_porcentaje = null;
                 }
             }
         }
@@ -674,6 +679,7 @@ class ProformasService
             $proforma->nota_cobro = $cliente->nota_cobro ?? null;
             $proforma->cliente_fecha_arriendo = $cliente->fecha_arriendo ?? null;
             $proforma->cliente_resolution_source = $resolutionSource;
+            $proforma->retencion_cliente_porcentaje = $cliente->retencion_cliente_porcentaje ?? null;
 
             return $proforma;
         });
@@ -720,6 +726,7 @@ class ProformasService
 
         $rows = DB::table('valores_externos as ve')
             ->leftJoin('clientes_potenciales as cp', 'cp.idclientes_potenciales', '=', DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED)'))
+            ->leftJoin('config_retenciones_fuente as ret_cliente', 'ret_cliente.id', '=', 'cp.retencion_fuente_id')
             ->whereRaw("TRIM(COALESCE(ve.id_cliente, '')) <> ''")
             ->where(function (Builder $outerQuery) use ($targets): void {
                 foreach ($targets as $target) {
@@ -741,6 +748,7 @@ class ProformasService
                 'cp.codigo',
                 'cp.nota_cobro',
                 'cp.fecha_arriendo',
+                'ret_cliente.porcentaje as retencion_cliente_porcentaje',
                 DB::raw("CASE WHEN TRIM(COALESCE(cp.codigo, '')) <> '' THEN 1 ELSE 0 END as codigo_present"),
                 DB::raw('CAST(TRIM(ve.id_cliente) AS UNSIGNED) as resolved_cliente_id'),
                 DB::raw('TRIM(cp.nit) as nit_normalized'),
@@ -769,6 +777,8 @@ class ProformasService
 
             if (!isset($resolved[$signature])) {
                 $resolved[$signature] = $row;
+            } elseif ((int) $resolved[$signature]->resolved_cliente_id !== (int) $row->resolved_cliente_id) {
+                $resolved[$signature]->retencion_cliente_porcentaje = null;
             }
         }
 
