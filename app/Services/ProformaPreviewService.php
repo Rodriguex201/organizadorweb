@@ -18,21 +18,35 @@ class ProformaPreviewService
     public function __construct(
         private readonly RevisarProformaCalculator $revisarProformaCalculator,
         private readonly ConceptosCatalogService $conceptosCatalogService,
+        private readonly ProformaImportesCalculator $importesCalculator,
+        private readonly ProformaRetencionService $retencionService,
     ) {
     }
 
     /**
      * Construye una proforma en memoria desde un cobro.
-     * TODO (fase siguiente): persistir cabecera en sg_proform y lineas en sg_proford.
+     * Las proformas emitidas usan exclusivamente su fotografía persistida.
      */
-    public function buildFromCobro(object $cobro): array
+    public function buildFromCobro(object $cobro, ?object $persistida = null): array
     {
-        $lineas = $this->construirLineas($cobro);
-        $lineasArray = array_map(fn (LineaProforma $linea) => $linea->toArray(), $lineas);
-
-        $totalLineas = array_reduce($lineas, fn (float $acc, LineaProforma $linea) => $acc + $linea->valorParcial(), 0.0);
+        if ($persistida !== null) {
+            $lineasArray = \Illuminate\Support\Facades\DB::table('sg_proford')->where('proforma_id', $persistida->id)
+                ->orderBy('orden')->get()->map(fn ($l) => [
+                    'codigo' => $l->ref_codigo, 'concepto' => $l->descripcion,
+                    'cantidad' => $l->cantidad, 'valor_unitario' => $l->vr_unidad, 'valor_parcial' => $l->vr_parcial,
+                ])->all();
+            $importes = [
+                'valor_original' => $persistida->valor_original,
+                'retencion_porcentaje' => $persistida->retencion_porcentaje,
+                'retencion_valor' => $persistida->retencion_valor,
+                'vtotal' => $persistida->vtotal,
+            ];
+        } else {
+            $lineasArray = array_map(fn (LineaProforma $linea) => $linea->toArray(), $this->construirLineas($cobro));
+            $lineasArray = $this->importesCalculator->normalizeLineas($lineasArray);
+            $importes = $this->importesCalculator->calculate($lineasArray, $this->retencionService->porcentajeParaNuevaProforma($cobro));
+        }
         $valorTotalCobro = (float) ($cobro->valor_total ?? 0);
-        $totalPreview = $this->calcularTotalPreview($cobro);
 
         return [
             'cabecera' => [
@@ -57,9 +71,10 @@ class ProformaPreviewService
             ],
             'detalle' => [
                 'lineas' => $lineasArray,
-                'total_calculado' => $totalLineas,
+                'total_calculado' => $importes['valor_original'],
                 'total_cobro' => $valorTotalCobro,
-                'total_preview' => $totalPreview,
+                'total_preview' => $importes['vtotal'],
+                'importes' => $importes,
             ],
         ];
     }
@@ -250,16 +265,6 @@ class ProformaPreviewService
             'SMP' => 'SMP',
             default => 'SAS',
         };
-    }
-
-    private function calcularTotalPreview(object $cobro): float
-    {
-        $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
-
-        return $this->toFloat($revision['total_mensualidad'] ?? null)
-            + $this->toFloat($revision['valor_facturas'] ?? null)
-            + $this->toFloat($cobro->valor_documentos ?? null)
-            + $this->toFloat($cobro->valor_acuse ?? null);
     }
 
     private function mapCobroToCalculationData(object $cobro): array

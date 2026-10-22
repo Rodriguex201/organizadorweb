@@ -52,7 +52,18 @@ $lookup = static function (array $rows, string $document = '900123456', string $
 };
 [$detail, $calls] = $lookup($base);
 $check($detail !== null && $detail['total'] === '1234.56' && $detail['lineas'][0]['cantidad'] === '1.5', 'unique relation and decimal precision');
-$check(array_keys($detail) === ['numero', 'empresa', 'periodo', 'estado', 'total', 'lineas'], 'public DTO whitelist');
+$check(array_keys($detail) === ['numero', 'empresa', 'periodo', 'estado', 'total', 'importes', 'lineas'], 'public DTO whitelist');
+$check($detail['importes'] === ['valor_original'=>null,'retencion_porcentaje'=>null,'retencion_valor'=>null], 'historical portal does not infer retention');
+$withRetention = $base;
+$withRetention['proforma'][0] = array_replace($withRetention['proforma'][0], ['valor_original'=>'100.00','retencion_porcentaje'=>'3.250','retencion_valor'=>'3.25','vtotal'=>'96.75']);
+[$retained] = $lookup($withRetention);
+$check($retained['total']==='96.75' && $retained['importes']['retencion_porcentaje']==='3.250', 'portal exposes frozen net and percentage');
+$app->instance('request', Request::create('http://127.0.0.1:8789/portal/revision'));
+$retainedHtml = view('portal.revision', ['detail'=>$retained,'submitted'=>true])->render();
+$check(str_contains($retainedHtml,'3,250 %') && str_contains($retainedHtml,'96,75'), 'portal renders snapshot');
+$withRetention['proforma'][0]['retencion_valor'] = null;
+[$partial] = $lookup($withRetention);
+$check($partial===null, 'partial financial snapshot blocked');
 $check($calls === [['cliente', ['900123456']], ['proforma', ['900123456', 'PF-001']], ['relacion', [20]], ['detalle', [15]]], 'fixed SELECT queries and parameter bindings');
 foreach (['cliente', 'proforma', 'relacion', 'detalle'] as $key) {
     $rows = $base;

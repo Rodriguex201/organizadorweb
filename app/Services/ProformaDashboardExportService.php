@@ -116,6 +116,9 @@ class ProformaDashboardExportService
             'proforma_estado',
             'proforma_mes',
             'proforma_anio',
+            'proforma_valor_original',
+            'proforma_retencion_porcentaje',
+            'proforma_retencion_valor',
             'proforma_valor_total',
             'proforma_fecha_generacion',
         ];
@@ -564,7 +567,10 @@ class ProformaDashboardExportService
                 'value' => fn (object $row) => $this->displayTextValue($this->proformasService->monthLabel($row->proforma_mes ?? null)),
             ],
             'proforma_anio' => $this->directNumericColumn('p.anio', 'proforma', 'Año', 'proforma_anio'),
-            'proforma_valor_total' => $this->directCurrencyColumn('p.vtotal', 'proforma', 'Valor total proforma', 'proforma_valor_total'),
+            'proforma_valor_original' => $this->directCurrencyColumn('p.valor_original', 'proforma', 'Valor original (sin dato en históricas)', 'proforma_valor_original'),
+            'proforma_retencion_porcentaje' => $this->directNumericColumn('p.retencion_porcentaje', 'proforma', 'Retención en la fuente (%)', 'proforma_retencion_porcentaje'),
+            'proforma_retencion_valor' => $this->directCurrencyColumn('p.retencion_valor', 'proforma', 'Retención en la fuente', 'proforma_retencion_valor'),
+            'proforma_valor_total' => $this->directCurrencyColumn('p.vtotal', 'proforma', 'Total a pagar', 'proforma_valor_total'),
             'proforma_fecha_generacion' => $this->directDateColumn('p.creado_en', 'proforma', 'Fecha generación', 'proforma_fecha_generacion'),
             'proforma_fecha_envio' => $this->directDateColumn('p.fecha_envio', 'proforma', 'Fecha envío', 'proforma_fecha_envio'),
             'proforma_fecha_pago' => [

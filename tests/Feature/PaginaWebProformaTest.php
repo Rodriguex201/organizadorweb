@@ -31,6 +31,7 @@ class PaginaWebProformaTest extends TestCase
 
         Schema::create('clientes_potenciales', function (Blueprint $table): void {
             $table->increments('idclientes_potenciales');
+            $table->integer('retencion_fuente_id')->nullable();
             foreach (['nombre', 'empresa', 'nit', 'codigo', 'contacto', 'celular1', 'celular2', 'email', 'direccion', 'regimen', 'modalidad', 'categoria', 'fecha_arriendo', 'fecha_retiro'] as $field) {
                 $table->string($field)->nullable();
             }
@@ -51,6 +52,7 @@ class PaginaWebProformaTest extends TestCase
         Schema::create('sg_proform', function (Blueprint $table): void {
             $table->increments('id');
             $table->integer('id_cobro')->nullable();
+            foreach (['valor_original','retencion_porcentaje','retencion_valor'] as $field) $table->decimal($field,15,3)->nullable();
             foreach (['nit', 'emp', 'emisora', 'fpago', 'rpdf', 'npdf', 'hpdf'] as $field) {
                 $table->string($field)->nullable();
             }
@@ -98,11 +100,11 @@ class PaginaWebProformaTest extends TestCase
         $this->assertSame(250.0, $cobros->mapCobroToRevisionValues($cobro)['valor_pagina_web']);
         $preview = $this->app->make(ProformaPreviewService::class)->buildFromCobro($cobro);
         $lines = array_column($preview['detalle']['lineas'], null, 'codigo');
-        $this->assertSame(1100.0, $lines['0010']['valor_parcial']);
-        $this->assertSame(250.0, $lines['0103']['valor_parcial']);
+        $this->assertSame('1100.00', $lines['0010']['valor_parcial']);
+        $this->assertSame('250.00', $lines['0103']['valor_parcial']);
         $this->assertSame(1.0, $lines['0103']['cantidad']);
-        $this->assertSame(1350.0, $preview['detalle']['total_preview']);
-        $this->assertSame(1350.0, $preview['detalle']['total_calculado']);
+        $this->assertSame('1350.00', $preview['detalle']['total_preview']);
+        $this->assertSame('1350.00', $preview['detalle']['total_calculado']);
 
         $result = $this->app->make(ProformaStoreService::class)->storeFromCobro($cobro);
         $this->assertTrue($result['created']);
@@ -126,23 +128,23 @@ class PaginaWebProformaTest extends TestCase
 
         DB::table('valores_externos')->where('id_cobro', 1)->update(['vlrpaginaweb' => 0]);
         $this->app->make(ProformaStoreService::class)->regenerateFromCobro($cobros->findCobroById(1));
-        $this->assertSame(0, DB::table('sg_proford')->where('proforma_id', $result['proforma_id'])->where('ref_codigo', '0103')->count());
-        $this->assertDatabaseHas('valores_externos', ['id_cobro' => 1, 'vlrpaginaweb' => 0, 'valor_total' => 1100]);
+        $this->assertSame(1, DB::table('sg_proford')->where('proforma_id', $result['proforma_id'])->where('ref_codigo', '0103')->count());
+        $this->assertDatabaseHas('valores_externos', ['id_cobro' => 1, 'vlrpaginaweb' => 0, 'valor_total' => 1350]);
 
     }
 
     public function test_cero_omite_linea_y_web_sola_no_crea_0010(): void
     {
         $preview = $this->app->make(ProformaPreviewService::class);
-        $cobro = (object) ['id_cobro' => 1, 'cliente_vlrprincipal' => 1000, 'vlrpaginaweb' => 0, 'cliente_vlrpaginaweb' => 250];
+        $cobro = (object) ['id_cobro' => 1, 'cliente_id' => 1, 'cliente_vlrprincipal' => 1000, 'vlrpaginaweb' => 0, 'cliente_vlrpaginaweb' => 250];
         $result = $preview->buildFromCobro($cobro);
         $this->assertSame(['0010'], array_column($result['detalle']['lineas'], 'codigo'));
-        $this->assertSame(1000.0, $result['detalle']['total_calculado']);
+        $this->assertSame('1000.00', $result['detalle']['total_calculado']);
         $cobro->cliente_vlrprincipal = 0;
         $cobro->vlrpaginaweb = null;
         $result = $preview->buildFromCobro($cobro);
         $this->assertSame(['0103'], array_column($result['detalle']['lineas'], 'codigo'));
-        $this->assertSame(250.0, $result['detalle']['total_calculado']);
+        $this->assertSame('250.00', $result['detalle']['total_calculado']);
     }
 
     public function test_extraordinario_y_revision_conservan_el_cargo_y_permiten_ponerlo_en_cero(): void

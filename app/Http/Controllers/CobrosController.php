@@ -1436,8 +1436,16 @@ $validated['precio_acuse'] = $request->filled('precio_acuse')
             throw new NotFoundHttpException('Cobro no encontrado.');
         }
 
-        $proforma = $this->proformaPreviewService->buildFromCobro($cobro);
         $proformaPersistidaId = $this->proformaStoreService->findExistingProformaIdFromCobro($cobro);
+        $persistida = $proformaPersistidaId ? DB::table('sg_proform')->where('id', $proformaPersistidaId)->first() : null;
+        try {
+            $proforma = $this->proformaPreviewService->buildFromCobro($cobro, $persistida);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            return view('cobros.proforma-preview', [
+                'cobro' => $cobro,
+                'generationError' => collect($exception->errors())->flatten()->first(),
+            ]);
+        }
 
         return view('cobros.proforma-preview', [
             'cobro' => $cobro,

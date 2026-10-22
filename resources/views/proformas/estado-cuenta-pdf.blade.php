@@ -96,11 +96,11 @@
     <table class="card detail">
         <thead>
             <tr>
-                <th style="width: 22%;">Proforma</th>
-                <th style="width: 24%;">Periodo</th>
-                <th style="width: 24%;">Estado</th>
-                <th style="width: 12%;">Emisora</th>
-                <th style="width: 18%;" class="text-right">Valor</th>
+                <th style="width: 14%;">Proforma</th>
+                <th style="width: 16%;">Periodo</th>
+                <th style="width: 16%;">Estado</th>
+                <th style="width: 9%;">Emisora</th>
+                <th style="width: 45%;" class="text-right">Importes</th>
             </tr>
         </thead>
         <tbody>
@@ -110,7 +110,7 @@
                     <td>{{ $proforma['periodo'] ?? 'N/D' }}</td>
                     <td>{{ $proforma['estado'] ?? 'N/D' }}</td>
                     <td>{{ $proforma['emisora'] ?? 'N/D' }}</td>
-                    <td class="money">$ {{ number_format((float) ($proforma['valor'] ?? 0), 2, ',', '.') }}</td>
+                    <td class="text-right">@include('proformas.partials.importes', ['importes' => $proforma['importes']])</td>
                 </tr>
             @endforeach
         </tbody>

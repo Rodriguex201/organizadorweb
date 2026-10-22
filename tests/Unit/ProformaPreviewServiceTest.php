@@ -24,9 +24,13 @@ class ProformaPreviewServiceTest extends TestCase
                 'EXTRA' => ['codigo' => 'EXTRA', 'nombre' => 'CARGO EXTRA MANUAL', 'cuenta' => '4199', 'activo' => 1],
             ]);
 
+        $retencion = $this->createMock(\App\Services\ProformaRetencionService::class);
+        $retencion->method('porcentajeParaNuevaProforma')->willReturn('0.000');
         $service = new ProformaPreviewService(
             new RevisarProformaCalculator(new ClienteValorTotalCalculator()),
             $catalogo,
+            new \App\Services\ProformaImportesCalculator(),
+            $retencion,
         );
 
         $cobro = (object) [
@@ -100,14 +104,14 @@ class ProformaPreviewServiceTest extends TestCase
         $this->assertSame('SERVICIO CLOUD NOMINA ELECTRONICA', $lineaNomina['concepto']);
         $this->assertSame(2.0, $lineaExtra['cantidad']);
         $this->assertSame(30.0, $lineaExtra['valor_unitario']);
-        $this->assertSame(60.0, $lineaExtra['valor_parcial']);
+        $this->assertSame('60.00', $lineaExtra['valor_parcial']);
         $this->assertSame('SERVICIO CLOUD FACTURACION ELECTRONICA', $lineaFacturacion['concepto']);
         $this->assertSame(8.0, $lineaFacturacion['cantidad']);
         $this->assertSame(2.0, $lineaFacturacion['valor_unitario']);
-        $this->assertSame(16.0, $lineaFacturacion['valor_parcial']);
+        $this->assertSame('16.00', $lineaFacturacion['valor_parcial']);
         $this->assertSame('SERVICIO CLOUD SOPORTE ELECTRONICO', $lineaSoporte['concepto']);
-        $this->assertSame(317.0, $preview['detalle']['total_preview']);
-        $this->assertSame(317.0, $preview['detalle']['total_calculado']);
+        $this->assertSame('317.00', $preview['detalle']['total_preview']);
+        $this->assertSame('317.00', $preview['detalle']['total_calculado']);
     }
 
     public function test_no_falla_si_el_concepto_de_terminales_extra_no_existe_en_bd(): void
@@ -127,9 +131,13 @@ class ProformaPreviewServiceTest extends TestCase
                 'exists' => false,
             ]);
 
+        $retencion = $this->createMock(\App\Services\ProformaRetencionService::class);
+        $retencion->method('porcentajeParaNuevaProforma')->willReturn('0.000');
         $service = new ProformaPreviewService(
             new RevisarProformaCalculator(new ClienteValorTotalCalculator()),
             $catalogo,
+            new \App\Services\ProformaImportesCalculator(),
+            $retencion,
         );
 
         $cobro = (object) [

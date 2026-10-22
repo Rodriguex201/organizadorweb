@@ -81,7 +81,11 @@ $money = static function ($value) use ($e): string {
                 <tr><td><?= $e($linea['concepto']) ?></td><td data-label="Cantidad"><?= $e($linea['cantidad']) ?></td><td data-label="Valor unitario"><?= $money($linea['unitario']) ?></td><td data-label="Subtotal"><?= $money($linea['subtotal']) ?></td></tr>
             <?php endforeach ?></tbody>
         </table></div>
-        <div class="invoice-total"><span>Total</span><strong><?= $money($detail['total']) ?></strong></div>
+        <?php if (isset($detail['importes']['valor_original'], $detail['importes']['retencion_porcentaje'], $detail['importes']['retencion_valor'])): ?>
+        <div class="invoice-total"><span>Valor original</span><strong><?= $money($detail['importes']['valor_original']) ?></strong></div>
+        <div class="invoice-total"><span>Retención en la fuente (<?= $e(number_format((float) $detail['importes']['retencion_porcentaje'], 3, ',', '.')) ?> %)</span><strong>− <?= $money($detail['importes']['retencion_valor']) ?></strong></div>
+        <?php else: ?><p>Proforma histórica: sin desglose de retención registrado.</p><?php endif ?>
+        <div class="invoice-total"><span>Total a pagar</span><strong><?= $money($detail['total']) ?></strong></div>
     </section>
 <?php endif ?>
 </main>

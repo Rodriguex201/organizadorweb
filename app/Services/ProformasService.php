@@ -59,7 +59,7 @@ class ProformasService
             'p.emisora',
             'p.mes',
             'p.anio',
-            'p.vtotal',
+            'p.vtotal', 'p.valor_original', 'p.retencion_porcentaje', 'p.retencion_valor',
             'p.estado',
             'p.fpag',
             'p.ffac',
@@ -155,7 +155,7 @@ class ProformasService
     public function paginateDashboardProformas(int $mes, int $anio, ?int $estado = null, ?int $grupoFecha = null, int $perPage = 15): LengthAwarePaginator
     {
         return $this->buildDashboardBaseQuery($mes, $anio, $estado, $grupoFecha)
-            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado'])
+            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.valor_original', 'p.retencion_porcentaje', 'p.retencion_valor', 'p.estado'])
             ->orderByDesc('p.id')
             ->paginate($perPage)
             ->withQueryString();
@@ -202,7 +202,7 @@ class ProformasService
         $this->applyClienteJoins($query);
 
         return $query
-            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.comprobante_pago', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])
+            ->select(['p.id', 'p.nro_prof', 'p.emp', 'p.nit', 'p.emisora', 'p.mes', 'p.anio', 'p.vtotal', 'p.valor_original', 'p.retencion_porcentaje', 'p.retencion_valor', 'p.estado', 'p.rpdf', 'p.npdf', 'p.hpdf', 'p.comprobante_pago', 'p.enviado', 'p.fecha_envio', 'p.intentos_envio'])
             ->selectRaw($this->joinedClienteFieldExpression('codigo').' as codigo')
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as id_cliente')
             ->selectRaw($this->joinedClienteFieldExpression('idclientes_potenciales').' as cliente_potencial_id')

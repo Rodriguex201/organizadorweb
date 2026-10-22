@@ -206,7 +206,7 @@
                         <td class="px-4 py-3">{{ $proforma->emisora ?: 'N/D' }}</td>
                         <td class="px-4 py-3">{{ $proformasService->monthLabel($proforma->mes) }}</td>
                         <td class="px-4 py-3">{{ $proforma->anio ?: 'N/D' }}</td>
-                        <td class="px-4 py-3 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
+                        <td class="px-4 py-3 text-right font-medium">@include('proformas.partials.importes', ['importes' => $proforma])</td>
                         <td class="px-4 py-3">
                             <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style="{{ $proformasService->estadoBadgeStyle($proforma->estado) }}">{{ $proformasService->estadoLabel($proforma->estado) }}</span>
                         </td>

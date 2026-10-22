@@ -35,6 +35,7 @@ class ProformaStoreService
         private readonly ProformaPreviewService $proformaPreviewService,
         private readonly RevisarProformaCalculator $revisarProformaCalculator,
         private readonly ConceptosCatalogService $conceptosCatalogService,
+        private readonly ProformaImportesCalculator $importesCalculator,
     ) {
     }
 
@@ -94,15 +95,13 @@ class ProformaStoreService
             return $validationError;
         }
 
-        $result = DB::transaction(function () use ($cobro, $extraConcepto, $preserveExistingEstado, $protectProcessedProforma) {
-            $preview = $this->proformaPreviewService->buildFromCobro($cobro);
-            $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
+        $result = DB::transaction(function () use ($cobro, $extraConcepto, $protectProcessedProforma) {
 
             $nit = trim((string) ($cobro->cliente_nit ?? ''));
             $mesTexto = trim((string) ($cobro->mes ?? ''));
             $mes = $this->normalizarMesParaProforma($mesTexto);
             $anio = (int) ($cobro->año ?? 0);
-            $emisora = (string) ($preview['cabecera']['empresa_emisora'] ?? 'SAS');
+            $emisora = $this->resolverEmpresaEmisoraDesdeRegimen($cobro);
             $idCobro = (int) ($cobro->id_cobro ?? 0);
             $proformaExistente = null;
             $resolved = $this->resolveExistingProforma($cobro, $emisora);
@@ -170,44 +169,27 @@ class ProformaStoreService
                     ];
                 }
 
-                $extraConcepto = $this->completarConceptoExtraDesdeProformaExistente(
-                    (int) $proformaExistente->id,
-                    $cobro,
-                    $extraConcepto,
-                );
-
-                $lineas = $this->garantizarLineaValorExtra(
-                    $preview['detalle']['lineas'] ?? [],
-                    $cobro,
-                    $extraConcepto,
-                );
-                $totalPreview = $this->calcularTotalDesdeLineas($lineas);
-
-                $this->actualizarCabeceraProformaExistente((int) $proformaExistente->id, $cobro, $preview, $revision);
-                $this->actualizarTotalCabecera((int) $proformaExistente->id, $totalPreview);
-                $this->actualizarValoresExternosDesdeRevision($cobro, $revision);
-                $this->reemplazarDetalleProforma((int) $proformaExistente->id, $lineas);
-                $estadoAConservar = $preserveExistingEstado
-                    ? (int) ($proformaExistente->estado ?? 2)
-                    : null;
-                $this->marcarCobroComoProformaGenerada((int) $cobro->id_cobro, $estadoAConservar);
-
+                // Regeneration may rebuild the PDF, never the issued financial snapshot.
+                // This also protects historical rows whose retention fields are NULL.
                 return [
                     'created' => false,
                     'duplicated' => true,
-                    'proforma_id' => $proformaExistente->id ?? null,
-                    'message' => 'La proforma ya existía para NIT, mes, año y emisora. Se actualizó cabecera y detalle con los valores vigentes.',
+                    'proforma_id' => $proformaExistente->id,
+                    'message' => 'La proforma ya existe. Se conservan sus conceptos, importes y retención originales.',
                 ];
             }
 
+            $preview = $this->proformaPreviewService->buildFromCobro($cobro);
+            $revision = $this->revisarProformaCalculator->calculate($this->mapCobroToCalculationData($cobro));
             $nroProf = $this->resolverNumeroProforma($emisora, $anio);
 
-            $lineas = $this->garantizarLineaValorExtra(
+            $lineas = $this->aplicarDescripcionExtra(
                 $preview['detalle']['lineas'] ?? [],
-                $cobro,
                 $extraConcepto,
             );
-            $totalPreview = $this->calcularTotalDesdeLineas($lineas);
+            $importes = $this->importesCalculator->calculate(
+                $lineas, $preview['detalle']['importes']['retencion_porcentaje'],
+            );
 
 
             $cabecera = [
@@ -226,7 +208,7 @@ class ProformaStoreService
                 'vlr_sop' => (float) ($cobro->valor_documentos ?? 0),
                 'vext1' => (float) ($revision['otro_valor_extra'] ?? 0),
                 'vext2' => (float) ($revision['otro_valor_extra_2'] ?? 0),
-                'vtotal' => $totalPreview,
+                ...$importes,
                 'cfe' => (float) ($cobro->numero_facturas ?? 0),
                 'csop' => (float) ($cobro->numero_documento_soporte ?? 0),
                 'crec' => (float) ($cobro->numero_acuse ?? 0),
@@ -405,61 +387,6 @@ class ProformaStoreService
         return $mesNumero;
     }
 
-    private function actualizarCabeceraProformaExistente(int $proformaId, object $cobro, array $preview, array $revision): void
-    {
-        $payload = [
-            'emp' => $this->resolveEmpresaCliente($cobro),
-            'vlr_mens' => (float) ($revision['total_mensualidad'] ?? 0),
-            'vlr_nom' => (float) ($revision['valor_nomina'] ?? 0),
-            'vlr_fe' => (float) ($revision['valor_facturas'] ?? 0),
-            'vlr_rec' => (float) ($cobro->valor_acuse ?? 0),
-            'vlr_sop' => (float) ($cobro->valor_documentos ?? 0),
-            'vext1' => (float) ($revision['otro_valor_extra'] ?? 0),
-            'vext2' => (float) ($revision['otro_valor_extra_2'] ?? 0),
-            'vtotal' => (float) ($preview['detalle']['total_preview'] ?? 0),
-            'cfe' => (float) ($cobro->numero_facturas ?? 0),
-            'csop' => (float) ($cobro->numero_documento_soporte ?? 0),
-            'crec' => (float) ($cobro->numero_acuse ?? 0),
-            'cnom' => (float) (($revision['valor_nomina'] ?? 0) > 0 ? 1 : 0),
-        ];
-
-        if ($this->hasColumn('sg_proform', 'id_cobro')) {
-            $payload['id_cobro'] = (int) ($cobro->id_cobro ?? 0) ?: null;
-        }
-
-        DB::table('sg_proform')
-            ->where('id', $proformaId)
-            ->update($payload);
-    }
-
-    private function actualizarTotalCabecera(int $proformaId, float $totalPreview): void
-    {
-        DB::table('sg_proform')
-            ->where('id', $proformaId)
-            ->update([
-                'vtotal' => $totalPreview,
-            ]);
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $lineas
-     */
-    private function reemplazarDetalleProforma(int $proformaId, array $lineas): void
-    {
-        DB::table('sg_proford')
-            ->where('proforma_id', $proformaId)
-            ->delete();
-
-        $detalleRows = $this->construirDetalleRows($proformaId, $lineas);
-        if ($detalleRows !== []) {
-            DB::table('sg_proford')->insert($detalleRows);
-        }
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $lineas
-     * @return array<int, array<string, mixed>>
-     */
     private function construirDetalleRows(int $proformaId, array $lineas): array
     {
         $catalogoConceptos = $this->obtenerCatalogoConceptos();
@@ -488,7 +415,7 @@ class ProformaStoreService
                     : $concepto['nombre'],
                 'cantidad' => (float) ($linea['cantidad'] ?? 0),
                 'vr_unidad' => (float) ($linea['valor_unitario'] ?? 0),
-                'vr_parcial' => (float) ($linea['valor_parcial'] ?? 0),
+                'vr_parcial' => (string) ($linea['valor_parcial'] ?? '0.00'),
                 'orden' => $index + 1,
                 'moneda' => 'COP',
             ];
@@ -539,126 +466,18 @@ class ProformaStoreService
      * @return array<int, array<string, mixed>>
      */
 
-    private function garantizarLineaValorExtra(array $lineas, object $cobro, array $extraConcepto): array
+    private function aplicarDescripcionExtra(array $lineas, array $extraConcepto): array
     {
-        $valorExtra = (float) ($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? 0);
-        $codigoExtra = trim((string) ($extraConcepto['codigo_concepto_extra'] ?? ''));
-
-        $descripcionExtra = strtoupper(trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? '')));
-
-
-        if ($valorExtra <= 0) {
-            return $lineas;
-        }
-
-        $indexLineaExtra = null;
-        foreach ($lineas as $index => &$linea) {
-
-            if ((string) ($linea['codigo'] ?? '') !== 'EXTRA') {
-                continue;
-            }
-
-
-            $indexLineaExtra = $index;
-            $linea['cantidad'] = 1;
-            $linea['valor_unitario'] = $valorExtra;
-            $linea['valor_parcial'] = $valorExtra;
-
+        foreach ($lineas as &$linea) {
+            if (($linea['codigo'] ?? '') !== 'EXTRA') continue;
+            $codigo = trim((string) ($extraConcepto['codigo_concepto_extra'] ?? ''));
+            $descripcion = strtoupper(trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? '')));
+            if ($codigo !== '') $linea['codigo_mostrado'] = $codigo;
+            if ($descripcion !== '') $linea['descripcion_mostrada'] = $descripcion;
             break;
         }
         unset($linea);
-
-
-        if ($indexLineaExtra === null) {
-            $lineas[] = [
-                'codigo' => 'EXTRA',
-                'concepto' => 'Cargo extra manual',
-                'cantidad' => 1,
-                'valor_unitario' => $valorExtra,
-                'valor_parcial' => $valorExtra,
-            ];
-        }
-
-        $ultimaPosicion = array_key_last($lineas);
-        if ($ultimaPosicion !== null && (string) ($lineas[$ultimaPosicion]['codigo'] ?? '') === 'EXTRA' && $indexLineaExtra === null) {
-            $indexLineaExtra = $ultimaPosicion;
-        }
-
-        if ($indexLineaExtra !== null) {
-            if ($codigoExtra !== '') {
-                $lineas[$indexLineaExtra]['codigo_mostrado'] = $codigoExtra;
-            }
-            if ($descripcionExtra !== '') {
-                $lineas[$indexLineaExtra]['descripcion_mostrada'] = $descripcionExtra;
-            }
-        }
-
         return $lineas;
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $lineas
-     */
-    private function calcularTotalDesdeLineas(array $lineas): float
-    {
-        return (float) array_reduce(
-            $lineas,
-            fn (float $acumulado, array $linea) => $acumulado + (float) ($linea['valor_parcial'] ?? 0),
-            0.0,
-        );
-    }
-
-    private function completarConceptoExtraDesdeProformaExistente(int $proformaId, object $cobro, array $extraConcepto): array
-    {
-        $codigoActual = trim((string) ($extraConcepto['codigo_concepto_extra'] ?? ''));
-        $descripcionActual = trim((string) ($extraConcepto['descripcion_concepto_extra'] ?? ''));
-        $valorExtra = (float) ($cobro->valor_extra ?? $cobro->cliente_vlrextra ?? 0);
-
-        if (($codigoActual !== '' && $descripcionActual !== '') || $valorExtra <= 0) {
-            return $extraConcepto;
-        }
-
-        $detalle = DB::table('sg_proford')
-            ->where('proforma_id', $proformaId)
-            ->orderBy('orden')
-            ->get();
-
-        $candidatos = $detalle
-            ->filter(function (object $linea) use ($valorExtra) {
-                return (string) ($linea->ref_codigo ?? '') !== '0103'
-                    && (float) ($linea->cantidad ?? 0) === 1.0
-                    && (float) ($linea->vr_unidad ?? 0) === $valorExtra
-                    && (float) ($linea->vr_parcial ?? 0) === $valorExtra;
-            })
-            ->values();
-
-        if ($candidatos->count() > 1) {
-            $candidatos = $candidatos
-                ->filter(fn (object $linea) => !in_array((string) ($linea->ref_codigo ?? ''), self::CODIGOS_CONCEPTO_OFICIALES, true))
-                ->values();
-        }
-
-        if ($candidatos->isEmpty()) {
-            $candidatos = $detalle
-                ->filter(fn (object $linea) => stripos((string) ($linea->descripcion ?? ''), 'extra') !== false)
-                ->values();
-        }
-
-        $lineaExtra = $candidatos->first();
-
-        if (!$lineaExtra) {
-            return $extraConcepto;
-        }
-
-        if ($codigoActual === '') {
-            $extraConcepto['codigo_concepto_extra'] = trim((string) ($lineaExtra->ref_codigo ?? ''));
-        }
-
-        if ($descripcionActual === '') {
-            $extraConcepto['descripcion_concepto_extra'] = trim((string) ($lineaExtra->descripcion ?? ''));
-        }
-
-        return $extraConcepto;
     }
 
     /**
@@ -669,7 +488,7 @@ class ProformaStoreService
         $nit = trim((string) ($cobro->cliente_nit ?? ''));
         $mesTexto = trim((string) ($cobro->mes ?? ''));
         $mes = $this->normalizarMesParaProforma($mesTexto);
-        $anio = (int) ($cobro->aÃ±o ?? 0);
+        $anio = (int) ($cobro->año ?? 0);
         $emisora = $emisoraOverride ?: $this->resolverEmpresaEmisoraDesdeRegimen($cobro);
         $idCobro = (int) ($cobro->id_cobro ?? 0);
 

@@ -125,7 +125,7 @@
                                         {{ $proforma->estado_label }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-3 text-right font-medium text-slate-800">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
+                                <td class="px-4 py-3 text-right font-medium text-slate-800">@include('proformas.partials.importes', ['importes' => $proforma])</td>
                             </tr>
                         @empty
                             <tr>

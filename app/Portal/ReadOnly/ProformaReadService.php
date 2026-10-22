@@ -9,7 +9,7 @@ final class ProformaReadService
     // Fixed SQL, bound values. No MAX, LIMIT 1, historical fallback or locks.
     public const QUERIES = [
         'cliente' => 'SELECT idclientes_potenciales FROM clientes_potenciales WHERE BINARY TRIM(nit) = BINARY ? LIMIT 2',
-        'proforma' => 'SELECT id, id_cobro, nro_prof, emp, mes, anio, vtotal, estado FROM sg_proform WHERE BINARY TRIM(nit) = BINARY ? AND BINARY nro_prof = BINARY ? LIMIT 2',
+        'proforma' => 'SELECT id, id_cobro, nro_prof, emp, mes, anio, vtotal, valor_original, retencion_porcentaje, retencion_valor, estado FROM sg_proform WHERE BINARY TRIM(nit) = BINARY ? AND BINARY nro_prof = BINARY ? LIMIT 2',
         'relacion' => 'SELECT DISTINCT id_cliente FROM valores_externos WHERE id_cobro = ? LIMIT 2',
         'detalle' => 'SELECT descripcion, cantidad, vr_unidad, vr_parcial FROM sg_proford WHERE proforma_id = ? ORDER BY orden LIMIT 501',
         'email' => 'SELECT email FROM clientes_potenciales WHERE idclientes_potenciales = ? LIMIT 2',
@@ -91,6 +91,15 @@ final class ProformaReadService
                 }
             }
         }
+        $importes = [];
+        foreach (['valor_original', 'retencion_porcentaje', 'retencion_valor'] as $key) {
+            $value = $p[$key] ?? null;
+            if ($value !== null && !self::decimal($value)) return null;
+            $importes[$key] = $value === null ? null : (string) $value;
+        }
+        // A partial snapshot is invalid; NULL historical snapshots remain unknown.
+        $present = count(array_filter($importes, fn ($v) => $v !== null));
+        if ($present !== 0 && $present !== 3) return null;
         // Whitelist the public DTO. Never pass the raw header or relationship.
         return [
             'numero' => $p['nro_prof'],
@@ -98,6 +107,7 @@ final class ProformaReadService
             'periodo' => ucfirst(ProformasService::MESES[(int) $p['mes']]).' de '.$p['anio'],
             'estado' => ProformasService::ESTADOS[(int) $p['estado']] ?? 'No disponible',
             'total' => (string) $p['vtotal'],
+            'importes' => $importes,
             'lineas' => array_map(static fn (array $l): array => [
                 'concepto' => $l['descripcion'],
                 'cantidad' => (string) $l['cantidad'],

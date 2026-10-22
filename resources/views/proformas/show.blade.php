@@ -69,8 +69,8 @@
                     </dd>
                 </div>
                 <div>
-                    <dt class="text-slate-500">Valor total</dt>
-                    <dd class="font-medium text-slate-900">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</dd>
+                    <dt class="text-slate-500">Importes de la proforma</dt>
+                    <dd class="font-medium text-slate-900">@include('proformas.partials.importes', ['importes' => $proforma])</dd>
                 </div>
                 <div>
                     <dt class="text-slate-500">Estado</dt>

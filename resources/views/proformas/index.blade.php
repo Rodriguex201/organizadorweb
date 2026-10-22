@@ -235,7 +235,7 @@
                                 {{ $proformasService->resolutionSourceLabel($proforma->cliente_resolution_source ?? null) }}
                             </span>
                         </td>
-                        <td class="px-3 py-2 text-right font-medium">{{ number_format((float) ($proforma->vtotal ?? 0), 2, ',', '.') }}</td>
+                        <td class="px-3 py-2 text-right font-medium">@include('proformas.partials.importes', ['importes' => $proforma])</td>
                         <td class="px-3 py-2 text-center">
                             @if($clientePotencialId > 0)
                                 <button

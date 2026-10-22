@@ -4,6 +4,13 @@
 
 @section('content')
 <div class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    @if($generationError ?? null)
+        <div role="alert" class="rounded border border-amber-200 bg-amber-50 p-5 text-amber-900">
+            <h1 class="text-xl font-semibold">No es posible generar la proforma</h1>
+            <p class="mt-2">{{ $generationError }}</p>
+            <a class="mt-4 inline-block underline" href="{{ route('cobros.show', ['id' => $cobro->id_cobro]) }}">Volver al cobro</a>
+        </div>
+    @else
     @if(session('status'))
         @php
             $statusType = session('status_type', 'success');
@@ -46,8 +53,8 @@
             <div>
                 <dt class="text-slate-500">Estado Proforma actual</dt>
                 <dd>
-                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ (int) $proforma['cabecera']['proforma_actual'] === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
-                        {{ (int) $proforma['cabecera']['proforma_actual'] === 1 ? 'Generada' : 'Pendiente' }}
+                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ isset(\App\Services\ProformasService::ESTADOS[(int) $proforma['cabecera']['proforma_actual']]) ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">
+                        {{ \App\Services\ProformasService::ESTADOS[(int) $proforma['cabecera']['proforma_actual']] ?? 'Pendiente' }}
                     </span>
                 </dd>
             </div>
@@ -123,18 +130,9 @@
                 @endforeach
                 </tbody>
                 <tfoot class="bg-slate-50">
-                <tr>
-                    <td colspan="4" class="px-3 py-2 text-right font-semibold">Total líneas</td>
-                    <td class="px-3 py-2 text-right font-semibold">{{ number_format((float) $proforma['detalle']['total_calculado'], 2, ',', '.') }}</td>
-                </tr>
-                <tr>
-                    <td colspan="4" class="px-3 py-2 text-right text-slate-600">Total cobro origen</td>
-                    <td class="px-3 py-2 text-right text-slate-600">{{ number_format((float) $proforma['detalle']['total_cobro'], 2, ',', '.') }}</td>
-                </tr>
-                <tr>
-                    <td colspan="4" class="px-3 py-2 text-right font-bold">Total proforma vista previa</td>
-                    <td class="px-3 py-2 text-right font-bold">{{ number_format((float) $proforma['detalle']['total_preview'], 2, ',', '.') }}</td>
-                </tr>
+                    <tr><td colspan="5" class="px-3 py-2 text-right">
+                        @include('proformas.partials.importes', ['importes' => $proforma['detalle']['importes']])
+                    </td></tr>
                 </tfoot>
             </table>
         </div>
@@ -167,5 +165,6 @@
             </form>
         </div>
     </section>
+    @endif
 </div>
 @endsection

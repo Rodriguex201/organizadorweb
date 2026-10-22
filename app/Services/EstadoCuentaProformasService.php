@@ -262,6 +262,7 @@ class EstadoCuentaProformasService
                     'periodo' => $this->periodLabel((int) ($proforma->mes ?? 0), (int) ($proforma->anio ?? 0)),
                     'estado' => $this->proformasService->estadoLabel($proforma->estado ?? null),
                     'valor' => (float) ($proforma->vtotal ?? 0),
+                    'importes' => ['vtotal' => $proforma->vtotal, 'valor_original' => $proforma->valor_original ?? null, 'retencion_porcentaje' => $proforma->retencion_porcentaje ?? null, 'retencion_valor' => $proforma->retencion_valor ?? null],
                     'emisora' => strtoupper(trim((string) ($proforma->emisora ?? 'N/D'))),
                 ];
             })->values()->all(),
@@ -308,7 +309,7 @@ class EstadoCuentaProformasService
                 'p.emisora',
                 'p.mes',
                 'p.anio',
-                'p.vtotal',
+                'p.vtotal', 'p.valor_original', 'p.retencion_porcentaje', 'p.retencion_valor',
                 'p.estado',
                 'p.creado_en',
                 'cp.idclientes_potenciales as id_cliente',

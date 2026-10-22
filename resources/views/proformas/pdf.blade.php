@@ -20,6 +20,8 @@
         .money { text-align: right; white-space: nowrap; }
         .total-box { margin-top: 14px; border: 1px solid #d1d5db; background: #f9fafb; padding: 10px 12px; }
         .total-title { font-size: 12px; font-weight: bold; text-transform: uppercase; color: #374151; }
+        .importes-total { font-size: 18px; margin-top: 8px; font-weight: bold; }
+        .total-box { page-break-inside: avoid; }
         .total-value { font-size: 18px; font-weight: bold; color: #111827; margin-top: 4px; }
         .footer-note { margin-top: 14px; font-size: 10px; color: #4b5563; }
         .payment-note { margin-top: 10px; font-size: 10px; color: #374151; line-height: 1.4; }
@@ -149,8 +151,7 @@ $mensajesPagoPorEmisora = [
 <div class="subtle">{{ $total_en_letras ?? '' }}</div>
 
 <div class="total-box">
-    <div class="total-title">Total Proforma</div>
-    <div class="total-value">$ {{ number_format($valorTotal, 2, ',', '.') }}</div>
+    @include('proformas.partials.importes', ['importes' => $cabecera])
 </div>
 
 <div class="footer-note">
