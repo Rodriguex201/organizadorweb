@@ -7,8 +7,9 @@ use App\Portal\ReadOnly\PortalReadGateway;
 use Brick\Math\BigDecimal;
 use RuntimeException;
 use Throwable;
+use App\Payments\Bold\{AttemptRepository, BoldHttpClient, CurlBoldHttpClient};
 
-/** Preparation only. No HTTP transport, routes, logs or MySQL writes in this phase. */
+/** Local sandbox transport; all persistence goes through the guarded attempt repository. */
 final class BoldPaymentService
 {
     public const ENDPOINT = 'https://integrations.api.bold.co/online/link/v1';
@@ -18,7 +19,14 @@ final class BoldPaymentService
         private PortalReadGateway $reader,
         private array $settings,
         private string $applicationEnvironment,
+        private ?BoldHttpClient $http = null,
+        private ?AttemptRepository $attemptRepository = null,
     ) {}
+
+    public static function forPortal(PortalOtpService $otp): self
+    {
+        return new self($otp, new PortalReadGateway(), config('bold'), app()->environment());
+    }
 
     /** Only an opaque portal session token is accepted. No amount or target parameters. */
     public function prepare(#[\SensitiveParameter] string $portalToken): array
@@ -62,13 +70,70 @@ final class BoldPaymentService
         ];
     }
 
-    public function createLink(#[\SensitiveParameter] string $portalToken): never
+    public function createLink(#[\SensitiveParameter] string $portalToken): array
     {
         if (($this->settings['enabled'] ?? false) !== true) {
             throw new RuntimeException('Las llamadas a Bold están deshabilitadas.');
         }
-        // Fail closed even after a configuration error; persistence/idempotency is pending.
-        throw new RuntimeException('Transporte Bold pendiente de validación; no se realizó ninguna llamada.');
+        $key = $this->settings['api_key'] ?? null;
+        if ($this->applicationEnvironment !== 'local' || ($this->settings['environment'] ?? null) !== 'sandbox'
+            || !is_string($key) || trim($key) === '' || preg_match('/[\r\n]/', $key)) {
+            throw new RuntimeException('Configuración de transporte Bold no válida.');
+        }
+        // Authorize before opening the writing connection, then revalidate when reserving/claiming.
+        $this->prepare($portalToken);
+        $repository = $this->attemptRepository ?? AttemptRepository::open(
+            $this->settings['database'] ?? [], $this->applicationEnvironment, $this->settings['environment']);
+        $flow = new BoldAttemptService($this, $repository);
+        $http = $this->http ?? new CurlBoldHttpClient();
+        $row = $flow->reserve($portalToken);
+        if ($row['estado'] === 'RESERVADO') {
+            $claimed = $flow->claim($portalToken);
+            if ($claimed === null) return $flow->reserve($portalToken);
+            // Re-read the source immediately before dispatch; retain the frozen amount/reference.
+            $row = $flow->reserve($portalToken);
+            if ($row['estado'] !== 'SOLICITANDO') return $row;
+            $body = '{"amount_type":"CLOSE","amount":{"currency":"COP","total_amount":'
+                .$claimed['importe'].',"tip_amount":0},"reference":'
+                .json_encode($claimed['referencia'], JSON_THROW_ON_ERROR).'}';
+            try { $response = $http->create($key, $body); }
+            catch (Throwable) { $response = ['uncertain'=>true, 'status'=>null]; }
+            $status = $response['status'] ?? null;
+            $decoded = [];
+            if (!($response['uncertain'] ?? true) && is_int($status)) {
+                try {
+                    $this->parseCreationBody($status, $response['body'], $response['content_type']);
+                    $decoded = json_decode($response['body'], true, 32, JSON_THROW_ON_ERROR);
+                } catch (Throwable) { /* Invalid response is persisted as REVISION, without its body. */ }
+            }
+            if (!$flow->recordCreation($claimed, ($response['uncertain'] ?? true) ? null : $status, $decoded)) {
+                throw new RuntimeException('El intento requiere revisión; no se repetirá el envío.');
+            }
+            $row = $flow->reserve($portalToken);
+        }
+        // Other executors never POST for SOLICITANDO, uncertain, review or active attempts.
+        if ($row['estado'] !== 'LINK_CREADO') return $row;
+        try { $response = $http->lookup($key, $row['payment_link']); }
+        catch (Throwable) { $response = ['uncertain'=>true, 'status'=>null]; }
+        $status = $response['status'] ?? null;
+        if (($response['uncertain'] ?? true) || $status === null || $status >= 500 || in_array($status, [408,429], true)) {
+            $repository->transition((int)$row['id'], $row['referencia'], 'LINK_CREADO', 'INDETERMINADO', [
+                'error_codigo'=>'VERIFY_TRANSPORT_UNCERTAIN', 'ultima_consulta_at'=>gmdate('Y-m-d H:i:s'),
+            ]);
+        } else {
+            $remote = [];
+            try {
+                if ($status >= 200 && $status < 300 && strlen($response['body']) <= 65536
+                    && strtolower(trim(explode(';', $response['content_type'] ?? '', 2)[0])) === 'application/json') {
+                    $object = json_decode($response['body'], false, 32, JSON_THROW_ON_ERROR);
+                    if ($object instanceof \stdClass) $remote = json_decode($response['body'], true, 32, JSON_THROW_ON_ERROR);
+                }
+            } catch (Throwable) { /* Fail closed without recording remote data. */ }
+            // A source change during HTTP must not activate a stale snapshot.
+            $row = $flow->reserve($portalToken);
+            if ($row['estado'] === 'LINK_CREADO') $flow->recordVerification($row, $remote);
+        }
+        return $flow->reserve($portalToken);
     }
 
     /** Validate a simulated creation response; not proof of payment or sandbox. */
@@ -100,7 +165,7 @@ final class BoldPaymentService
     }
 
     /**
-     * Optional diagnostic entry point for a future transport. The sink receives ONLY
+     * Optional diagnostic entry point. The sink receives ONLY
      * a bounded, sanitized JSON document on failure. Never pass headers or request data.
      * No logging or filesystem writes occur unless the caller explicitly supplies a sink.
      */

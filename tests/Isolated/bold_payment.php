@@ -67,8 +67,8 @@ $reject(fn ()=>$make(['environment'=>'production'])->prepare($token),'production
 $reject(fn ()=>$make([], 'production')->prepare($token),'nonlocal app blocked');
 $reads=$gateway->reads;
 $reject(fn ()=>$service->createLink($token),'disabled blocks before reads and HTTP');
-$reject(fn ()=>$make(['enabled'=>true])->createLink($token),'enabled still has no live transport');
-$check($gateway->reads===$reads,'create never queries database');
+$reject(fn ()=>$make(['enabled'=>true])->createLink($token),'missing key blocks transport');
+$check($gateway->reads===$reads,'disabled or missing key blocks before source read');
 $response=['payload'=>['payment_link'=>'LNK_TEST','url'=>'https://checkout.bold.co/LNK_TEST','secret'=>'must-not-propagate'],'errors'=>[]];
 $check($service->parseCreationResponse(200,$response)===['payment_link'=>'LNK_TEST','url'=>'https://checkout.bold.co/LNK_TEST'],'response whitelist');
 foreach ([401,429,500] as $status) $reject(fn ()=>$service->parseCreationResponse($status,$response),'HTTP failure sanitized');

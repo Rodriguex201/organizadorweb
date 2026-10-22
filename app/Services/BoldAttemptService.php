@@ -75,7 +75,7 @@ final class BoldAttemptService
         ]);
     }
 
-    /** Future authenticated GET result; never browser callback data or proof of payment. */
+    /** Authenticated GET result; never browser callback data or proof of payment. */
     public function recordVerification(array $row, array $remote): bool
     {
         $valid = ($remote['is_sandbox'] ?? null) === true
