@@ -19,4 +19,11 @@ class PortalReadGateway
         try { return (new ProformaReadService($reader))->authorizedDetail($grant); }
         finally { $reader->close(); }
     }
+
+    public function paymentSnapshot(array $grant): ?array
+    {
+        $reader = MySqlReviewReader::open(config('portal_review'));
+        try { return (new ProformaReadService($reader))->paymentSnapshot($grant); }
+        finally { $reader->close(); }
+    }
 }

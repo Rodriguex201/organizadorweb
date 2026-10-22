@@ -62,6 +62,20 @@ final class ProformaReadService
         return $identity + ['email' => (string) ($rows[0]['email'] ?? ''), 'documento' => $documento, 'numero' => $numero];
     }
 
+    /** Internal payment snapshot, never supplied by a browser or recalculated. */
+    public function paymentSnapshot(array $grant): ?array
+    {
+        $identity = $this->identity($grant['documento'], $grant['numero']);
+        if ($identity === null || $identity['cliente_id'] !== $grant['cliente_id']
+            || $identity['proforma_id'] !== $grant['proforma_id']) return null;
+        return [
+            'cliente_id' => $identity['cliente_id'],
+            'proforma_id' => $identity['proforma_id'],
+            'estado' => $identity['header']['estado'],
+            'vtotal' => $identity['header']['vtotal'],
+        ];
+    }
+
     public function authorizedDetail(array $grant): ?array
     {
         $identity = $this->identity($grant['documento'], $grant['numero']);
