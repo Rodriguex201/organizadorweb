@@ -82,6 +82,52 @@ final class AttemptRepository
         return $this->isolated ? '`intentos_pago`' : '`organizadorprueba`.`intentos_pago`';
     }
 
+    public function reconciliationCandidates(int $limit): array
+    {
+        $this->guard();
+        $limit = max(1, min(20, $limit));
+        return $this->pdo->query('SELECT id FROM '.$this->table()." WHERE pasarela='bold' AND ambiente='sandbox'
+            AND estado IN ('ACTIVO','PROCESANDO','INDETERMINADO','LINK_CREADO')
+            AND payment_link IS NOT NULL AND payment_link <> ''
+            ORDER BY COALESCE(ultima_consulta_at,created_at), id LIMIT ".$limit)->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /** Named lock serializes manual/batch workers without holding a row transaction over HTTP. */
+    public function reconcile(int $id, \Closure $decide): array
+    {
+        $this->guard();
+        $lock = 'bold-reconcile-test-'.$id;
+        if (!$this->isolated) {
+            $q=$this->pdo->prepare('SELECT GET_LOCK(?,0)'); $q->execute([$lock]);
+            if ((int)$q->fetchColumn()!==1) return ['id'=>$id,'result'=>'busy'];
+        }
+        try {
+            $q=$this->pdo->prepare('SELECT * FROM '.$this->table()." WHERE id=? AND pasarela='bold' AND ambiente='sandbox'");
+            $q->execute([$id]); $row=$q->fetch();
+            if (!$row) return ['id'=>$id,'result'=>'not_found'];
+            $fields=$decide($row);
+            if ($fields===[]) return ['id'=>$id,'result'=>'skipped','estado'=>$row['estado']];
+            if (!in_array($row['estado'],['ACTIVO','PROCESANDO','INDETERMINADO','LINK_CREADO'],true)
+                || array_diff(array_keys($fields),['estado','estado_remoto','ambiente_verificado','http_status','error_codigo','ultima_consulta_at','transaction_id'])
+                || !in_array($fields['estado']??'', ['ACTIVO','PROCESANDO','PAGADO','CANCELADO','EXPIRADO','REVISION','INDETERMINADO','LINK_CREADO'],true)) {
+                throw new RuntimeException('Conciliación no permitida.');
+            }
+            $fields['updated_at']=$fields['ultima_consulta_at'];
+            $set=implode(',',array_map(fn($k)=>'`'.$k.'`=?',array_keys($fields)));
+            // CAS also rejects a concurrent webhook/administrative change since the GET snapshot.
+            $sql='UPDATE '.$this->table().' SET '.$set.' WHERE id=? AND estado=? AND referencia=? AND payment_link=? AND importe=? AND moneda=? AND cliente_id=? AND proforma_id=?'
+                ." AND ambiente='sandbox' AND pasarela='bold' AND updated_at=?"
+                .' AND (ultima_consulta_at=? OR (ultima_consulta_at IS NULL AND ? IS NULL))';
+            $q=$this->pdo->prepare($sql);
+            $q->execute([...array_values($fields),$id,$row['estado'],$row['referencia'],$row['payment_link'],$row['importe'],$row['moneda'],$row['cliente_id'],$row['proforma_id'],$row['updated_at'],$row['ultima_consulta_at'],$row['ultima_consulta_at']]);
+            return ['id'=>$id,'result'=>$q->rowCount()===1?'updated':'stale','estado'=>$fields['estado'],
+                'estado_remoto'=>$fields['estado_remoto']??$row['estado_remoto'],'http_status'=>$fields['http_status'],
+                'error_codigo'=>$fields['error_codigo'],'moneda_verificada_get'=>false];
+        } finally {
+            if (!$this->isolated) { $q=$this->pdo->prepare('SELECT RELEASE_LOCK(?)'); $q->execute([$lock]); }
+        }
+    }
+
     /** Internal draft from BoldPaymentService, never request data. Unique key arbitrates races. */
     public function reserve(array $draft): array
     {
