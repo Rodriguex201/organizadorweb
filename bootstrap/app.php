@@ -11,9 +11,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         then: function (): void {
             require __DIR__.'/../routes/portal.php';
+            require __DIR__.'/../routes/bold_webhook.php';
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Preserve webhook bytes and avoid JSON parsing by global input transforms.
+        $webhook = fn (\Illuminate\Http\Request $request): bool => $request->is('portal/pagos/bold/webhook');
+        $middleware->trimStrings(except: [$webhook]);
+        $middleware->convertEmptyStringsToNull(except: [$webhook]);
         $middleware->alias([
             'auth.custom' => \App\Http\Middleware\CustomAuth::class,
             'role' => \App\Http\Middleware\RoleMiddleware::class,

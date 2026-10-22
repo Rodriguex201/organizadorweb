@@ -5,6 +5,10 @@ return [
     'environment' => env('BOLD_ENV', 'sandbox'),
     // Identity key for the Payment Button / Payment Link API. Server-side only.
     'api_key' => env('BOLD_API_KEY', ''),
+    'webhook' => [
+        'enabled' => env('BOLD_WEBHOOK_ENABLED', false),
+        'merchant_id' => env('BOLD_WEBHOOK_MERCHANT_ID', ''),
+    ],
     // Dedicated attempt persistence; deliberately no DB_* or portal credential fallback.
     'database' => [
         'host' => env('BOLD_DB_HOST', ''),
