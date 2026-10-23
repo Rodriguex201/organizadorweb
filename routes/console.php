@@ -4,6 +4,18 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use App\Support\DirectorioAudit;
 
+Artisan::command('bold:planificar-activaciones {--id=} {--limit=10}', function () {
+    try {
+        $id=$this->option('id');$limit=(string)$this->option('limit');
+        if(($id!==null && (!ctype_digit((string)$id)||(int)$id<1)) || !ctype_digit($limit)||(int)$limit<1)throw new \RuntimeException();
+        $planner=\App\Services\BoldActivationPlanner::configured(config('bold',[]),config('bold_activations',[]),app()->environment());
+        $result=$id===null?$planner->batch((int)$limit):$planner->one((int)$id);
+        $this->line(json_encode($result,JSON_UNESCAPED_UNICODE));
+        $rows=$id===null?$result:[$result];
+        return count(array_filter($rows,fn($r)=>$r['result']==='REINTENTAR'))>0?1:0;
+    }catch(\Throwable){$this->error('No se pudo planificar. La ejecución remota permanece deshabilitada.');return 1;}
+})->purpose('Planificar activaciones de pagos aplicados sin conexiones remotas');
+
 Artisan::command('bold:aplicar {id}', function () {
     try {
         $id = (string) $this->argument('id');
