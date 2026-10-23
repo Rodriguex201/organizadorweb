@@ -1,8 +1,7 @@
 <?php
-
 return [
-    // Deliberately not enabled through .env: this phase has no remote transport.
+    // No real remote transport is wired in this phase.
     'remote_enabled' => false,
-    'rules_version' => 'SIN_REGLAS_APROBADAS',
-    'rules' => [],
+    'rules_version' => 'PAGO_APLICADO_UN_MES_V1',
+    'rules' => [], // Concepts are evidence only.
 ];
