@@ -1,50 +1,50 @@
 <?php
-// Run with php -n -d extension=pdo_sqlite; never bootstrap Laravel.
-if (PDO::getAvailableDrivers() !== ['sqlite'] || extension_loaded('mysqli')) {
-    throw new RuntimeException('Only SQLite :memory: is permitted.');
-}
+if (PDO::getAvailableDrivers()!==['sqlite'] || extension_loaded('mysqli')) throw new RuntimeException('Only SQLite :memory: permitted');
 $root=dirname(__DIR__,2);
 spl_autoload_register(function($class)use($root){if(str_starts_with($class,'App\\'))require $root.'/app/'.str_replace('\\','/',substr($class,4)).'.php';});
+require __DIR__.'/Support/SimulatedActivationAdapter.php';
 use App\Payments\Bold\{ActivationRuleResolver,ActivationTaskRepository};
 use App\Services\BoldActivationPlanner;
 function check(bool $ok,string $label):void{if(!$ok)throw new RuntimeException($label);echo "PASS $label\n";}
-class TestPDO extends PDO {public bool $fail=false; public function commit():bool{if($this->fail){$this->fail=false;throw new RuntimeException('simulated crash');}return parent::commit();}}
-$p=new TestPDO('sqlite::memory:');
-$repo=ActivationTaskRepository::isolated($p);
-$p->exec("CREATE TABLE intentos_pago(id INTEGER PRIMARY KEY,proforma_id INT,cliente_id INT,pasarela TEXT DEFAULT 'bold',ambiente TEXT DEFAULT 'sandbox',estado_aplicacion TEXT DEFAULT 'APLICADO',estado TEXT DEFAULT 'PAGADO',estado_remoto TEXT DEFAULT 'PAID',aplicado_at TEXT DEFAULT '2026-01-01',proforma_aplicada_id INT,ambiente_verificado INT DEFAULT 1);
-CREATE TABLE sg_proform(id INTEGER PRIMARY KEY,id_cobro INT,nit TEXT,estado INT DEFAULT 4,vtotal TEXT DEFAULT '100.00');
+class TestPDO extends PDO {public bool $fail=false;public function commit():bool{if($this->fail){$this->fail=false;throw new RuntimeException('simulated');}return parent::commit();}}
+$p=new TestPDO('sqlite::memory:');$repo=ActivationTaskRepository::isolated($p);
+$p->exec("CREATE TABLE intentos_pago(id INTEGER PRIMARY KEY,proforma_id INT,cliente_id INT,pasarela TEXT DEFAULT 'bold',ambiente TEXT DEFAULT 'sandbox',estado_aplicacion TEXT DEFAULT 'APLICADO',estado TEXT DEFAULT 'PAGADO',estado_remoto TEXT DEFAULT 'PAID',aplicado_at TEXT DEFAULT '2026-01-31',proforma_aplicada_id INT,ambiente_verificado INT DEFAULT 1,importe TEXT DEFAULT '100.00',moneda TEXT DEFAULT 'COP');
+CREATE TABLE sg_proform(id INTEGER PRIMARY KEY,id_cobro INT,nit TEXT,estado INT DEFAULT 4,vtotal TEXT DEFAULT '100.00',fpag TEXT DEFAULT '2026-01-31',fpago TEXT DEFAULT 'BOLD');
 CREATE TABLE clientes_potenciales(idclientes_potenciales INTEGER PRIMARY KEY,codigo TEXT,nit TEXT);
 CREATE TABLE valores_externos(id_cobro INTEGER PRIMARY KEY,id_cliente TEXT,Proforma INT DEFAULT 4);
 CREATE TABLE sg_proford(id INTEGER PRIMARY KEY,proforma_id INT,ref_codigo TEXT,orden INT DEFAULT 1);
-CREATE TABLE conceptos(codigo TEXT PRIMARY KEY);
-INSERT INTO conceptos VALUES ('0010');
-CREATE TABLE activaciones_pago(id INTEGER PRIMARY KEY,intento_pago_id INT,proforma_id INT,cliente_id INT,servicio TEXT,clave_idempotencia TEXT UNIQUE,empresa_codigo TEXT,regla_version TEXT,conceptos_origen TEXT,estado TEXT,error_codigo TEXT,objetivo_sha256 TEXT,proximo_intento_at TEXT,ultimo_intento_at TEXT,token_ejecucion TEXT,reserva_hasta TEXT,intentos INT DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(intento_pago_id,servicio));
+CREATE TABLE activaciones_pago(id INTEGER PRIMARY KEY,intento_pago_id INT,proforma_id INT,cliente_id INT,servicio TEXT,clave_idempotencia TEXT UNIQUE,empresa_codigo TEXT,regla_version TEXT,conceptos_origen TEXT,estado TEXT,error_codigo TEXT,objetivo_sha256 TEXT,proximo_intento_at TEXT,ultimo_intento_at TEXT,token_ejecucion TEXT,reserva_hasta TEXT,intentos INT DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,conexion_logica TEXT,base_destino TEXT,fecha_inicio_anterior TEXT,fecha_fin_anterior TEXT,fecha_inicio_global_anterior TEXT,fecha_fin_global_anterior TEXT,fecha_inicio_objetivo TEXT,fecha_fin_objetivo TEXT,escrito_at TEXT,verificado_at TEXT,UNIQUE(intento_pago_id,servicio));
 CREATE UNIQUE INDEX serial_company ON activaciones_pago(empresa_codigo,servicio) WHERE estado IN ('EJECUTANDO','VERIFICANDO','INDETERMINADA');");
-function seed(TestPDO $p,int $id,?string $company='TEST'):void{
-    $p->exec("INSERT INTO intentos_pago(id,proforma_id,cliente_id,proforma_aplicada_id) VALUES ($id,$id,$id,$id);INSERT INTO sg_proform(id,id_cobro,nit) VALUES ($id,$id,'N$id');INSERT INTO valores_externos(id_cobro,id_cliente) VALUES ($id,'$id');INSERT INTO sg_proford(proforma_id,ref_codigo) VALUES ($id,'0010')");
-    $p->prepare('INSERT INTO clientes_potenciales VALUES (?,?,?)')->execute([$id,$company,'N'.$id]);
-}
-$config=require $root.'/config/bold_activations.php';$resolver=new ActivationRuleResolver($config);$planner=new BoldActivationPlanner($repo,$resolver);
-seed($p,1);$r=$planner->one(1);
-check($r['result']==='PLANIFICADO'&&$r['motivo']==='REGLA_NO_APROBADA','applied known concept creates review');
-$before=$p->query('SELECT * FROM activaciones_pago')->fetchAll();
-check($planner->one(1)['result']==='YA_PLANIFICADO'&&$before===$p->query('SELECT * FROM activaciones_pago')->fetchAll(),'repeat makes no mutation');
-seed($p,2);$p->exec("INSERT INTO sg_proford(proforma_id,ref_codigo) VALUES (2,'UNKNOWN'),(2,'0010')");$r=$planner->one(2);
-$origins=json_decode($p->query('SELECT conceptos_origen FROM activaciones_pago WHERE intento_pago_id=2')->fetchColumn(),true);
-check($r['motivo']==='CONCEPTO_DESCONOCIDO'&&array_column($origins,'ref_codigo')===['0010','UNKNOWN','0010'],'multiple concepts preserved including duplicates and unknown');
-seed($p,3,null);check($planner->one(3)['motivo']==='CLIENTE_SIN_CODIGO','missing company stays review');
-seed($p,4);$p->fail=true;check($planner->one(4)['result']==='REINTENTAR'&&(int)$p->query('SELECT COUNT(*) FROM activaciones_pago WHERE intento_pago_id=4')->fetchColumn()===0,'crash before commit rolls back');
-check(count($planner->batch())===1&&$planner->one(4)['result']==='YA_PLANIFICADO','next batch recovers missing planning');
-seed($p,5);$p->exec("UPDATE intentos_pago SET estado_aplicacion='PENDIENTE' WHERE id=5");check($planner->one(5)['result']==='NO_APLICADO','unapplied payment excluded');
-check($planner->batch()===[],'batch does not replan');
-foreach([6,7]as$id){seed($p,$id);$p->prepare("INSERT INTO activaciones_pago(intento_pago_id,servicio,empresa_codigo,estado,objetivo_sha256) VALUES (?,'ACTIVACION_NORMAL','SAMECOMPANY','PENDIENTE',?)")->execute([$id,str_repeat('a',64)]);$ids[]=(int)$p->lastInsertId();}
-$now='2026-10-23 12:00:00.000000';$until='2026-10-23 12:05:00.000000';
-check($repo->reserve($ids[0],$now,$until,str_repeat('b',64))['result']==='RESERVADA','first company reservation');
-check($repo->reserve($ids[1],$now,$until,str_repeat('c',64))['result']==='OCUPADA','other payment same company service blocked');
-$p->exec("UPDATE activaciones_pago SET estado='INDETERMINADA' WHERE id=".$ids[0]);
-check($repo->reserve($ids[1],$now,$until,str_repeat('d',64))['result']==='OCUPADA','uncertain result retains company lock');
-check($repo->reserve(1,$now,$until,str_repeat('a',64))['result']==='NO_RESERVABLE','review planning cannot execute');
-foreach(['DisabledNormalActivationAdapter','DisabledEventsActivationAdapter']as$name){$class='App\\Payments\\Bold\\Activation\\'.$name;$adapter=new $class;foreach(['consult'=>[[]],'comparePrecondition'=>[[],[]],'writeAbsoluteObjective'=>[[],[],[]],'rereadAndVerify'=>[[],[]]]as$method=>$args){try{$adapter->$method(...$args);throw new LogicException('allowed');}catch(RuntimeException $e){check($e->getMessage()==='ACTIVACION_REMOTA_DESHABILITADA',"$name $method disabled");}}}
-foreach([array_replace($config,['remote_enabled'=>true]),array_replace($config,['rules'=>['0010'=>[]]])]as$bad){try{new ActivationRuleResolver($bad);throw new LogicException('allowed');}catch(RuntimeException){check(true,'unsafe configuration rejected');}}
-try{ActivationTaskRepository::open(['database'=>'organizador'],'local','sandbox');throw new LogicException('allowed');}catch(RuntimeException){check(true,'wrong database rejected before connection');}
-echo "All isolated planner tests passed. No network or MySQL drivers.\n";
+function seed($p,$id,$company=null){$company??='TEST'.$id;$p->exec("INSERT INTO intentos_pago(id,proforma_id,cliente_id,proforma_aplicada_id) VALUES ($id,$id,$id,$id);INSERT INTO sg_proform(id,id_cobro,nit) VALUES ($id,$id,'N$id');INSERT INTO valores_externos(id_cobro,id_cliente) VALUES ($id,'$id');INSERT INTO sg_proford(proforma_id,ref_codigo) VALUES ($id,'UNKNOWN'),($id,'0010'),($id,'0010')");$p->prepare('INSERT INTO clientes_potenciales VALUES (?,?,?)')->execute([$id,$company,'N'.$id]);}
+$config=require $root.'/config/bold_activations.php';$rules=new ActivationRuleResolver($config);$adapter=new SimulatedActivationAdapter;$planner=new BoldActivationPlanner($repo,$rules,$adapter);
+foreach([['2026-01-31','2026-01-20','2026-02-28'],['2028-01-31','2028-01-20','2028-02-29'],['2026-01-31','2026-03-31','2026-04-30'],['2026-12-31','2026-12-31','2027-01-31']]as[$end,$payment,$expected]){$start=(new DateTimeImmutable($end))->modify('-2 days')->format('Y-m-d');$r=$rules->resolve([],'TEST',$payment,SimulatedActivationAdapter::inventory('TEST',$start,$end));check($r['estado']==='PENDIENTE'&&$r['fecha_fin_objetivo']===$expected,'calendar max/no-overflow '.$end.' '.$payment);}
+$valid=SimulatedActivationAdapter::inventory('TEST');
+foreach(['duplicate_server','missing_server','individual_missing','individual_duplicate','global_duplicate','dates_mismatch','invalid_date','wrong_gap','wrong_company']as$case){$s=$valid;$e=&$s['mysql_213']['empresas'][0];switch($case){case 'duplicate_server':$s['mysql_167']['empresas']=$s['mysql_213']['empresas'];break;case 'missing_server':unset($s['mysql_167']);break;case 'individual_missing':$e['individual']=[];break;case 'individual_duplicate':$e['individual'][]=$e['individual'][0];break;case 'global_duplicate':$e['global'][]=$e['global'][0];break;case 'dates_mismatch':$e['global'][0]['emprfinit']='2026-02-01';break;case 'invalid_date':$e['individual'][0]['seg_fecha']='2026-02-30';break;case 'wrong_gap':$e['individual'][0]['seg_fecha']=$e['global'][0]['emprfpago']='2026-01-28';break;case 'wrong_company':$e['codigo']='OTHER';break;}unset($e);check($rules->resolve([],'TEST','2026-01-31',$s)['estado']==='REVISION',$case);}
+seed($p,1);$r=$planner->one(1);$id=$r['tareas'][0];check($r['estado']==='PENDIENTE','one normal task independent of concepts');
+$task=$p->query("SELECT * FROM activaciones_pago WHERE id=$id")->fetch();check($task['servicio']==='ACTIVACION_NORMAL'&&count(json_decode($task['conceptos_origen'],true))===3&&$task['fecha_inicio_objetivo']==='2026-02-26','frozen objective and all concepts');
+$reads=$adapter->reads;$p->exec("UPDATE sg_proform SET fpag='2026-04-01' WHERE id=1");check($planner->one(1)['result']==='YA_PLANIFICADO'&&$reads===$adapter->reads&&$task===$p->query("SELECT * FROM activaciones_pago WHERE id=$id")->fetch(),'repeat preserves objective and never consults');
+seed($p,2,'TEST1');check($planner->one(2)['motivo']==='EMPRESA_OCUPADA','second payment waits before freezing');
+$now='2026-10-23 12:00:00.000000';$until='2026-10-23 12:05:00.000000';$token=str_repeat('a',64);
+check($repo->reserve($id,$now,$until,$token)['result']==='RESERVADA','reserve');check($repo->reserve($id,$now,$until,str_repeat('b',64))['result']==='NO_RESERVABLE','double executor blocked');
+check($repo->observe($id,$token,$now,SimulatedActivationAdapter::inventory('TEST1'))['result']==='PRECONDICION','original precondition permits simulated write');
+check($repo->observe($id,$token,$now,null,true)['result']==='INDETERMINADA','persist uncertainty before write');
+$adapter->writeAbsoluteObjective(['empresa_codigo'=>'TEST1'],SimulatedActivationAdapter::inventory('TEST1'),$task);
+check($repo->observe($id,$token,$now,$adapter->consult(['empresa_codigo'=>'TEST1']),true)['result']==='COMPLETADA','reread objective completes');
+$completed=$p->query("SELECT * FROM activaciones_pago WHERE id=$id")->fetch();check($repo->observe($id,$token,$now,$valid)['result']==='YA_COMPLETADA'&&$completed===$p->query("SELECT * FROM activaciones_pago WHERE id=$id")->fetch(),'completed cannot degrade');
+$adapter->snapshot=null;
+foreach([3,4,5,6,7,8]as$n)seed($p,$n);
+$p->fail=true;check($planner->one(3)['result']==='REINTENTAR'&&(int)$p->query('SELECT COUNT(*) FROM activaciones_pago WHERE intento_pago_id=3')->fetchColumn()===0,'rollback before commit');check($planner->one(3)['result']==='PLANIFICADO','recover planning');
+$r=$planner->one(4);$rid=$r['tareas'][0];$repo->reserve($rid,$now,$until,$token);check($repo->observe($rid,$token,$now,null)['result']==='REINTENTABLE','unavailable before write retryable');check($repo->reserve($rid,$now,$until,$token)['result']==='NO_RESERVABLE','backoff enforced');
+$r=$planner->one(5);$rid=$r['tareas'][0];$repo->reserve($rid,$now,$until,$token);check($repo->observe($rid,$token,$now,SimulatedActivationAdapter::inventory('TEST5','2026-04-28','2026-04-30'))['result']==='REVISION','manual third value review');
+$r=$planner->one(6);$rid=$r['tareas'][0];$repo->reserve($rid,$now,$until,$token);$repo->observe($rid,$token,$now,null,true);$later='2026-10-23 12:06:00.000000';$newToken=str_repeat('c',64);check($repo->reserve($rid,$later,'2026-10-23 12:11:00.000000',$newToken)['result']==='RESERVADA','recover uncertain lease');check($repo->observe($rid,$token,$later,$valid)['result']==='RESERVA_PERDIDA','stale executor rejected');check($repo->observe($rid,$newToken,$later,SimulatedActivationAdapter::inventory('TEST6','2026-02-26','2026-02-28'))['result']==='COMPLETADA','lost response recovered without new write');
+$disabled=new BoldActivationPlanner($repo,$rules);check($disabled->one(7)['motivo']==='LECTURA_REMOTA_NO_DISPONIBLE','default adapter cannot connect');
+$p->exec("UPDATE clientes_potenciales SET codigo=NULL WHERE idclientes_potenciales=8");check($planner->one(8)['motivo']==='CLIENTE_SIN_CODIGO','invalid company review');
+foreach(['DisabledNormalActivationAdapter','DisabledEventsActivationAdapter']as$name){$class='App\\Payments\\Bold\\Activation\\'.$name;$a=new $class;try{$a->consult([]);throw new LogicException('allowed');}catch(RuntimeException){check(true,$name.' disabled');}}
+try{new ActivationRuleResolver(array_replace($config,['remote_enabled'=>true]));throw new LogicException('allowed');}catch(RuntimeException){check(true,'enabled config rejected');}
+seed($p,9);$p->exec("UPDATE intentos_pago SET estado_aplicacion='PENDIENTE' WHERE id=9");check($planner->one(9)['result']==='NO_APLICADO','unapplied excluded');
+seed($p,10);$p->exec("UPDATE sg_proform SET vtotal='99.00' WHERE id=10");check($planner->one(10)['motivo']==='PAGO_NETO_NO_COINCIDE','changed net amount review');
+seed($p,11);$p->exec("INSERT INTO activaciones_pago(intento_pago_id,servicio,estado,error_codigo) VALUES (11,'PLANIFICACION','REVISION','REGLA_NO_APROBADA')");check($planner->one(11)['result']==='REVISION_PLAN_LEGADO','legacy task not duplicated or silently converted');
+check($rules->resolve([],'TEST','2026-01-31',['mysql_213'=>['consultado'=>true,'empresas'=>[]],'mysql_167'=>['consultado'=>true,'empresas'=>[]]])['error_codigo']==='EMPRESA_NO_ENCONTRADA','absent company review');
+check($rules->resolve([],'TEST','invalid',$valid)['error_codigo']==='FECHA_PAGO_INVALIDA','invalid payment date review');
+$altered=$task;$altered['fecha_fin_objetivo']='2027-01-01';check(ActivationRuleResolver::compare($altered,SimulatedActivationAdapter::inventory('TEST1'))==='OBJETIVO_ALTERADO','objective integrity enforced');
+echo "All isolated tests passed; no external connections.\n";
