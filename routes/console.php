@@ -4,6 +4,20 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use App\Support\DirectorioAudit;
 
+Artisan::command('bold:aplicar {id}', function () {
+    try {
+        $id = (string) $this->argument('id');
+        if (!ctype_digit($id) || (int) $id < 1) throw new \RuntimeException();
+        $service = \App\Services\BoldPaymentApplicationService::configured(config('bold', []), app()->environment());
+        $result = $service->apply((int) $id, 'cli:bold-aplicar');
+        $this->line(json_encode($result, JSON_UNESCAPED_UNICODE));
+        return in_array($result['result'], ['APLICADO', 'YA_APLICADO'], true) ? 0 : 1;
+    } catch (\Throwable) {
+        $this->error('No se pudo preparar la aplicación del pago.');
+        return 1;
+    }
+})->purpose('Aplicar un pago Bold confirmado en organizadorprueba sin activaciones ni correos');
+
 Artisan::command('bold:conciliar {--id=} {--limit=5}', function () {
     try {
         $service=\App\Services\BoldReconciliationService::configured(config('bold',[]),app()->environment());
